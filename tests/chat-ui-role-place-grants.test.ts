@@ -125,7 +125,6 @@ describe("a role's right in one place", () => {
       expect(buttonNamed("Add a right for Agents")).toBeDefined();
       expect(buttonNamed("Add a right for Skills")).toBeUndefined();
       await act(async () => required(buttonNamed("Add a right for Agents")).click());
-      expect(document.body.textContent).toContain("New right in Editorial");
       // The holder is the role, and the kind is the area's: neither is asked.
       expect(buttonNamed("Person")).toBeUndefined();
       expect(

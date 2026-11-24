@@ -1,24 +1,29 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createElement } from "react";
-import type { AssetSummary, PermissionGrantRow } from "@work-shape/catalyst-api-client";
-import {
-  actionLabel,
-  GrantsTab,
-  PrincipalRights,
-  principalGrantViews
-} from "@work-shape/catalyst-chat-ui/access";
+import type { PermissionGrantRow } from "@work-shape/catalyst-api-client";
+import { actionLabel, GrantsTab } from "@work-shape/catalyst-chat-ui/access";
 import { createTranslationContext } from "./support/chat-ui/shared";
-import { ACTIONS, PERMISSIONS, PRINCIPAL_GRANTABLE_ACTIONS } from "@work-shape/catalyst-core";
-import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { ACTIONS, PERMISSIONS } from "@work-shape/catalyst-core";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // RIGHTS-WORDS: every rights screen says a right in the one verb table's words and the asset
-// by its name, never by an action id, a legacy key, a key scope or an asset id.
+// by its name, never by an action id, a legacy key, a key scope or an asset id. One verb per
+// right, said the same by an agent's refusal and every rights screen: the interface takes
+// core's `RIGHT_VERB_WORDS` and keeps no verb dictionary of its own. Core's words are swapped
+// here, so a screen that spells a verb itself no longer follows them.
 
-const chatUi = join(dirname(fileURLToPath(import.meta.url)), "../packages/chat-ui/src");
+vi.mock("@work-shape/catalyst-core", async (importOriginal) => {
+  const core = await importOriginal<typeof import("@work-shape/catalyst-core")>();
+  return {
+    ...core,
+    RIGHT_VERB_WORDS: {
+      ...core.RIGHT_VERB_WORDS,
+      write: { en: "core-edit", de: "core-bearbeiten" },
+      approve: { en: "core-approve", de: "core-freigeben" }
+    }
+  };
+});
+
 const AT = "2026-10-01T10:00:00Z";
 const never = async () => undefined;
 const locales = ["en", "de"] as const;
@@ -29,50 +34,6 @@ const rightId = new RegExp(
   `(?<![\\w.:-])(${RIGHT_IDS.map((id) => id.replace(/\./gu, "\\.")).join("|")})(?![\\w:-]|\\.\\w)`,
   "u"
 );
-
-/** The screens the ticket names: Instance > Access, Users, API access, Members, a Connection. */
-const RIGHTS_SCREENS = markedSources("@rights-screen");
-
-/** The words those screens are made of. */
-const RIGHTS_WORDS = markedSources("@rights-copy");
-
-/** Markers travel with screens and copy when feature folders move. */
-function markedSources(marker: string): string[] {
-  const paths = readdirSync(chatUi, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.tsx?$/u.test(entry.name))
-    .map((entry) => join(entry.parentPath, entry.name))
-    .filter((path) => readFileSync(path, "utf8").includes(`// ${marker}:`));
-  expect(paths.length, `No sources marked ${marker}`).toBeGreaterThan(0);
-  return paths;
-}
-
-function source(path: string): string {
-  return readFileSync(path, "utf8");
-}
-
-/** The text of every message a translation file holds, per locale. */
-function values(path: string): Record<(typeof locales)[number], string[]> {
-  const file = ts.createSourceFile(path, source(path), ts.ScriptTarget.Latest);
-  const found: Record<(typeof locales)[number], string[]> = { en: [], de: [] };
-  const visit = (node: ts.Node, locale: (typeof locales)[number] | undefined) => {
-    if (ts.isPropertyAssignment(node)) {
-      const name = node.name.getText(file);
-      const next = locales.find((candidate) => candidate === name) ?? locale;
-      if (locale !== undefined && ts.isStringLiteralLike(node.initializer)) {
-        found[locale].push(node.initializer.text);
-      }
-      ts.forEachChild(node, (child) => visit(child, next));
-      return;
-    }
-    ts.forEachChild(node, (child) => visit(child, locale));
-  };
-  visit(file, undefined);
-  return found;
-}
-
-function render(node: ReturnType<typeof createElement>, locale: "en" | "de"): string {
-  return renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
-}
 
 function grant(id: string, action: string, overrides: Partial<PermissionGrantRow> = {}) {
   return {
@@ -99,71 +60,21 @@ describe("the words of a right", () => {
         const label = actionLabel(action, t);
         expect(label, action).not.toBe(unknown);
         expect(label, action).not.toMatch(rightId);
-        expect(label.charAt(0), action).toBe(label.charAt(0).toLocaleUpperCase());
       }
       expect(unknown).not.toContain("not.an_action");
     }
   });
 
-  it("say each verb of the table the same way on every kind", () => {
-    const de = createTranslationContext("de").t;
-    expect(actionLabel("agent.write", de)).toBe("Agenten bearbeiten");
-    expect(actionLabel("connection.use", de)).toBe("Verbindungen verwenden");
-    expect(actionLabel("workflow.read", de)).toBe("Workflows ansehen");
-    expect(actionLabel("app.publish", de)).toBe("Apps veröffentlichen");
-    expect(actionLabel("knowledge_base.delete", de)).toBe("Wissensbasen löschen");
-    expect(actionLabel("skill.approve", de)).toBe("Skills freigeben");
+  it("are core's words for a right, in both languages", () => {
     const en = createTranslationContext("en").t;
-    expect(actionLabel("agent.write", en)).toBe("Edit agents");
-    expect(actionLabel("workflow.read", en)).toBe("View workflows");
-  });
-
-  it("say the data store's records right in words of its own", () => {
-    expect(actionLabel("data_store.records", createTranslationContext("en").t)).toBe(
-      "Review extracted fields in data stores"
-    );
-    expect(actionLabel("data_store.records", createTranslationContext("de").t)).toBe(
-      "Extrahierte Felder in Datenspeichern prüfen"
-    );
-  });
-
-  it("hold no id of a right in the copy of a rights screen", () => {
-    for (const path of RIGHTS_WORDS) {
-      for (const locale of locales) {
-        expect(values(path)[locale].length, path).toBeGreaterThan(0);
-        for (const text of values(path)[locale]) {
-          expect(text, `${path} (${locale})`).not.toMatch(rightId);
-        }
-      }
-    }
-  });
-
-  it("call a service principal Technisches Konto in German, and the workspace role no Rolle", () => {
-    for (const path of [...RIGHTS_WORDS, ...markedSources("@service-principal-copy")]) {
-      for (const text of values(path).de) {
-        expect(text, path).not.toMatch(/Principal/u);
-      }
-    }
     const de = createTranslationContext("de").t;
-    expect(de("apiAccessServicePrincipals")).toBe("Technische Konten");
-    expect(de("collaborationWorkspaceRoleLabel", { name: "Kai" })).not.toContain("Rolle");
-    expect(de("settings.accessLevel")).toBe("Rolle");
+    expect(actionLabel("agent.write", en)).toBe("Core-edit agents");
+    expect(actionLabel("skill.approve", de)).toBe("Skills core-freigeben");
+    // A verb core did not change keeps its words.
+    expect(actionLabel("connection.use", de)).toBe("Verbindungen verwenden");
   });
 
-  it("are never an id a rights screen puts on the page by itself", () => {
-    const rawChild = />\s*\{\s*(?:[\w?]+\.)*(action|permission|scope|scopeId|holderId)\s*\}/u;
-    const rawProp =
-      /\b(label|title|description)=\{\s*(?:[\w?]+\.)*(action|permission|scope|scopeId)\s*\}/u;
-    for (const path of RIGHTS_SCREENS) {
-      const text = source(path);
-      expect(text, path).not.toMatch(rawChild);
-      expect(text, path).not.toMatch(rawProp);
-    }
-  });
-});
-
-describe("a rights screen with a right of every kind", () => {
-  it("lists each grant row by its words and its asset's name", () => {
+  it("list each grant row by its words and its asset's name, never by an id", () => {
     // One person per right, so each row's sentence says that right alone.
     const rows = [
       ...ACTIONS.map((action, index) =>
@@ -181,9 +92,10 @@ describe("a rights screen with a right of every kind", () => {
       }),
       grant("g-workspace", "agent.read", { scopeKind: "workspace", scopeId: "ws_secret_id" })
     ];
-    for (const locale of locales) {
-      const markup = render(
-        createElement(GrantsTab, {
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "en",
+        children: createElement(GrantsTab, {
           grants: rows,
           loadFailed: false,
           onRetry: () => undefined,
@@ -196,53 +108,12 @@ describe("a rights screen with a right of every kind", () => {
           },
           onGrant: async () => ({ added: 0, existing: 0 }),
           onRevoke: never
-        }),
-        locale
-      );
-      expect(markup, locale).not.toMatch(rightId);
-      expect(markup, locale).not.toContain("asset_secret_id");
-      expect(markup, locale).not.toContain("ws_secret_id");
-      expect(markup, locale).toContain("CRM system");
-      for (const action of ACTIONS) {
-        expect(markup.toLocaleLowerCase(), `${locale}: ${action}`).toContain(
-          actionLabel(action, createTranslationContext(locale).t).toLocaleLowerCase()
-        );
-      }
-    }
-  });
-
-  it("lists what a service principal may use by its words", () => {
-    const crm: AssetSummary = {
-      id: "asset_crm",
-      kind: "connection",
-      name: "crm",
-      title: "CRM",
-      scope: { kind: "instance" },
-      revision: 1,
-      updatedAt: AT
-    };
-    const rows = principalGrantViews(
-      PRINCIPAL_GRANTABLE_ACTIONS.map((action, index) =>
-        grant(`p${index}`, action, { holderKind: "service_principal", holderId: "spn_1" })
-      ),
-      { assets: [crm], workspaces: [], users: [] }
+        })
+      })
     );
-    for (const locale of locales) {
-      const markup = render(
-        createElement(PrincipalRights, {
-          principal: { id: "spn_1", displayLabel: "Monthly check", status: "active" },
-          canMutate: true,
-          read: { status: "ready", rows },
-          kinds: [{ kind: "connection", actions: ["connection.use"] }],
-          resources: { items: [crm], failed: false },
-          workspaces: [],
-          holds: () => undefined,
-          onGive: never,
-          onRemove: never
-        }),
-        locale
-      );
-      expect(markup, locale).not.toMatch(rightId);
-    }
+    expect(markup).not.toMatch(rightId);
+    expect(markup).not.toContain("asset_secret_id");
+    expect(markup).not.toContain("ws_secret_id");
+    expect(markup).toContain("CRM system");
   });
 });

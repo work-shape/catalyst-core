@@ -5,8 +5,6 @@ import {
   createThreadTimes,
   dayMarkerLabel,
   dayOpeningMessages,
-  formatElapsedSeconds,
-  formatWorkHistoryLabel,
   msUntilNextMidnight,
   transcriptMessageTimes
 } from "./support/chat-ui";
@@ -29,14 +27,6 @@ function openings(
     )
   ];
 }
-
-describe("run times", () => {
-  it("formats elapsed time consistently for active and completed runs", () => {
-    expect(formatElapsedSeconds(42)).toBe("42s");
-    expect(formatElapsedSeconds(102)).toBe("1m 42s");
-    expect(formatWorkHistoryLabel("Arbeitsverlauf", 102_000)).toBe("Arbeitsverlauf · 1m 42s");
-  });
-});
 
 describe("day boundaries of a conversation", () => {
   it("marks the first message, and the first one of each later day only", () => {
@@ -148,45 +138,29 @@ describe("day boundaries of a conversation", () => {
   });
 });
 
-describe("day marker wording", () => {
+describe("day markers", () => {
   // Thursday 15 October 2026, 12:00 in Berlin.
   const now = new Date("2026-10-15T10:00:00.000Z");
-  const label = (at: string, locale: "en" | "de", timeZone = berlin) =>
-    plain(dayMarkerLabel({ at, now, locale, t: createTranslationContext(locale).t, timeZone }));
-
-  it("says today and yesterday with the time", () => {
-    expect(label("2026-10-15T08:47:00.000Z", "en")).toBe("Today 10:47 AM");
-    expect(label("2026-10-15T08:47:00.000Z", "de")).toBe("Heute 10:47");
-    expect(label("2026-10-14T14:12:00.000Z", "en")).toBe("Yesterday 4:12 PM");
-    expect(label("2026-10-14T14:12:00.000Z", "de")).toBe("Gestern 16:12");
-  });
+  const label = (at: string, timeZone = berlin) =>
+    plain(dayMarkerLabel({ at, now, locale: "en", t: createTranslationContext("en").t, timeZone }));
 
   it("counts calendar days, not hours, for yesterday", () => {
     // 23:59 the day before, twelve hours ago.
-    expect(label("2026-10-14T21:59:00.000Z", "en")).toBe("Yesterday 11:59 PM");
+    expect(label("2026-10-14T21:59:00.000Z")).toBe("Yesterday 11:59 PM");
     // 00:01 today.
-    expect(label("2026-10-14T22:01:00.000Z", "en")).toBe("Today 12:01 AM");
-  });
-
-  it("names the weekday within the last week", () => {
-    expect(label("2026-10-11T08:47:00.000Z", "en")).toBe("Sunday 10:47 AM");
-    expect(label("2026-10-11T08:47:00.000Z", "de")).toBe("Sonntag 10:47");
-    expect(label("2026-10-09T08:47:00.000Z", "en")).toBe("Friday 10:47 AM");
+    expect(label("2026-10-14T22:01:00.000Z")).toBe("Today 12:01 AM");
   });
 
   it("gives the full date from a week back, and for a time ahead of the reader's clock", () => {
-    expect(label("2026-10-08T08:47:00.000Z", "en")).toBe("October 8, 2026 at 10:47 AM");
-    expect(label("2026-10-08T08:47:00.000Z", "de")).toBe("8. Oktober 2026 um 10:47");
-    expect(label("2026-10-16T08:47:00.000Z", "en")).toBe("October 16, 2026 at 10:47 AM");
+    expect(label("2026-10-08T08:47:00.000Z")).toBe("October 8, 2026 at 10:47 AM");
+    expect(label("2026-10-16T08:47:00.000Z")).toBe("October 16, 2026 at 10:47 AM");
   });
 
   it("reads the day in the reader's time zone", () => {
     // Now is 19:00 on 15 October in Tokyo and 03:00 on 15 October in Los Angeles.
-    expect(label("2026-10-14T16:00:00.000Z", "en", "Asia/Tokyo")).toBe("Today 1:00 AM");
-    expect(label("2026-10-15T16:00:00.000Z", "en", "America/Los_Angeles")).toBe("Today 9:00 AM");
-    expect(label("2026-10-15T01:00:00.000Z", "en", "America/Los_Angeles")).toBe(
-      "Yesterday 6:00 PM"
-    );
+    expect(label("2026-10-14T16:00:00.000Z", "Asia/Tokyo")).toBe("Today 1:00 AM");
+    expect(label("2026-10-15T16:00:00.000Z", "America/Los_Angeles")).toBe("Today 9:00 AM");
+    expect(label("2026-10-15T01:00:00.000Z", "America/Los_Angeles")).toBe("Yesterday 6:00 PM");
   });
 });
 

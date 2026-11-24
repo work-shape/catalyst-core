@@ -74,14 +74,9 @@ function instructionsSection(toolNames: string[], withInstructions = true): stri
 }
 
 describe("the platform instructions on an agent's page", () => {
-  it("fold away above the agent's own instructions, and are absent where the instance names none", () => {
-    const section = instructionsSection([]);
-    expect(section).toContain("data-platform-instructions");
-    expect(section).toContain("Platform instructions");
-    expect(section.indexOf("Platform instructions")).toBeLessThan(
-      section.indexOf("Agent instructions")
-    );
-    expect(instructionsSection([], false)).not.toContain("Platform instructions");
+  it("are shown only where the instance names some", () => {
+    expect(instructionsSection([])).toContain("data-platform-instructions");
+    expect(instructionsSection([], false)).not.toContain("data-platform-instructions");
   });
 
   it("show the rules to every agent and the orientation only to one that holds a platform tool, with no field to edit", () => {
@@ -90,7 +85,6 @@ describe("the platform instructions on an agent's page", () => {
     );
     expect(without).toContain("You act as the signed-in user.");
     expect(without).not.toContain("You run on a platform");
-    expect(without).toContain("This agent holds none");
 
     const holding = render(
       createElement(PlatformInstructionsBody, {

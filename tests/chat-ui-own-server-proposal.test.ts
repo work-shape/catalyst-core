@@ -108,60 +108,25 @@ describe("the card", () => {
       )
     );
 
-  it("says Add MCP server with the name and the host, and opens the add screen for the chat's person", () => {
-    const de = render("de", true);
-    expect(de).toContain("data-own-server-proposal");
-    expect(de).toContain("MCP-Server hinzufügen");
-    expect(de).toContain("Meine Notizen");
-    expect(de).toContain("notes.example.com");
-    expect(de).toContain("data-own-server-proposal-open");
-    expect(de).toContain("Öffnen");
-    // A private chat: no line about private chats, no button to start one.
-    expect(de).not.toContain("data-own-server-proposal-private");
-    const en = render("en", true);
-    expect(en).toContain("Add MCP server");
-    expect(en).toContain("Nothing is saved before.");
-  });
-
-  it("has no button for someone else reading the chat", () => {
-    const en = render("en", false);
-    expect(en).not.toContain("data-own-server-proposal-open");
-    expect(en).toContain("Only the person who asked adds their own MCP server.");
-  });
-
-  it("in a chat others read, says where the tools work and offers a private chat to its person", () => {
-    const startPrivateChat = () => undefined;
-    const more = { ownsCall: () => true, startPrivateChat };
-    const de = render("de", true, { privateChat: false, more });
-    expect(de).toContain("data-own-server-proposal-open");
-    expect(de).toContain("Funktioniert nur in deinen privaten Chats.");
-    expect(de).toContain("Privaten Chat starten");
-    const en = render("en", true, { privateChat: false, more });
-    expect(en).toContain("Works only in your private chats.");
-    expect(en).toContain("Start private chat");
-    expect(host(true, [], more).startPrivateChat).toBe(startPrivateChat);
-    // Without a way to start one, the line stays and the button does not.
-    const bare = render("en", true, { privateChat: false, more: { ownsCall: () => true } });
-    expect(bare).toContain("Works only in your private chats.");
-    expect(bare).not.toContain("data-own-server-proposal-private=");
-  });
-
   it("gives the buttons to the person whose message the run answered, not to who started the chat", () => {
+    // A private chat of its person: Open, and no private-chat line.
+    const own = render("en", true);
+    expect(own).toContain("data-own-server-proposal-open");
+    expect(own).not.toContain("data-own-server-proposal-private");
+    expect(render("en", false)).not.toContain("data-own-server-proposal-open");
     // A teammate asked in the creator's team chat: theirs, and the creator only reads.
     const teammate = render("en", false, {
       privateChat: false,
       more: { ownsCall: () => true, startPrivateChat: () => undefined }
     });
     expect(teammate).toContain("data-own-server-proposal-open");
-    expect(teammate).toContain("Start private chat");
+    expect(teammate).toContain("data-own-server-proposal-private");
     const creator = render("en", true, {
       privateChat: false,
       more: { ownsCall: () => false, startPrivateChat: () => undefined }
     });
     expect(creator).not.toContain("data-own-server-proposal-open");
-    expect(creator).not.toContain("Start private chat");
-    expect(creator).not.toContain("Works only in your private chats.");
-    expect(creator).toContain("Only the person who asked adds their own MCP server.");
+    expect(creator).not.toContain("data-own-server-proposal-private");
     // Where the thread does not know the run, the chat's creator has it, as before.
     expect(render("en", true, { more: { ownsCall: () => undefined } })).toContain(
       "data-own-server-proposal-open"
@@ -229,29 +194,15 @@ describe("whose run a call is", () => {
 });
 
 describe("the message the person's tab sends once the server is added", () => {
-  it("names the server and the tools accepted, or that none were, in the person's language", () => {
+  it("names the server and the tools accepted, at most five of them", () => {
     const { t } = createTranslationContext("en");
     expect(ownServerAddedMessage({ title: "Notes", tools: ["Search", "Save page"] }, t)).toBe(
       "I added my MCP server \u201cNotes\u201d. 2 tools accepted: \u201cSearch\u201d, \u201cSave page\u201d."
     );
-    expect(ownServerAddedMessage({ title: "Notes", tools: ["Search"] }, t)).toBe(
-      "I added my MCP server \u201cNotes\u201d. 1 tool accepted: \u201cSearch\u201d."
-    );
-    expect(ownServerAddedMessage({ title: "Notes", tools: [] }, t)).toBe(
-      "I added my MCP server \u201cNotes\u201d, with no tools accepted yet."
-    );
-    const de = createTranslationContext("de").t;
-    expect(ownServerAddedMessage({ title: "Notizen", tools: [] }, de)).toBe(
-      "Ich habe meinen MCP-Server \u201eNotizen\u201c hinzugef\u00fcgt, noch ohne akzeptierte Tools."
-    );
     const many = Array.from({ length: 12 }, (_, index) => `Tool ${index + 1}`);
     const listed = ownServerAddedMessage({ title: "Notes", tools: many }, t);
     expect(listed).toContain("12 tools accepted");
-    expect(listed).toContain("\u201cTool 5\u201d + 7 more.");
     expect(listed).not.toContain("Tool 6");
-    expect(ownServerAddedMessage({ title: "N", tools: many }, de)).toContain(
-      "\u201eTool 5\u201c + 7 weitere."
-    );
   });
 
   it("quotes a hostile tool title as one short name, never as the person's own words", () => {

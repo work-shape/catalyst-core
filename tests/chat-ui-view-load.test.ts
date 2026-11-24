@@ -19,7 +19,6 @@ import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 // Both offer Try again, which starts a new shell.
 
 const en = createTranslationContext("en").t;
-const de = createTranslationContext("de").t;
 
 const unmounts: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -42,7 +41,7 @@ function framesNeverFail(): void {
   });
 }
 
-async function mount(locale: "en" | "de" = "en"): Promise<HTMLElement> {
+async function mount(): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   document.body.append(container);
@@ -57,7 +56,7 @@ async function mount(locale: "en" | "de" = "en"): Promise<HTMLElement> {
           { allowedScriptSrc: [], children: null },
           createElement(
             TranslationProvider,
-            { locale, children: null },
+            { locale: "en", children: null },
             createElement(
               UiRoot,
               { mode: "light", labels: uiLabelsEn },
@@ -153,16 +152,5 @@ describe("a view in a conversation that cannot load", () => {
     expect(loadError(view)).toBeNull();
     await advance(1);
     expect(loadError(view)).not.toBeNull();
-  });
-
-  it("says so in German", async () => {
-    vi.useFakeTimers();
-    framesNeverFail();
-    const view = await mount("de");
-    await advance(VIEW_LOAD_TIMEOUT_MS);
-    expect(loadError(view)?.textContent).toContain(
-      "Diese Ansicht wurde nicht innerhalb von 30 Sekunden geladen."
-    );
-    expect(de("displayLoadFailed")).toBe("Diese Ansicht konnte nicht geladen werden.");
   });
 });

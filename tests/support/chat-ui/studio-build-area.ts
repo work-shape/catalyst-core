@@ -9,19 +9,17 @@ export {
   refusalPlaceOf
 } from "../../../packages/chat-ui/src/studio/build-area/asset-place";
 export { SkillMyChats } from "../../../packages/chat-ui/src/studio/build-area/skill-my-chats";
-export { AgentSkills } from "../../../packages/chat-ui/src/studio/build-area/agent-skills";
+
 export { AgentKnowledge } from "../../../packages/chat-ui/src/studio/build-area/agent-knowledge";
 export {
   shareUpTo,
-  unreachablePlaces,
-  unreachableReason
+  unreachablePlaces
 } from "../../../packages/chat-ui/src/studio/build-area/unreachable-choices";
 export { NewAssetAvailability } from "../../../packages/chat-ui/src/studio/build-area/build-create-dialog";
 export { AgentDataStores } from "../../../packages/chat-ui/src/studio/build-area/agent-data-stores";
 export {
   heldDataStores,
   isAgentDataStoreToolName,
-  unusableDataStoreReason,
   withChosenDataStores,
   withDataStoreAccess
 } from "../../../packages/chat-ui/src/studio/build-area/agent-data-stores-model";

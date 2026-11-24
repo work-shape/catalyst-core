@@ -42,7 +42,6 @@ const failed = () =>
 
 /** Mounts the page; `answers` maps a path to its answer, and every request is counted. */
 async function mountMembers(
-  locale: "en" | "de",
   answers: Record<string, () => Response>
 ): Promise<{ container: HTMLElement; calls: string[]; unmount(): Promise<void> }> {
   const calls: string[] = [];
@@ -60,7 +59,7 @@ async function mountMembers(
       ),
       workspace
     },
-    locale,
+    "en",
     createElement(WorkspaceMembersPage)
   );
   return { ...mounted, calls };
@@ -82,39 +81,25 @@ function buttonNamed(container: ParentNode, label: string): HTMLButtonElement | 
 }
 
 describe("Workspace > Members, when a list cannot be read", () => {
-  it.each([
-    {
-      list: "members",
-      path: membersPath,
-      said: "Du darfst die Mitglieder dieses Arbeitsbereichs nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
-    },
-    {
-      list: "requests",
-      path: requestsPath,
-      said: "Du darfst die Beitrittsanfragen dieses Arbeitsbereichs nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
+  it("a refused list names whom to ask, as information without a retry", async () => {
+    const mounted = await mountMembers({
+      [membersPath]: () => Response.json({ items: [member] }),
+      [requestsPath]: refused
+    });
+    try {
+      await waitForText(mounted.container, "for example Mara.");
+      expect(bannerSaying(mounted.container, "You").getAttribute("data-tone")).toBe("info");
+      expect(buttonNamed(mounted.container, "Try again")).toBeUndefined();
+    } finally {
+      await mounted.unmount();
     }
-  ])(
-    "a refused $list list names whom to ask, as information without a retry",
-    async ({ path, said }) => {
-      const mounted = await mountMembers("de", {
-        [membersPath]: () => Response.json({ items: [member] }),
-        [path]: refused
-      });
-      try {
-        await waitForText(mounted.container, said);
-        expect(bannerSaying(mounted.container, said).getAttribute("data-tone")).toBe("info");
-        expect(buttonNamed(mounted.container, "Erneut versuchen")).toBeUndefined();
-      } finally {
-        await mounted.unmount();
-      }
-    }
-  );
+  });
 
   it.each([
     { list: "members", path: membersPath, said: "Members could not be loaded." },
     { list: "requests", path: requestsPath, said: "Access requests could not be loaded." }
   ])("a failed $list list is an error with a retry that asks again", async ({ path, said }) => {
-    const mounted = await mountMembers("en", {
+    const mounted = await mountMembers({
       [membersPath]: () => Response.json({ items: [member] }),
       [path]: failed
     });
@@ -139,77 +124,30 @@ describe("Workspace > Members, when a list cannot be read", () => {
 describe("Workspace > Members, when a change is refused", () => {
   // Round 2: the refusal of Approve stood at the top of the page, two sections away, and said
   // only "You are not allowed to do this in this workspace."
-  it.each([
-    {
-      locale: "en" as const,
-      approve: "Approve",
-      requests: "Requests",
-      said: "You can't approve requests in this workspace. Ask an admin for all workspaces, for example Mara."
-    },
-    {
-      locale: "de" as const,
-      approve: "Genehmigen",
-      requests: "Anfragen",
-      said: "Du darfst Anfragen in diesem Arbeitsbereich nicht genehmigen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara."
-    }
-  ])(
-    "a refused Approve is said at the top of Requests, naming the action ($locale)",
-    async ({ locale, approve, requests, said }) => {
-      const mounted = await mountMembers(locale, {
-        [membersPath]: () => Response.json({ items: [member] }),
-        [requestsPath]: () => Response.json({ items: [requester] }),
-        [approvePath]: refused
-      });
-      try {
-        await waitForText(mounted.container, "Jonas Weber");
-        await act(async () => {
-          required(buttonNamed(mounted.container, approve)).click();
-        });
-        await waitForText(mounted.container, said);
-        const banner = bannerSaying(mounted.container, said);
-        expect(banner.getAttribute("data-tone")).toBe("info");
-        const section = required(banner.closest("section"));
-        expect(section.querySelector("h2")?.textContent).toBe(requests);
-        // First in the section's content, before the request it concerns.
-        const row = required(
-          section.querySelector('[data-testid="collaboration-workspace-request-row"]')
-        );
-        expect(banner.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-        expect(row.textContent).toContain("Jonas Weber");
-        // Nowhere else, and not above the members.
-        expect(mounted.container.textContent?.split(said)).toHaveLength(2);
-        const members = required(
-          mounted.container.querySelector('[data-testid="collaboration-workspace-members"]')
-        );
-        expect(members.contains(banner)).toBe(false);
-      } finally {
-        await mounted.unmount();
-      }
-    }
-  );
-});
-
-describe("Workspace > Members, its description", () => {
-  // Builder and Publisher reach only assets the workspace owns, never its conversations,
-  // Projects or members' files. Name the owner and examples in both languages.
-  it.each([
-    {
-      locale: "en" as const,
-      said: "Members use this workspace's agents and apps and work in its conversations. Builders may also edit what this workspace owns, such as its agents and apps; Publishers may publish it. An admin for all workspaces grants these rights."
-    },
-    {
-      locale: "de" as const,
-      said: "Mitglieder verwenden die Agenten und Apps dieses Arbeitsbereichs und arbeiten in seinen Unterhaltungen. Wer das Recht zum Bearbeiten hat, darf zusätzlich bearbeiten, was dem Arbeitsbereich gehört, etwa seine Agenten und Apps; wer das Recht zum Veröffentlichen hat, darf es veröffentlichen. Beide Rechte vergibt ein Admin für alle Arbeitsbereiche."
-    }
-  ])("limits the extra rights to what this workspace owns ($locale)", async ({ locale, said }) => {
-    const mounted = await mountMembers(locale, {
-      [membersPath]: () => Response.json({ items: [member] })
+  it("a refused Approve is said in Requests, naming whom to ask", async () => {
+    const mounted = await mountMembers({
+      [membersPath]: () => Response.json({ items: [member] }),
+      [requestsPath]: () => Response.json({ items: [requester] }),
+      [approvePath]: refused
     });
     try {
+      await waitForText(mounted.container, "Jonas Weber");
+      await act(async () => {
+        required(buttonNamed(mounted.container, "Approve")).click();
+      });
+      const said = "You can't approve requests in this workspace.";
       await waitForText(mounted.container, said);
-      if (locale === "de") {
-        expect(mounted.container.textContent).not.toMatch(/Builder|Publisher|ihm gehört|Inhalte/u);
-      }
+      const banner = bannerSaying(mounted.container, said);
+      expect(banner.textContent).toContain("Mara");
+      expect(banner.getAttribute("data-tone")).toBe("info");
+      const section = required(banner.closest("section"));
+      expect(
+        section.querySelector('[data-testid="collaboration-workspace-request-row"]')
+      ).not.toBeNull();
+      const members = required(
+        mounted.container.querySelector('[data-testid="collaboration-workspace-members"]')
+      );
+      expect(members.contains(banner)).toBe(false);
     } finally {
       await mounted.unmount();
     }

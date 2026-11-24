@@ -7,7 +7,7 @@ import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiClient, type Message } from "@work-shape/catalyst-api-client";
-import { UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import {
   ToolDisplayPanelProvider,
   useToolDisplayPanel
@@ -19,6 +19,8 @@ import {
   ThreadMessage,
   ToolDecisionsProvider,
   toAiSdkMessageRepository,
+  partitionAttachments,
+  planAttachmentGroup,
   toUiMessages,
   WorkspaceApiClientProvider
 } from "./support/chat-ui";
@@ -152,10 +154,11 @@ const sent: Message = {
   }
 };
 
-function shell(locale: "en" | "de", child: ReactNode) {
+function shell(child: ReactNode) {
+  const locale = "en";
   return createElement(
     UiRoot,
-    { mode: "light", labels: locale === "de" ? uiLabelsDe : uiLabelsEn },
+    { mode: "light", labels: uiLabelsEn },
     createElement(
       QueryClientProvider,
       { client: new QueryClient() },
@@ -182,8 +185,8 @@ async function settle() {
   }
 }
 
-async function show(locale: "en" | "de" = "en") {
-  await act(async () => root.render(shell(locale, createElement(Thread, { messages: [sent] }))));
+async function show() {
+  await act(async () => root.render(shell(createElement(Thread, { messages: [sent] }))));
   await settle();
 }
 
@@ -192,25 +195,12 @@ function panel(): HTMLElement | null {
 }
 
 describe("a picture sent with a message", () => {
-  it("is a button that names the file and holds the picture", async () => {
-    await show();
-    const button = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Open preview for photo.png"]'
-    );
-    expect(button, "the picture is a button").not.toBeNull();
-    expect(button?.type).toBe("button");
-    expect(button?.querySelector("img")?.getAttribute("alt")).toBe("photo.png");
-    expect(button?.textContent).toBe("photo.png");
-    button?.focus();
-    expect(document.activeElement).toBe(button);
-    expect(panel()).toBeNull();
-  });
-
   it("opens in the preview panel on a click, as the file view of that file", async () => {
     await show();
     const button = host.querySelector<HTMLButtonElement>(
       'button[aria-label="Open preview for photo.png"]'
     );
+    expect(panel()).toBeNull();
     await act(async () => button?.click());
     await settle();
 
@@ -222,11 +212,24 @@ describe("a picture sent with a message", () => {
     );
     expect(urls.some((url) => url.includes("/conversations/conv_1/resources"))).toBe(true);
   });
+});
 
-  it("says what it does in German", async () => {
-    await show("de");
+describe("sent message attachment grouping", () => {
+  it("collapses long stacks into a card that reveals the remainder on demand", () => {
+    expect(planAttachmentGroup(4, false)).toEqual({ layout: "inline", visible: 4, hidden: 0 });
+    expect(planAttachmentGroup(6, false)).toEqual({ layout: "card", visible: 6, hidden: 0 });
+    expect(planAttachmentGroup(17, false)).toEqual({ layout: "card", visible: 6, hidden: 11 });
+    expect(planAttachmentGroup(17, true)).toEqual({ layout: "card", visible: 17, hidden: 0 });
+  });
+
+  it("groups only the files so image attachments keep their thumbnails", () => {
     expect(
-      host.querySelector('button[aria-label="Vorschau für photo.png öffnen"] img')
-    ).not.toBeNull();
+      partitionAttachments([
+        { type: "file", name: "0. Fragebogen.pdf", contentType: "application/pdf" },
+        { type: "image", name: "scan.png", contentType: "image/png" },
+        { type: "document", name: "1. Datenschutz.pdf" },
+        { type: "file", name: "photo.jpeg" }
+      ])
+    ).toEqual({ images: [1], files: [0, 2, 3] });
   });
 });

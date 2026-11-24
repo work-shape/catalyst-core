@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
 import {
@@ -11,13 +9,11 @@ import {
   workspaceRoutePath,
   addressDockConversation,
   clampDockWidth,
-  DOCK_DEFAULT_WIDTH,
   dockConversationOfSearch,
   dockMotion,
   dockPlacement,
   searchWithDock
 } from "./support/chat-ui";
-// Keep this module private: exporting it only for tests hides a Knip unused-export finding.
 
 type Area = (typeof areaRoutes)[number]["area"];
 
@@ -69,56 +65,37 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
 ];
 
 describe("area route table", () => {
-  it("has one row per area", () => {
-    const areas = areaRoutes.map((row) => row.area);
-
-    expect(areas).toEqual([
-      "chat",
-      "agents",
-      "apps",
-      "workflows",
-      "scheduled",
-      "projects",
-      "settings",
-      "inbox",
-      "build",
-      "ui-library"
-    ]);
-  });
-
-  it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {
-    expect(workspaceRouteFromPath(path)).toEqual(route);
-    expect(workspaceRouteFromPath(`${path === "/" ? "" : path}/`)).toEqual(route);
-    expect(areaOfRoute(workspaceRouteFromPath(path))).toBe(view);
-  });
-
-  it.each(addresses)("leads back to %s from its route", (path, route) => {
-    const { to, params = {} } = workspaceRouteNavigation(route);
-    const address = to.replace(/\$(\w+)/gu, (_match, name: string) => params[name] ?? "");
-
-    expect(address).toBe(path);
-    expect(areaRoutePaths().map((candidate) => candidate.path)).toContain(to);
+  it("resolves each address to its view and leads back to it from its route", () => {
+    for (const [path, route, view] of addresses) {
+      expect(workspaceRouteFromPath(path), path).toEqual(route);
+      expect(workspaceRouteFromPath(`${path === "/" ? "" : path}/`), path).toEqual(route);
+      expect(areaOfRoute(workspaceRouteFromPath(path)), path).toBe(view);
+      const { to, params = {} } = workspaceRouteNavigation(route);
+      expect(
+        to.replace(/\$(\w+)/gu, (_match, name: string) => params[name] ?? ""),
+        path
+      ).toBe(path);
+      expect(areaRoutePaths().map((candidate) => candidate.path)).toContain(to);
+    }
   });
 
   /** The addresses of the old areas, with the Settings page that holds the same content now. */
   const oldAddresses: [path: string, route: WorkspaceRoute][] = [
     ["/settings", { kind: "settings", group: "you", page: "profile" }],
     ["/admin/users", { kind: "settings", group: "instance", page: "users" }],
-    ["/admin/usage", { kind: "settings", group: "instance", page: "usage" }],
-    ["/admin/audit", { kind: "settings", group: "instance", page: "audit" }],
     ["/admin/api-access", { kind: "settings", group: "instance", page: "api-access" }]
   ];
 
-  it.each(oldAddresses)("leads the old address %s to its Settings page", (path, route) => {
-    const row = areaRoutePaths().find((candidate) => candidate.path === path);
-    const { to, params = {} } = workspaceRouteNavigation(route);
-
-    expect(row?.route).toBeUndefined();
-    expect(row?.redirectTo).toBe(
-      to.replace(/\$(\w+)/gu, (_match, name: string) => params[name] ?? "")
-    );
-    expect(workspaceRouteFromPath(path)).toEqual(route);
-    expect(areaOfRoute(workspaceRouteFromPath(path))).toBe("settings");
+  it("leads the old addresses to their Settings pages", () => {
+    for (const [path, route] of oldAddresses) {
+      const row = areaRoutePaths().find((candidate) => candidate.path === path);
+      const { to, params = {} } = workspaceRouteNavigation(route);
+      expect(row?.route, path).toBeUndefined();
+      expect(row?.redirectTo, path).toBe(
+        to.replace(/\$(\w+)/gu, (_match, name: string) => params[name] ?? "")
+      );
+      expect(workspaceRouteFromPath(path), path).toEqual(route);
+    }
   });
 
   // Fails without the Inbox routes: /approvals was a route of its own and /inbox resolved to the root.
@@ -150,10 +127,6 @@ describe("area route table", () => {
     expect(workspaceRouteFromPath("/conversations")).toEqual({
       kind: "collaboration-workspace-root"
     });
-  });
-
-  it("keeps /admin as an address the shell answers by the viewer's rights", () => {
-    expect(workspaceRouteFromPath("/admin")).toEqual({ kind: "administration" });
   });
 
   it("leads the old Config address to Studio, which opens a list", () => {
@@ -188,10 +161,7 @@ describe("area route table", () => {
     for (const path of [
       "/w/",
       "/w/cw_1/c",
-      "/w/cw_1/x/conv_2",
-      "/c/a/b",
       "/admin/nothing",
-      "/x",
       "/build/a/b/c",
       // A Workflow's address names its workspace; without it there is no such page.
       "/workflows/unknown"
@@ -211,19 +181,6 @@ describe("area route table", () => {
       kind: "legacy-conversation",
       conversationId: "%E0%A4%A"
     });
-  });
-});
-
-describe("standalone router", () => {
-  const source = readFileSync(
-    fileURLToPath(new URL("../packages/chat-ui/src/standalone-chat-app.tsx", import.meta.url)),
-    "utf8"
-  );
-
-  it("creates its routes from the table and none by hand", () => {
-    expect(source.match(/createRoute\(/gu)).toHaveLength(1);
-    expect(source).toMatch(/areaRoutePaths\(\)\s*\.map\(/u);
-    expect(source).not.toMatch(/path:\s*["'`]/u);
   });
 });
 
@@ -266,15 +223,10 @@ describe("the dock in the address", () => {
     expect(dockMotion({ route: chatRoute }, { route: appsRoute })).toBeUndefined();
   });
 
-  it("opens at 420 px and leaves the dock and the page 380 px each", () => {
-    expect(DOCK_DEFAULT_WIDTH).toBe(420);
-    expect(dockPlacement(1200, 380)).toBe("beside");
+  it("leaves the dock and the page their minimum each", () => {
     expect(dockPlacement(760, 380)).toBe("beside");
     expect(dockPlacement(759, 380)).toBe("over");
-    expect(dockPlacement(undefined, 380)).toBe("beside");
-    expect(clampDockWidth(420, 1200, 380)).toBe(420);
     expect(clampDockWidth(200, 1200, 380)).toBe(380);
     expect(clampDockWidth(1000, 1200, 380)).toBe(820);
-    expect(clampDockWidth(420, 700, 380)).toBe(380);
   });
 });

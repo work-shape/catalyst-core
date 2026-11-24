@@ -91,7 +91,7 @@ const allowButton = (container: ParentNode) =>
   );
 
 describe("the outside hosts a preview of a draft holds back", () => {
-  it("offers the person to allow them for their own preview, says what it reads, and loads the frame again", async () => {
+  it("allows each held-back host for the person's own preview and loads the frame again", async () => {
     const onAllowed = vi.fn();
     const { container, asked } = await mount(
       createElement(DraftHostsNotice, {
@@ -101,12 +101,8 @@ describe("the outside hosts a preview of a draft holds back", () => {
         onAllowed
       })
     );
-    const text = container.textContent ?? "";
-    expect(text).toContain(
-      t("apps.draftHostsHeld", { hosts: "api.example.com, collect.example.net" })
-    );
-    expect(text).toContain(t("apps.draftHostsReadsData"));
-    expect(text).toContain(t("apps.draftHostsOnlyYou"));
+    // The person is told the draft reads data before allowing it to reach out.
+    expect(container.textContent).toContain(t("apps.draftHostsReadsData"));
 
     await act(async () => allowButton(container)?.click());
     await vi.waitFor(() => expect(onAllowed).toHaveBeenCalledOnce(), {

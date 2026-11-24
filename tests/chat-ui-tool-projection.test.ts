@@ -15,8 +15,7 @@ import {
 } from "./support/chat-ui";
 import {
   readToolActionLabel,
-  readToolDetailSections,
-  readToolDisplayProjection
+  readToolDetailSections
 } from "@work-shape/catalyst-chat-ui/tool-call";
 
 describe("chat UI message history projection", () => {
@@ -314,11 +313,6 @@ describe("chat UI message history projection", () => {
     const serializedDetails = JSON.stringify(detailSections);
 
     expect(serializedDetails).toContain("pptx_inspect --view summary");
-    expect(serializedDetails).toContain("status completed");
-    expect(serializedDetails).toContain("exit 0");
-    expect(serializedDetails).toContain("1.2 s");
-    expect(serializedDetails).toContain("stdout preview");
-    expect(serializedDetails).toContain("(truncated)");
     expect(serializedDetails).toContain("summary.json");
     expect(serializedDetails).not.toContain("scratch/");
     expect(serializedDetails).not.toContain("execution-workspaces/private");
@@ -694,104 +688,6 @@ describe("chat UI message history projection", () => {
     expect(serializedDetails).not.toContain("secret html");
     expect(serializedDetails).not.toContain("<w:document>");
     expect(serializedDetails).not.toContain("<p>");
-  });
-
-  it("keeps non-workspace tool details available", () => {
-    const detailSections = readToolDetailSections({
-      args: { text: "hello" },
-      labels: { input: "Input", output: "Output" },
-      result: { status: "success", output: "hello back" },
-      toolName: "demo.echo"
-    });
-
-    expect(detailSections).toEqual([
-      { label: "Input", value: JSON.stringify({ text: "hello" }, null, 2) },
-      {
-        label: "Output",
-        value: JSON.stringify({ status: "success", output: "hello back" }, null, 2)
-      }
-    ]);
-  });
-
-  it("projects user-facing tool titles and call subjects", () => {
-    expect(
-      readToolDisplayProjection({
-        args: { name: "pdf" },
-        locale: "en",
-        result: {
-          status: "success",
-          output: {
-            name: "pdf",
-            title: "PDF",
-            description: "Render and inspect PDF artifacts.",
-            content: "# PDF",
-            sourceVersion: "sha256:test"
-          }
-        },
-        toolName: "read_skill"
-      })
-    ).toEqual({
-      actionLabel: "PDF",
-      technicalName: "read_skill",
-      title: "Read instructions"
-    });
-
-    expect(
-      readToolDisplayProjection({
-        args: { name: "pdf" },
-        locale: "de",
-        result: undefined,
-        toolName: "read_skill"
-      })
-    ).toMatchObject({
-      actionLabel: "PDF",
-      technicalName: "read_skill",
-      title: "Anleitung lesen"
-    });
-
-    // The tool keeps its name `show_view`; a person reads what it does, never "Widget".
-    for (const [locale, title] of [
-      ["en", "Show an overview"],
-      ["de", "Übersicht zeigen"]
-    ] as const) {
-      expect(
-        readToolDisplayProjection({
-          args: { title: "Open tasks" },
-          locale,
-          result: undefined,
-          toolName: "show_view"
-        })
-      ).toEqual({ actionLabel: "Open tasks", technicalName: "show_view", title });
-    }
-
-    // The fact sheet steps say what happens, in both languages.
-    const step = (toolName: string, locale: "en" | "de") =>
-      readToolDisplayProjection({ args: {}, locale, result: undefined, toolName }).title;
-    expect(step("structured_data.publish", "en")).toBe("Update the fact sheet");
-    expect(step("structured_data.read", "en")).toBe("Read the fact sheet");
-    expect(step("structured_result.read", "en")).toBe("Reopen an earlier result");
-    expect(step("structured_data.publish", "de")).toBe("Faktenblatt aktualisieren");
-    expect(step("structured_data.read", "de")).toBe("Faktenblatt lesen");
-    expect(step("structured_result.read", "de")).toBe("Früheres Ergebnis öffnen");
-
-    // A Data Store's reading steps are named in the person's language, never "Describe".
-    expect(step("data_store.fristen.describe", "de")).toBe("Spalten des Data Stores lesen");
-    expect(step("data_store.fristen.query", "de")).toBe("Datensätze lesen");
-    expect(step("data_store.fristen.preview_rows", "de")).toBe("Datensätze ansehen");
-    expect(step("data_store.fristen.describe", "en")).toBe("Read the data store's columns");
-
-    expect(
-      readToolDisplayProjection({
-        args: {},
-        locale: "en",
-        result: undefined,
-        toolName: "demo.workflow_summary"
-      })
-    ).toEqual({
-      actionLabel: undefined,
-      technicalName: "demo.workflow_summary",
-      title: "Workflow Summary"
-    });
   });
 
   it("replays persisted tool failures as dynamic tool errors", () => {

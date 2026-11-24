@@ -1,6 +1,5 @@
 export { BrowseCollaborationWorkspacesDialog } from "../../../packages/chat-ui/src/shared/collaboration-workspace/browse-collaboration-workspaces-dialog";
 export {
-  collaborationWorkspaceAccentAttributes,
   collaborationWorkspaceAccentColors,
   collaborationWorkspaceAccentTokens,
   contrastRatio,

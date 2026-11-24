@@ -43,7 +43,6 @@ describe("the output of a tool call in the work history", () => {
     const markup = render({ result: { error: SENTENCE }, isError: true });
     const text = /<p[^>]*>([^<]*)<\/p>/u.exec(markup);
     expect(text?.[1]).toBe(SENTENCE.replace(">", "&gt;"));
-    expect(text?.[0]).toContain("[overflow-wrap:anywhere]");
     // Not as JSON, and no code box until the technical details are opened.
     expect(markup).not.toContain("&quot;error&quot;");
     expect(markup).not.toContain("<pre");

@@ -70,7 +70,7 @@ export function LanguageAppearancePage() {
   );
 }
 
-export function LanguageAppearanceView({
+function LanguageAppearanceView({
   locales,
   locale,
   selectLocale,

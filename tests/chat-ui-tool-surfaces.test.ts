@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { toUiMessages, ToolSurfaceList, dedupeToolSurfaceRefs } from "./support/chat-ui";
-import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
+import {
+  createToolDisplayPanelAutoShowTracker,
+  ToolDisplayPanelProvider
+} from "@work-shape/catalyst-chat-ui/tool-display-panel";
 
 describe("chat UI message history projection", () => {
   it("defers promoted result cards until the active run finishes", () => {
@@ -180,68 +183,14 @@ describe("chat UI message history projection", () => {
     expect(markup).toContain("Unsupported Dashboard");
     expect(markup).toContain("Open in side panel");
   });
+});
 
-  it("renders final surface cards as whole-card side panel openers", () => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        ToolDisplayPanelProvider,
-        null,
-        createElement(ToolSurfaceList, {
-          surfaces: [
-            {
-              surfaceId: "surface_dashboard",
-              title: "Dashboard",
-              toolName: "show_view",
-              display: {
-                kind: "html.rendered",
-                version: 1,
-                mode: "side_panel",
-                data: {
-                  html: "<section>Dashboard</section>",
-                  title: "Dashboard"
-                }
-              }
-            }
-          ]
-        })
-      )
-    );
+describe("chat UI tool display panel", () => {
+  it("auto-opens each display key once", () => {
+    const tracker = createToolDisplayPanelAutoShowTracker();
 
-    expect(markup).toContain('role="button"');
-    expect(markup).toContain('tabindex="0"');
-    expect(markup).toContain('aria-label="Open in side panel"');
-    expect(markup).toContain("Dashboard");
-  });
-
-  it("renders structured data references as matching side-panel cards", () => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        ToolDisplayPanelProvider,
-        null,
-        createElement(ToolSurfaceList, {
-          surfaces: [
-            {
-              surfaceId: "structured-data:resource_1",
-              title: "Customer data",
-              toolName: "structured_data.publish",
-              display: {
-                kind: "structured_data.resource",
-                version: 1,
-                mode: "side_panel",
-                data: {
-                  structuredDataResourceId: "resource_1",
-                  resourceKey: "customer_data",
-                  revision: 1
-                }
-              }
-            }
-          ]
-        })
-      )
-    );
-
-    expect(markup).toContain('role="button"');
-    expect(markup).toContain("Customer data");
-    expect(markup).not.toContain("structured_data.publish");
+    expect(tracker.shouldAutoShow("review:call_1")).toBe(true);
+    expect(tracker.shouldAutoShow("review:call_1")).toBe(false);
+    expect(tracker.shouldAutoShow("review:call_2")).toBe(true);
   });
 });

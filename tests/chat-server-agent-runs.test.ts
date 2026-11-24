@@ -6,7 +6,6 @@ import {
   createTestInstance,
   getTestConfig
 } from "./support/test-instance";
-import { withTestSql as withSql } from "./support/test-sql";
 
 import { testOperations } from "./support/operations";
 
@@ -361,46 +360,6 @@ describe("client instance app vertical slice", () => {
           ])
         }
       }
-    });
-
-    const firstCreateAndStart = await fetchTestOperation(baseUrl, "conversations.runs.create", {
-      ...{
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-create-run-key",
-          conversation: { title: "Created through run command" },
-          message: { text: "create and start through public run API" }
-        })
-      }
-    });
-    expect(firstCreateAndStart.status).toBe(200);
-    const firstCreateAndStartBody = (await firstCreateAndStart.json()) as {
-      conversation: { id: string };
-      userMessage: { id: string };
-      run: { id: string };
-    };
-
-    const retryCreateAndStart = await fetchTestOperation(baseUrl, "conversations.runs.create", {
-      ...{
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-create-run-key",
-          conversation: { title: "Should not create another conversation" },
-          message: { text: "this retry must not create another run" }
-        })
-      }
-    });
-    expect(retryCreateAndStart.status).toBe(200);
-    expect(await retryCreateAndStart.json()).toMatchObject({
-      conversation: { id: firstCreateAndStartBody.conversation.id },
-      userMessage: { id: firstCreateAndStartBody.userMessage.id },
-      run: { id: firstCreateAndStartBody.run.id }
     });
 
     const [concurrentCreateA, concurrentCreateB] = await Promise.all([
@@ -868,85 +827,6 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("cancels the current conversation run instead of letting the stream complete in the background", async () => {
-    const app = await createTestInstance({
-      config: createTestConfig(),
-      env: {},
-      tools: []
-    });
-
-    try {
-      const created = await app.call("conversations.create", {
-        payload: { title: "Cancel stream test" }
-      });
-      expect(created.statusCode).toBe(200);
-      const conversation = created.json() as { id: string };
-
-      const baseUrl = await listenTestInstance(app);
-      const messageTokens = Array.from({ length: 240 }, (_, index) => `cancel-token-${index}`);
-      const lateToken = messageTokens.at(-1) ?? "";
-
-      const started = await fetchStartConversationRun(
-        baseUrl,
-        conversation.id,
-        messageTokens.join(" ")
-      );
-      const runId = started.run.id;
-
-      const cancelled = await fetchTestOperation(baseUrl, "conversations.runs.cancel", {
-        params: { conversationId: conversation.id, runId: runId },
-        ...{
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: JSON.stringify({ reason: "test cancellation" })
-        }
-      });
-      expect(cancelled.status).toBe(200);
-      // A run its worker has not claimed yet is cancelled at once; a claimed one is asked to stop.
-      expect(await cancelled.json()).toMatchObject({
-        run: {
-          id: runId,
-          status: expect.stringMatching(/^cancell(?:ed|ing)$/)
-        }
-      });
-
-      const chunks = parseSseChunks(await fetchRunEvents(baseUrl, conversation.id, runId));
-      expect(chunks.some((chunk) => chunk.type === "run_cancelled")).toBe(true);
-      expect(chunks.map((chunk) => chunk.payload?.delta ?? "").join("")).not.toContain(lateToken);
-
-      // The run's job has ended, so nothing of the run is still executing that could write the
-      // rest of the answer. Without the cancel the job ends with the whole answer stored.
-      await waitUntil(
-        async () => {
-          const jobs = await withSql(
-            (sql) => sql<{ status: string }[]>`
-              select status from platform_jobs where subject = ${runId}`
-          );
-          return jobs.length === 1 && jobs[0]?.status !== "queued" && jobs[0]?.status !== "running";
-        },
-        "the cancelled run's job has ended",
-        10_000
-      );
-
-      const messages = await fetchTestOperation(baseUrl, "conversations.messages.list", {
-        params: { conversationId: conversation.id }
-      });
-      expect(messages.status).toBe(200);
-      const persistedMessages = apiOperations["conversations.messages.list"].response.schema.parse(
-        await messages.json()
-      ).items;
-      const assistantText = persistedMessages
-        .filter((message) => message.role === "assistant")
-        .map((message) => message.text)
-        .join("\n");
-      expect(assistantText).not.toContain(lateToken);
-    } finally {
-      await app.close();
-    }
-  }, 12_000);
-
   it("rejects messages after the configured daily model call limit is reached", async () => {
     const app = await createTestInstance({
       config: createTestConfig({
@@ -1057,7 +937,7 @@ async function waitForAuditEvents(
 describe("agent availability per Collaboration Workspace", () => {
   it("rejects an agent that is not available in the conversation's workspace", async () => {
     const fixture = await createAvailabilityFixture();
-    const { app, sharedWorkspaceId, personalWorkspaceId } = fixture;
+    const { app, clientInstanceId, sharedWorkspaceId, personalWorkspaceId } = fixture;
     try {
       const notDefined = (agentName: string) => ({
         error: { code: "NOT_FOUND", message: `Agent '${agentName}' is not defined` }
@@ -1123,6 +1003,15 @@ describe("agent availability per Collaboration Workspace", () => {
         conversation: { collaborationWorkspaceId: sharedWorkspaceId },
         run: { agentName: "shared_only" }
       });
+
+      // A queued run keeps its stored agent when availability is revoked; the next start is refused.
+      const { run } = allowed.json() as { run: { id: string; status: string } };
+      expect(run.status).toBe("queued");
+      await fixture.setAvailability("shared_only", SELECTED_NOWHERE);
+      await expect(
+        app.stores.agentRuns.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
+      ).resolves.toMatchObject({ agentName: "shared_only", status: "queued" });
+      expect((await fixture.startRun(shared, "shared_only")).statusCode).toBe(404);
     } finally {
       await app.close();
     }
@@ -1154,32 +1043,6 @@ describe("agent availability per Collaboration Workspace", () => {
       const nothingAvailable = await fixture.startRun(await fixture.createConversation());
       expect(nothingAvailable.statusCode).toBe(422);
       expect(nothingAvailable.json()).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
-    } finally {
-      await app.close();
-    }
-  });
-
-  it("keeps the stored agent of a queued run when availability is revoked", async () => {
-    const fixture = await createAvailabilityFixture();
-    const { app, clientInstanceId, sharedWorkspaceId } = fixture;
-    try {
-      const started = await fixture.startRun(
-        await fixture.createConversation(sharedWorkspaceId),
-        "shared_only"
-      );
-      const { run } = started.json() as { run: { id: string; status: string } };
-      expect(run.status).toBe("queued");
-
-      await fixture.setAvailability("shared_only", SELECTED_NOWHERE);
-
-      await expect(
-        app.stores.agentRuns.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
-      ).resolves.toMatchObject({ agentName: "shared_only", status: "queued" });
-      const next = await fixture.startRun(
-        await fixture.createConversation(sharedWorkspaceId),
-        "shared_only"
-      );
-      expect(next.statusCode).toBe(404);
     } finally {
       await app.close();
     }

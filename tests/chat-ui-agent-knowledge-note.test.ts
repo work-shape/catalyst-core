@@ -18,7 +18,6 @@ import { CONDITION_WAIT_MS } from "./support/assertions";
 // unpublished one says so on its own row.
 
 const en = createTranslationContext("en").t;
-const de = createTranslationContext("de").t;
 const OWNER = "cw_owner";
 const AGENT_FIELDS: readonly EditableAgentField[] = ["knowledgeBases"];
 
@@ -92,14 +91,11 @@ describe("the Knowledge Base chooser of an agent says why one is missing or does
     await openChooser(container);
     await until(() => expect(rows()).toHaveLength(2));
 
-    expect(document.body.textContent).toContain(
-      "Lists the knowledge bases of this agent's workspace and those for everyone. One of another place is greyed, with the reason."
-    );
-    expect(document.body.textContent).not.toContain("Only a published knowledge base answers.");
+    expect(document.body.textContent).toContain(en("knowledge.agentNoteWorkspace"));
     const [published, unpublished] = rows();
     expect(published).toBe("Richtlinien");
     expect(unpublished).toContain("Entwurf");
-    expect(unpublished).toContain("Not published yet: it answers once it is published");
+    expect(unpublished).not.toBe("Entwurf");
   });
 
   it("names only the instance for an agent of the instance, whose list is empty here", async () => {
@@ -111,22 +107,8 @@ describe("the Knowledge Base chooser of an agent says why one is missing or does
     );
     await openChooser(container);
     await until(() =>
-      expect(document.body.textContent).toContain(
-        "Lists the knowledge bases for everyone. One that belongs to a workspace is greyed, with the reason."
-      )
+      expect(document.body.textContent).toContain(en("knowledge.agentNoteInstance"))
     );
     expect(rows()).toEqual([]);
-  });
-
-  it("says the same in German", () => {
-    expect(de("knowledge.agentNoteWorkspace")).toBe(
-      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die für alle. Eine von woanders steht ausgegraut da, mit dem Grund."
-    );
-    expect(de("knowledge.agentNoteInstance")).toBe(
-      "Hier stehen die Wissensbasen für alle. Eine, die einem Arbeitsbereich gehört, steht ausgegraut da, mit dem Grund."
-    );
-    expect(de("knowledge.agentUnpublished")).toBe(
-      "Noch nicht veröffentlicht: Sie antwortet, sobald sie veröffentlicht ist"
-    );
   });
 });

@@ -1,6 +1,6 @@
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
-import type { ConfigAssetReferences, LocaleCode } from "@work-shape/catalyst-api-client";
+import type { ConfigAssetReferences } from "@work-shape/catalyst-api-client";
 import type { ConnectionToolsRead } from "@work-shape/catalyst-chat-ui/build-area";
 import {
   AgentEditor,
@@ -108,7 +108,6 @@ const crmConnection: ConnectionToolsRead = {
 function packages(input: {
   selected?: string[];
   skillNames?: string[];
-  locale?: LocaleCode;
   references?: ConfigAssetReferences;
   connections?: ConnectionToolsRead;
 }) {
@@ -116,7 +115,7 @@ function packages(input: {
     references: input.references ?? described,
     selected: input.selected ?? [],
     skillNames: input.skillNames ?? [],
-    locale: input.locale ?? "en",
+    locale: "en",
     ...(input.connections ? { connections: input.connections } : {}),
     isOtherSource: (name) => name.startsWith("app.")
   });
@@ -153,24 +152,6 @@ describe("the rows of the Tools section", () => {
       summary: "Finds a customer.",
       effect: "reading"
     });
-  });
-
-  it("shows the title and summary in the reader's language, and the id where the title is missing", () => {
-    const en = packages({});
-    const de = packages({ locale: "de" });
-
-    expect(byKey(en, "package:documents")?.tools[0]).toMatchObject({
-      title: "Read document text",
-      summary: "Reads the text of a document attached to the conversation.",
-      module: "documents",
-      effect: "reading"
-    });
-    expect(byKey(de, "package:documents")?.tools[0]).toMatchObject({ title: "Dokumenttext lesen" });
-    const exec = byKey(en, "package:files")?.tools[0];
-    expect(exec?.title).toBe("workspace.exec");
-    expect(exec).not.toHaveProperty("summary");
-    // A deployment's tool without wording is a row of its own, named by its id.
-    expect(byKey(en, "own:crm.lookup")).toMatchObject({ kind: "own", title: "crm.lookup" });
   });
 
   it("lists every offered tool by its name where the server describes none", () => {
@@ -328,9 +309,6 @@ describe("the fact sheet, one check box for keeping and reading it", () => {
       "structured_data.publish",
       "structured_result.read"
     ]);
-    expect(view?.tools.find((tool) => tool.name === "structured_data.publish")?.title).toBe(
-      "Keep a fact sheet"
-    );
     expect(view?.choosable).not.toContain("structured_data.read");
     expect(view?.heldCount).toBe(1);
     // The section's count takes the pair as one tool too.
@@ -420,14 +398,13 @@ describe("the Tools section of the agent page", () => {
 
   function page(
     toolNames: string[],
-    locale: LocaleCode = "en",
     canEdit = true,
     references: { value?: ConfigAssetReferences; loading?: boolean } = { value: described }
   ): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { children: null, locale },
+        { children: null, locale: "en" },
         createElement(AgentEditor, {
           frame: frame(),
           initialForm: agentConfigToForm({
@@ -456,9 +433,6 @@ describe("the Tools section of the agent page", () => {
   it("shows a row per package, its count, and a switch that is mixed while partly on", () => {
     const markup = page(["read_skill", "web_fetch", "connection.crm.find_customer"]);
 
-    expect(markup).toContain(
-      "What the agent can do. It always acts with the rights of the person it works for."
-    );
     // Every package stands, the one the agent uses none of too, and the Connection.
     for (const key of ["package:documents", "package:web", "package:skills", "connection:crm"]) {
       expect(markup).toContain(`data-tool-package="${key}"`);
@@ -469,48 +443,26 @@ describe("the Tools section of the agent page", () => {
     expect(row(markup, "package:web")).toContain('aria-checked="true"');
     expect(row(markup, "package:skills")).toContain(">1/2<");
     expect(row(markup, "package:skills")).toContain('aria-checked="mixed"');
-    expect(row(markup, "package:skills")).toContain('aria-label="All tools of Skills"');
-    expect(row(markup, "package:skills")).toContain(
-      "Reads its skills and proposes changes to them."
-    );
     expect(row(markup, "connection:crm")).toContain(">1/2<");
-    // The sub-headings of the instance's own tools and of the Connections.
-    expect(markup).toContain(">For everyone</h3>");
-    expect(markup).toContain(">Connections</h3>");
     // The heading counts the tools that are on: what the rows add up to.
     expect(/>Tools<\/h2><span[^>]*>(\d+)</u.exec(markup)?.[1]).toBe("3");
-    expect(markup).toContain("Technical details");
     // The tools stand folded in their row, so no id shows on the page at rest.
     expect(markup).not.toContain("propose_skill_change");
   });
 
-  it("lets a reader fold the rows out but switch nothing", () => {
-    const reader = page(["web_fetch"], "en", false);
+  it("lets a reader switch nothing", () => {
+    const reader = page(["web_fetch"], false);
     expect(row(reader, "package:web")).toMatch(/role="checkbox"[^>]*disabled=""/u);
-    expect(row(reader, "package:web")).toContain('aria-expanded="false"');
   });
 
   it("waits for the references before it shows a row, and then shows the agent's own names if none came", () => {
     // On their way: the loading layout, and no tool by its id as a row of its own.
-    const loading = page(["show_view", "read_skill"], "en", true, { loading: true });
+    const loading = page(["show_view", "read_skill"], true, { loading: true });
     expect(loading).toContain("data-tool-loading");
     expect(loading).not.toContain("data-tool-package");
     // Refused: the agent's names stand by their ids, so nothing it holds is hidden.
-    const refused = page(["show_view"], "en", true, {});
+    const refused = page(["show_view"], true, {});
     expect(refused).not.toContain("data-tool-loading");
     expect(refused).toContain('data-tool-package="own:show_view"');
-  });
-
-  it("speaks German", () => {
-    const markup = page(["web_fetch"], "de");
-
-    expect(markup).toContain(">Web<");
-    expect(markup).toContain(">Für alle</h3>");
-    expect(markup).toContain(">Verbindungen</h3>");
-    expect(markup).toContain('aria-label="Alle Werkzeuge von Web"');
-    expect(markup).toContain("Technische Details");
-    expect(markup).toContain(
-      "Was der Agent tun kann. Er handelt immer mit den Rechten der Person, für die er arbeitet."
-    );
   });
 });

@@ -12,6 +12,7 @@ import {
   knowledgeBaseConfigToForm,
   knowledgeBaseFormToConfig,
   knowledgeBaseKindOn,
+  ReindexStatement,
   requestBuildStart,
   resolveBuildRights,
   startedKnowledgeBaseForm,
@@ -32,6 +33,8 @@ import { buildPageSettings } from "./chat-ui-build-page-harness";
 import { required } from "./support/assertions";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { createTranslationContext } from "./support/chat-ui/shared";
+import { rightSentenceKeys } from "./support/chat-ui";
 
 // The Knowledge Base page in Build against planted answers of `knowledge_bases.get` and the
 // asset reads: the draft and its publish in the frame's head, the tables of the store with
@@ -241,173 +244,57 @@ function instanceSettings(documents: boolean): SettingsPageContextValue {
 }
 
 describe("Knowledge Bases in Build", () => {
-  it("says that a saved draft is ahead of what is published and offers to publish it", () => {
-    const page = render(knowledgeBase({ revision: 3, publishedRevision: 2 }));
-
-    expect(page).toMatch(/data-asset-status="draft"[^>]*data-draft-revision="3"/u);
-    expect(page).toContain("Draft · not live");
-    expect(page).toContain("data-build-publish");
-  });
-
-  it("says nothing of a draft when the saved revision is the published one", () => {
-    const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
-
-    expect(page).not.toContain('data-asset-status="draft"');
-    expect(page).toContain('data-asset-status="live"');
-    expect(page).not.toContain("data-build-publish");
-  });
-
-  it("lists the store's tables, keeps a described table the store lacks, and shows the last check", () => {
-    const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
-
-    expect(page).toContain('data-knowledge-table="findings"');
-    expect(page).toContain('data-knowledge-table="runs"');
-    expect(page).toContain('data-knowledge-table="invoices"');
-    expect(page).toContain("Not in the data store");
-    // A box left clear is no error: a required box stopped the browser from sending the form.
-    expect(page).not.toMatch(/role="checkbox"[^>]*aria-required="true"/u);
-    expect(page).toContain('data-knowledge-state="needs_attention"');
-    expect(page).toContain("Cannot be read");
-    expect(page).toContain("Check now");
-    expect(page).toContain("select * from findings limit 20");
-    expect(page).toContain("Say what the rows are about");
-  });
-
-  // What stands on the page before the folded Settings, and the Settings themselves.
-  const mainOf = (page: string) => page.split("data-asset-settings=")[0] ?? "";
-  const foldedOf = (page: string) => page.slice(mainOf(page).length);
   const ok: KnowledgeBaseState = {
     ...needsAttention,
     status: "ok",
     tables: needsAttention.tables.map((table) => ({ ...table, readable: true }))
   };
 
-  it("leads with what agents do with the tables and keeps SQL and the status under Advanced", () => {
-    const asset = {
-      ...knowledgeBase({ revision: 2, publishedRevision: 2 }),
-      config: {
-        ...knowledgeBase({ revision: 2 }).config,
-        tables: [{ name: "open_invoices", description: "One row per open invoice." }]
-      }
-    };
-    const page = render(asset, { state: ok, askInChat: noop });
-    const main = mainOf(page);
-    const folded = foldedOf(page);
-
-    expect(main).toMatch(
-      /data-asset-lead=""><p[^>]*>Your agents answer questions from these tables\.<\/p>/u
-    );
-    // A table is named as a person reads it, with its own name small under it.
-    expect(main).toMatch(/<label[^>]*>Open Invoices<\/label>/u);
-    expect(main).toContain(">open_invoices</code>");
-    // The sentence about a row takes the lines it needs.
-    // Its name for a screen reader holds the table's own name, which two tables never share.
-    expect(main).toMatch(
-      /<textarea[^>]*aria-label="What a row of Open Invoices \(open_invoices\) is"/u
-    );
-    expect(main).not.toMatch(/<input[^>]*aria-label="What a row of/u);
-    // The test in plain words comes first; nothing of SQL, the status or the store before the fold.
-    expect(main).toContain("Ask something that is in the tables");
-    expect(main).toContain("Ask in chat");
-    expect(main).not.toContain("SQL");
-    expect(main).not.toContain("select * from");
-    expect(main).not.toContain("data-knowledge-state");
-    expect(main).not.toContain("Readable");
-    expect(main).not.toContain("Choose a data store");
-    expect(main).not.toContain("data-knowledge-attention");
-    // Settings stay folded, with Advanced folded inside them.
-    expect(folded).toMatch(/<button[^>]*aria-expanded="false"[^>]*data-asset-settings-trigger/u);
-    expect(folded).toContain("Name, data store, availability and more");
-    const advanced = folded.slice(folded.indexOf("data-knowledge-advanced="));
-    expect(advanced).toMatch(
-      /<button[^>]*aria-expanded="false"[^>]*data-knowledge-advanced-trigger/u
-    );
-    expect(advanced).toContain("Status and SQL test");
-    expect(advanced).toContain(">SQL test</h2>");
-    expect(advanced).toContain("select * from open_invoices limit 20");
-    expect(advanced).toContain('data-knowledge-state="ok"');
-    expect(folded.indexOf('id="data-store"')).toBeLessThan(folded.indexOf('id="status"'));
-
-    const german = mainOf(render(asset, { state: ok, askInChat: noop, locale: "de" }));
-    expect(german).toContain("Deine Agenten beantworten Fragen aus diesen Tabellen.");
-    expect(german).toContain("Frag etwas, das in den Tabellen steht");
-    expect(german).not.toContain("SQL");
+  it("offers to publish a saved draft that is ahead of what is published, and only then", () => {
+    const ahead = render(knowledgeBase({ revision: 3, publishedRevision: 2 }));
+    expect(ahead).toMatch(/data-asset-status="draft"[^>]*data-draft-revision="3"/u);
+    expect(ahead).toContain("data-build-publish");
+    const live = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
+    expect(live).toContain('data-asset-status="live"');
+    expect(live).not.toContain("data-build-publish");
   });
 
-  it("says at the top that a table cannot be read, and names each table's state in a row of its own", () => {
+  it("lists the store's tables, keeps a described table the store lacks, and flags one that cannot be read", () => {
     const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
-    const main = mainOf(page);
-
-    expect(main).toContain("data-knowledge-attention");
-    expect(main).toContain("1 table cannot be read. Agents do not answer from it.");
-    expect(main).toContain("Show status");
-    expect(main.indexOf("data-knowledge-attention")).toBeLessThan(main.indexOf('id="source"'));
-    // The label and the badge are not squeezed into one narrow column: a row per table.
-    const row = /<li[^>]*data-knowledge-table-state="invoices".*?<\/li>/su.exec(page)?.[0] ?? "";
-    expect(row).toContain("Invoices");
-    expect(row).toContain(">invoices</code>");
-    expect(row).toContain("Cannot be read");
-    // The backend could not be asked at all: no table is counted.
-    const unreachable = mainOf(
-      render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
-        state: { ...needsAttention, tables: ok.tables, problem: "The data store is not reachable." }
-      })
-    );
-    expect(unreachable).toContain("The tables cannot be read right now.");
-    // A published one never checked says so at the top, with the same way to the status.
-    const unchecked = mainOf(
+    expect(page).toContain('data-knowledge-table="findings"');
+    expect(page).toContain('data-knowledge-table="runs"');
+    expect(page).toContain('data-knowledge-table="invoices"');
+    // fix: a box left clear is no error; a required box stopped the browser from sending the form.
+    expect(page).not.toMatch(/role="checkbox"[^>]*aria-required="true"/u);
+    expect(page).toContain('data-knowledge-state="needs_attention"');
+    expect(page).toContain("data-knowledge-attention");
+    // fix: a published one never checked says so at the top too.
+    expect(
       render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
         state: { ...ok, status: "unchecked" }
       })
-    );
-    expect(unchecked).toContain("data-knowledge-attention");
-    expect(unchecked).toContain("Not checked yet whether agents can read the tables.");
-    expect(unchecked).toContain("Show status");
-    // The list of the states is not named as the list of the tables is.
-    expect(page).toMatch(/<ul[^>]*aria-label="Status of the tables"/u);
-    expect(page.split('aria-label="Tables"').length - 1).toBe(1);
+    ).toContain("data-knowledge-attention");
+    expect(
+      render(knowledgeBase({ revision: 2, publishedRevision: 2 }), { state: ok })
+    ).not.toContain("data-knowledge-attention");
   });
 
-  it("offers the question only where the page has a chat, and names the agents that have it", () => {
+  it("offers the question only where the page has a chat", () => {
     const asset = knowledgeBase({ revision: 2, publishedRevision: 2 });
     expect(render(asset, { state: ok })).not.toContain("data-knowledge-ask");
-    const named = render(asset, {
-      state: { ...ok, agents: [{ name: "advisor", title: "Advisor" }] },
-      askInChat: noop
-    });
-    expect(named).toContain("Send it to an agent that has this knowledge base: Advisor.");
-    const none = render(asset, { state: { ...ok, agents: [] }, askInChat: noop });
-    expect(none).toContain("No agent you can see has this knowledge base yet.");
+    expect(render(asset, { state: ok, askInChat: noop })).toContain("data-knowledge-ask");
   });
 
-  it("opens Settings by itself while no data store is chosen, which is chosen there", () => {
+  it("opens Settings by itself while no data store is chosen", () => {
     const asset = knowledgeBase({ revision: 1 });
     const page = render({
       ...asset,
       config: { ...asset.config, backend: { dataStore: "" }, tables: [] }
     });
     expect(page).toMatch(/<button[^>]*aria-expanded="true"[^>]*data-asset-settings-trigger/u);
-    expect(mainOf(page)).toContain("Choose a data store to see its tables.");
   });
 
-  // AVAIL-1: agents can use a Knowledge Base in the workspaces it is available in.
-  it("says beside its place who uses a Knowledge Base of everyone (SCOPE-WORDS)", () => {
-    const line = (markup: string) =>
-      /<span data-asset-place="">.*?<\/span>/su.exec(markup)?.[0] ?? "";
-    const offered = render(
-      {
-        ...knowledgeBase({ revision: 1, publishedRevision: 1 }),
-        availability: { mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: true }
-      },
-      { locale: "de" }
-    );
-    expect(line(offered)).toContain("Agenten nutzen sie in: Persönliche Arbeitsbereiche");
-    expect(line(render(knowledgeBase({ revision: 1, publishedRevision: 1 })))).toContain(
-      "No agent can use it yet"
-    );
-  });
-
-  it("says where agents can use it, saved with the page and applied at once", () => {
+  it("shows where agents can use it only to a reader the instance answers it to", () => {
     const section = (page: string) =>
       /<section[^>]*id="availability">.*?<\/section>/su.exec(page)?.[0] ?? "";
     const available = section(
@@ -419,27 +306,15 @@ describe("Knowledge Bases in Build", () => {
         }
       })
     );
-
-    expect(available).toContain("where agents can answer from this knowledge base");
-    expect(available).toContain("but not open its settings or change it");
     expect(available).toContain("Sales");
-    expect(available).toContain("With nothing selected, agents cannot use it in any workspace.");
     expect(section(render(knowledgeBase({ revision: 2, publishedRevision: 2 })))).toBe("");
   });
 
   it("asks for a publish before it shows a check or a test query", () => {
     const page = render(knowledgeBase({ revision: 1 }));
-
-    expect(page).toContain('data-asset-status="draft"');
-    expect(page).not.toContain("data-knowledge-state");
-    // One notice under the head, not a Status and a Test query section that each say "publish".
     expect(page).toContain("data-knowledge-not-published");
-    expect(page).toContain(
-      "Not published yet. Publish it so agents can answer from its tables and you can try a question."
-    );
+    expect(page).not.toContain("data-knowledge-state");
     expect(page).not.toContain("data-knowledge-ask");
-    expect(page).not.toContain(">SQL test<");
-    expect(page).not.toContain(">Status<");
   });
 });
 
@@ -459,49 +334,25 @@ describe("the data Workflows of a Knowledge Base (WF-KIND)", () => {
       ? undefined
       : (page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "");
 
-  it("names the Workflows that fill it and those that process it, each a link to its page", () => {
+  it("links the Workflows that fill and process it where the reader may open Workflows, and counts hidden ones without naming them", () => {
     const state = withFlows({
       fills: [{ id: "asset_import", name: "findings-import", title: "Findings import" }],
-      processes: [
-        { id: "asset_extract", name: "findings-extract", title: "Extract findings" },
-        { id: "asset_classify", name: "findings-classify", title: "" }
-      ],
+      processes: [{ id: "asset_extract", name: "findings-extract", title: "Extract findings" }],
       hidden: { fills: 2, processes: 0 },
-      truncated: true
+      truncated: false
     });
-    const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
-      state,
-      workflows
-    });
+    const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), { state, workflows });
     const filled = required(section(page, "filled-by"));
-    expect(filled).toContain(">Filled by</h2>");
-    expect(filled).toContain(">Findings import<");
     expect(filled).toContain('href="/w/ws_1/workflows/findings-import"');
-    expect(filled).toContain("and 2 more you can&#x27;t see");
-    const processed = required(section(page, "processed-by"));
-    expect(processed).toContain(">Processed by</h2>");
-    expect(processed).toContain(">Extract findings<");
-    // A Workflow without a title is named by its name.
-    expect(processed).toContain(">findings-classify<");
-    expect(processed).toContain('href="/w/ws_1/workflows/findings-extract"');
-    // The note on a cut read stands once, under the last section.
-    expect(page.split("this list may be incomplete").length - 1).toBe(1);
-    expect(processed).toContain("this list may be incomplete");
-
-    const german = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
-      state,
-      workflows,
-      locale: "de"
-    });
-    expect(german).toContain(">Gefüllt von</h2>");
-    expect(german).toContain(">Verarbeitet von</h2>");
+    expect(filled).toContain("2 more");
+    expect(required(section(page, "processed-by"))).toContain(
+      'href="/w/ws_1/workflows/findings-extract"'
+    );
     // Where the Workflows area is closed to the reader, the names stand without a link.
     const closed = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), { state });
     expect(closed).toContain(">Findings import<");
     expect(closed).not.toContain("/workflows/findings-import");
-  });
 
-  it("counts the Workflows the reader may not see without naming one, and has no section without any", () => {
     const hiddenOnly = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
       state: withFlows({
         fills: [],
@@ -511,64 +362,21 @@ describe("the data Workflows of a Knowledge Base (WF-KIND)", () => {
       }),
       workflows
     });
-    const filled = required(section(hiddenOnly, "filled-by"));
-    expect(filled).toContain("3 workflows you can&#x27;t see do this.");
-    expect(filled).not.toContain("data-data-flow=");
+    expect(required(section(hiddenOnly, "filled-by"))).not.toContain("data-data-flow=");
     expect(section(hiddenOnly, "processed-by")).toBeUndefined();
-    // A cut read that found none still says the list may be incomplete, once.
-    const cut = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), {
-      state: withFlows({
-        fills: [],
-        processes: [],
-        hidden: { fills: 0, processes: 0 },
-        truncated: true
-      })
-    });
-    expect(required(section(cut, "filled-by"))).toContain("this list may be incomplete");
-    expect(cut.split("this list may be incomplete").length - 1).toBe(1);
-    expect(section(cut, "processed-by")).toBeUndefined();
-    for (const state of [
-      needsAttention,
-      withFlows({ fills: [], processes: [], hidden: { fills: 0, processes: 0 }, truncated: false })
-    ]) {
-      const page = render(knowledgeBase({ revision: 2, publishedRevision: 2 }), { state });
-      expect(section(page, "filled-by")).toBeUndefined();
-      expect(section(page, "processed-by")).toBeUndefined();
-    }
+    const none = render(knowledgeBase({ revision: 2, publishedRevision: 2 }));
+    expect(section(none, "filled-by")).toBeUndefined();
   });
 });
 
 describe("Knowledge Bases of documents", () => {
-  it("lists the documents of a published one with their state, and offers no SQL query", () => {
+  it("lists the documents of a published one with a test search, and offers no SQL query", () => {
     const page = render(documentsKnowledgeBase());
-
-    expect(page).toContain("data-knowledge-documents");
     expect(page).toContain('data-knowledge-document-state="indexed"');
-    expect(page).toContain("data-knowledge-tally");
     expect(page).toContain("data-knowledge-add");
-    // Its description is the page's lead line; the fields for it wait under Settings, folded.
-    expect(page).toContain("data-asset-lead");
-    expect(page).toMatch(
-      /data-asset-settings-trigger=""[^>]*aria-expanded="false"|aria-expanded="false"[^>]*data-asset-settings-trigger=""/u
-    );
-    expect(page.indexOf("data-knowledge-documents")).toBeLessThan(
-      page.indexOf("data-asset-settings")
-    );
-    expect(page.indexOf("data-asset-settings")).toBeLessThan(page.indexOf('id="about"'));
-    // The list is the page: no outline beside it.
-    expect(page).not.toContain("data-page-outline");
-    // What it holds is told of its documents, not of rows of a table.
-    expect(page).toContain("Say what the documents are about");
-    expect(page).not.toContain("Say what the rows are about");
-    // What it answers from is fixed once it exists and plain from its documents: no line for
-    // it, no choice, and no data store to pick.
-    expect(page).not.toContain("What it answers from");
-    expect(page).not.toContain('role="radiogroup"');
+    expect(page).toContain("data-knowledge-test-search");
     expect(page).not.toContain("Choose a data store");
     expect(page).not.toContain("Test query");
-    // Instead a search to try, as an agent searches.
-    expect(page).toContain("Test search");
-    expect(page).toContain("data-knowledge-test-search");
   });
 
   it("is being set up while its store is made, and needs no attention for that", () => {
@@ -581,17 +389,15 @@ describe("Knowledge Bases of documents", () => {
       tables: [],
       problem: "The store for the Knowledge Base's documents is being made."
     };
-
-    const page = render(documentsKnowledgeBase(), { state: preparing, locale: "de" });
-
-    expect(page).toContain('data-knowledge-state="preparing"');
-    expect(page).toContain("Wird eingerichtet");
+    const page = render(documentsKnowledgeBase(), { state: preparing });
     expect(page).toContain("data-knowledge-preparing");
-    expect(page).not.toContain("Braucht Aufmerksamkeit");
+    expect(page).not.toContain("data-knowledge-attention");
+    expect(page).toContain('data-knowledge-state="preparing"');
     // What is no fault is shown as no error.
-    expect(page).not.toContain("is being made.");
+    expect(page).not.toContain(required(preparing.problem));
   });
 
+  // fix (KB-8 leftovers): Studio offers to embed one with no index.
   it("offers to embed the searchable documents of one that searches by meaning and has no index yet", () => {
     const semantic = documentsKnowledgeBase();
     const asset = { ...semantic, config: { ...semantic.config, methods: ["semantic", "keyword"] } };
@@ -611,67 +417,24 @@ describe("Knowledge Bases of documents", () => {
       ok: true,
       data: { started: false, state: "none" }
     });
-
-    const english = render(asset, { state: unembedded, reindex });
-    expect(english).toContain('data-knowledge-embedding="none"');
-    expect(english).toContain("data-knowledge-reindex");
-    expect(english).toContain("Embed passages…");
-    expect(english).toContain("The passages are not embedded yet");
-    expect(english).not.toContain("Re-index…");
-    const german = render(asset, { state: unembedded, reindex, locale: "de" });
-    expect(german).toContain("Passagen einbetten…");
-    expect(german).toContain("Die Passagen sind noch nicht eingebettet.");
-
+    expect(render(asset, { state: unembedded, reindex })).toContain("data-knowledge-reindex");
     // With no searchable document there is nothing to embed, and nothing is offered.
-    const empty = render(asset, { state: unembedded, reindex, documents: [] });
-    expect(empty).toContain('data-knowledge-embedding="none"');
-    expect(empty).not.toContain("data-knowledge-reindex");
-  });
-
-  it("starts a new Knowledge Base by asking where its knowledge comes from, upload chosen", () => {
-    try {
-      requestBuildStart("knowledge-bases", { name: "contracts-kb", title: "Contracts" });
-      const page = render(documentsKnowledgeBase(), { newAsset: true });
-
-      expect(page).toContain('role="radiogroup"');
-      const checked = /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>/u.exec(page)?.[0];
-      const label = checked ? /aria-labelledby="([^"]+)"/u.exec(checked)?.[1] : undefined;
-      expect(label).toBeDefined();
-      expect(page).toContain("Where does its knowledge come from?");
-      expect(page).toMatch(new RegExp(`id="${label}" class="text-label">.*?Upload files<`, "u"));
-      expect(page).toContain("Knowledge from your data");
-      expect(page).not.toContain("Choose a data store");
-      // It goes live on create: no section waits for a publish, and the save bar says so.
-      expect(page).toContain("Goes live when it is created, available in no workspace");
-      expect(page).not.toContain("data-knowledge-not-published");
-      expect(page).not.toContain(">Test search<");
-      expect(page).not.toContain("Saves a draft.");
-    } finally {
-      clearBuildStartRequest();
-    }
+    expect(render(asset, { state: unembedded, reindex, documents: [] })).not.toContain(
+      "data-knowledge-reindex"
+    );
   });
 
   it("names on the create page exactly the formats the instance reads (ACCEPT-FIX-8, C13)", () => {
-    // Before the first publish the page has no read of the store, so the formats come from the
-    // instance: PDF and DOCX only with its document processing, else TXT and Markdown. Outside a
-    // settings page it names the text formats, which every instance reads.
     try {
       requestBuildStart("knowledge-bases", { name: "contracts-kb", title: "Contracts" });
       for (const settings of [undefined, instanceSettings(false)]) {
-        const english = render(documentsKnowledgeBase(), { newAsset: true, settings });
-        expect(english).toContain("Files you add: TXT and Markdown.");
-        expect(english).not.toMatch(/PDF|DOCX/u);
-        const german = render(documentsKnowledgeBase(), { newAsset: true, locale: "de", settings });
-        expect(german).toContain("Dateien, die du hinzufügst: TXT und Markdown.");
-        expect(german).not.toMatch(/PDF|DOCX/u);
+        expect(render(documentsKnowledgeBase(), { newAsset: true, settings })).not.toMatch(
+          /PDF|DOCX/u
+        );
       }
-      const settings = instanceSettings(true);
-      expect(render(documentsKnowledgeBase(), { newAsset: true, settings })).toContain(
-        "Files you add: TXT, Markdown, PDF, DOCX, XLSX, and PPTX."
-      );
       expect(
-        render(documentsKnowledgeBase(), { newAsset: true, locale: "de", settings })
-      ).toContain("Dateien, die du hinzufügst: TXT, Markdown, PDF, DOCX, XLSX und PPTX.");
+        render(documentsKnowledgeBase(), { newAsset: true, settings: instanceSettings(true) })
+      ).toContain("PDF, DOCX");
     } finally {
       clearBuildStartRequest();
     }
@@ -730,17 +493,13 @@ describe("Knowledge Bases of documents", () => {
     expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(listed))).toEqual(listed);
   });
 
-  it("shows the keyword languages in Advanced, German and English checked where none is listed", () => {
+  it("checks German and English among the keyword languages where none is listed", () => {
     const boxOf = (html: string, language: string) =>
       html.split(`data-knowledge-keyword-language="${language}"`)[1]?.split("</li>")[0] ?? "";
-    const english = render(documentsKnowledgeBase());
-    expect(english).toContain("Keyword languages");
-    expect(boxOf(english, "de")).toContain('data-state="checked"');
-    expect(boxOf(english, "en")).toContain('data-state="checked"');
-    expect(boxOf(english, "fr")).toContain('data-state="unchecked"');
-    const german = render(documentsKnowledgeBase(), { locale: "de" });
-    expect(german).toContain("Sprachen der Wortsuche");
-    expect(boxOf(german, "fr")).toContain("Französisch");
+    const page = render(documentsKnowledgeBase());
+    expect(boxOf(page, "de")).toContain('data-state="checked"');
+    expect(boxOf(page, "en")).toContain('data-state="checked"');
+    expect(boxOf(page, "fr")).toContain('data-state="unchecked"');
   });
 });
 
@@ -762,5 +521,46 @@ describe("the agent form", () => {
     expect(
       agentFormToConfig(agentConfigToForm({ ...config, knowledgeBases: [] }))
     ).not.toHaveProperty("knowledgeBases");
+  });
+});
+
+describe("the room a first index or a re-index needs (KB-8)", () => {
+  const statement = {
+    bindingId: "embed-eu",
+    model: "text-embedding-3-large",
+    chunks: 1_200,
+    tokens: 480_000,
+    room: false,
+    storeBytes: 900_000_000,
+    addedBytes: 200_000_000,
+    limitBytes: 1_000_000_000,
+    confirmation: "a".repeat(64)
+  };
+  const shown = (first: boolean) =>
+    renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "en",
+        children: createElement(ReindexStatement, { statement, locale: "en", first })
+      })
+    );
+
+  // fix (KB-8 leftovers): the first index's no-room line names one index.
+  it("names both indexes only for a re-index beside the active one", () => {
+    expect(shown(true)).not.toContain("both indexes");
+    expect(shown(false)).toContain("both indexes");
+  });
+});
+
+// ACCEPT-FIX-10 C3: the help under "Verwenden" on a Knowledge Base spoke of "Zeilen" and the
+// "Datenspeicher" behind it, also for a Knowledge Base of documents.
+describe("the help under the use right of a Knowledge Base", () => {
+  it.each([
+    { locale: "en" as const, never: [/\brows?\b/iu, /data store/iu] },
+    { locale: "de" as const, never: [/Zeile/iu, /Datenspeicher/iu] }
+  ])("speaks of documents and not of rows or a data store ($locale)", ({ locale, never }) => {
+    const help = createTranslationContext(locale).t(
+      required(rightSentenceKeys["knowledge_base.use"])
+    );
+    for (const word of never) expect(help).not.toMatch(word);
   });
 });

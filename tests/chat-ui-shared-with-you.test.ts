@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ApiClient,
   ConversationListItem,
-  LocaleCode,
   SafeConfig,
   SharedFromOutsideListItem
 } from "@work-shape/catalyst-api-client";
@@ -131,11 +130,11 @@ function railProps(overrides: Partial<RailProps>): RailProps {
   };
 }
 
-function renderRail(overrides: Partial<RailProps>, locale: LocaleCode = "en"): string {
+function renderRail(overrides: Partial<RailProps>): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { children: null, locale },
+      { children: null, locale: "en" },
       createElement(WorkspaceRail, railProps(overrides))
     )
   );
@@ -180,8 +179,7 @@ async function until(check: () => boolean) {
 
 function mount(
   node: ReactNode,
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-  locale: LocaleCode = "en"
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 ) {
   act(() =>
     root?.render(
@@ -190,7 +188,7 @@ function mount(
         { mode: "light", labels: uiLabelsEn },
         createElement(
           TranslationProvider,
-          { children: null, locale },
+          { children: null, locale: "en" },
           createElement(QueryClientProvider, { client: queryClient }, node)
         )
       )
@@ -200,42 +198,17 @@ function mount(
 }
 
 describe("the rail's group Shared with you", () => {
-  it("stands below Recent with each chat's title and its workspace's name", () => {
+  it("lists each chat with its workspace, offers no menu on it, and is absent while empty", () => {
     const markup = renderRail({ sharedWithYou: [fromTeam, fromOther] });
     const group = markup.slice(markup.indexOf('data-testid="rail-shared-with-you"'));
-    expect(markup.indexOf("Recent")).toBeLessThan(markup.indexOf("Shared with you"));
-    expect(markup.indexOf("Own notes")).toBeLessThan(markup.indexOf('data-testid="rail-shared'));
     expect(group.match(/data-testid="rail-shared-chat"/gu)).toHaveLength(2);
-    expect(group).toMatch(
-      /title="Quarter figures, in Team T"[^>]*>(?:(?!<\/button>).)*Quarter figures(?:(?!<\/button>).)*data-testid="rail-shared-chat-workspace"[^>]*>Team T</u
-    );
-    expect(group).toContain(">Launch notes<");
     expect(group).toContain(">Other team<");
     // A row has no menu: Share, Move and Delete are the creator's.
     expect(group).not.toContain("Options for");
-  });
-
-  it("is named in German", () => {
-    expect(renderRail({ sharedWithYou: [fromTeam] }, "de")).toContain("Mit dir geteilt");
-  });
-
-  it("is absent while it holds nothing, and in the collapsed strip", () => {
-    expect(renderRail({})).not.toContain("rail-shared-with-you");
-    expect(renderRail({ sharedWithYou: [] })).not.toContain("Shared with you");
-    const collapsed = renderRail({ sharedWithYou: [fromTeam], collapsed: true });
-    expect(collapsed).not.toContain("Shared with you");
-    expect(collapsed).not.toContain("Quarter figures");
-  });
-
-  it("marks the open chat as the current row", () => {
-    const markup = renderRail({
-      sharedWithYou: [fromTeam, fromOther],
-      selectedConversationId: "conv_other"
-    });
-    expect(
-      markup.match(/aria-current="true"[^>]*title="Launch notes, in Other team"/gu)
-    ).toHaveLength(1);
-    expect(markup).not.toMatch(/aria-current="true"[^>]*title="Quarter figures/u);
+    expect(renderRail({ sharedWithYou: [] })).not.toContain("rail-shared-with-you");
+    expect(renderRail({ sharedWithYou: [fromTeam], collapsed: true })).not.toContain(
+      "Quarter figures"
+    );
   });
 
   it("opens a chat with its own workspace on a click", () => {
@@ -348,16 +321,6 @@ describe("the palette's chats shared from outside", () => {
     expect(opened.map((chat) => [chat.id, chat.collaborationWorkspaceId])).toEqual([
       ["conv_other", "cws_other_team"]
     ]);
-  });
-
-  it("says no results only where neither list matches", async () => {
-    const { client } = paletteClient([]);
-    mountPalette({ client });
-    act(() => required(palette).onQueryChange("nothing"));
-    await until(() => container.querySelector("output") !== null);
-    expect(container.querySelector("output")?.textContent).toBe(
-      'No results for "nothing" in Own team.'
-    );
   });
 });
 

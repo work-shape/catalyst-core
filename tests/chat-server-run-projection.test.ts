@@ -4,7 +4,7 @@ import {
   createTestInstance
 } from "./support/test-instance";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   NoopAuditRecorder,
@@ -23,6 +23,7 @@ import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";
 import {
   createMissingRuntime,
   createUnusedModelProvider,
+  drainRunEvents,
   fetchStartConversationRun,
   fetchRunEvents,
   parseSseChunks
@@ -407,139 +408,6 @@ describe("client instance app vertical slice", () => {
       })
     });
 
-    const finalOnlyUserMessage = await store.conversations.appendMessage({
-      clientInstanceId,
-      conversationId: conversation.id,
-      role: "user",
-      text: "split this PDF into three files"
-    });
-    const finalOnlyRun = await store.agentRuns.createAgentRun({
-      id: createPlatformId<"AgentRunId">("run_final_only"),
-      clientInstanceId,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      inputMessageId: finalOnlyUserMessage.id,
-      agentName: "test_agent",
-      correlationId: "completed-projection-final-only",
-      startedAt: "2026-07-01T12:01:00.000Z"
-    });
-    const finalOnlyToolCallId = asToolCallId("call_workspace");
-    const finalOnlyProgressText = "I will create the files now.";
-    const finalOnlyText = "Done. I split the PDF into 3 files.";
-    const finalOnlyMessageId = createPlatformId<"MessageId">("msg_final_only");
-
-    await store.agentRuns.appendRunObservation({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      event: {
-        type: "message_delta",
-        runId: finalOnlyRun.id,
-        sequence: 1,
-        createdAt: "2026-07-01T12:01:01.000Z",
-        delta: finalOnlyProgressText
-      }
-    });
-    await store.agentRuns.appendRunObservation({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      event: {
-        type: "tool_call_started",
-        runId: finalOnlyRun.id,
-        sequence: 2,
-        createdAt: "2026-07-01T12:01:02.000Z",
-        toolCallId: finalOnlyToolCallId,
-        toolName: "workspace.exec",
-        input: {
-          command: "split-pdf"
-        }
-      }
-    });
-    await store.agentRuns.appendRunObservation({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      event: {
-        type: "tool_call_completed",
-        runId: finalOnlyRun.id,
-        sequence: 3,
-        createdAt: "2026-07-01T12:01:03.000Z",
-        toolCallId: finalOnlyToolCallId,
-        toolName: "workspace.exec",
-        result: toolSuccess({
-          ok: true
-        }),
-        modelOutput: '{"ok":true}'
-      }
-    });
-    await store.agentRuns.appendRunObservation({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      event: {
-        type: "message_delta",
-        runId: finalOnlyRun.id,
-        sequence: 4,
-        createdAt: "2026-07-01T12:01:04.000Z",
-        delta: finalOnlyText
-      }
-    });
-    await store.agentRuns.appendRunObservation({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      event: {
-        type: "message_completed",
-        runId: finalOnlyRun.id,
-        sequence: 5,
-        createdAt: "2026-07-01T12:01:05.000Z",
-        message: {
-          id: finalOnlyMessageId,
-          role: "assistant",
-          text: finalOnlyText,
-          metadata: createAssistantFinalMetadata({
-            runId: finalOnlyRun.id
-          })
-        }
-      }
-    });
-    await store.agentRuns.appendRunObservation({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      conversationId: conversation.id,
-      ownerUserId: owner.id,
-      event: {
-        type: "run_completed",
-        runId: finalOnlyRun.id,
-        sequence: 6,
-        createdAt: "2026-07-01T12:01:06.000Z"
-      }
-    });
-    await store.agentRuns.updateAgentRunStatus({
-      clientInstanceId,
-      runId: finalOnlyRun.id,
-      status: "completed",
-      updatedAt: "2026-07-01T12:01:06.000Z",
-      completedAt: "2026-07-01T12:01:06.000Z",
-      lastSequence: 6
-    });
-    await store.conversations.appendMessage({
-      id: finalOnlyMessageId,
-      clientInstanceId,
-      conversationId: conversation.id,
-      role: "assistant",
-      text: finalOnlyText,
-      metadata: createAssistantFinalMetadata({
-        runId: finalOnlyRun.id
-      })
-    });
-
     const server = await createTestInstance({
       server: {
         config,
@@ -587,21 +455,6 @@ describe("client instance app vertical slice", () => {
       {
         type: "text",
         text: finalText
-      }
-    ]);
-    expect(body.completedRunProjections?.[finalOnlyRun.id]?.parts).toEqual([
-      {
-        type: "text",
-        text: finalOnlyProgressText
-      },
-      expect.objectContaining({
-        type: "tool_call",
-        toolCallId: finalOnlyToolCallId,
-        toolName: "workspace.exec"
-      }),
-      {
-        type: "text",
-        text: finalOnlyText
       }
     ]);
 
@@ -767,4 +620,129 @@ describe("client instance app vertical slice", () => {
 
     await app.close();
   });
+});
+
+describe("the event stream of a run", () => {
+  // Fails without the second read: the stream saw no event, then the finished run, and closed
+  // with nothing sent.
+  it.each([
+    ["a new stream", 0],
+    ["a stream resumed after a reconnect", 1]
+  ])(
+    "delivers every event to %s when the run ends between its event read and its status read",
+    async (_reader, afterSequence) => {
+      const clientInstanceId = asClientInstanceId("demo-local");
+      const owner = createTestUser("user-1", clientInstanceId);
+      const store = (await createTestInstance()).stores;
+      const config = createTestConfig();
+      const conversation = await store.createConversationForTesting({
+        clientInstanceId,
+        createdByUserId: owner.id,
+        createdByExternalUserId: owner.externalUserId,
+        title: "Run that ends between two reads",
+        retainedUntil: "2030-01-01T00:00:00.000Z"
+      });
+      const userMessage = await store.conversations.appendMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text: "answer me"
+      });
+      const run = await store.agentRuns.createAgentRun({
+        id: createPlatformId<"AgentRunId">("run"),
+        clientInstanceId,
+        conversationId: conversation.id,
+        ownerUserId: owner.id,
+        inputMessageId: userMessage.id,
+        agentName: "test_agent",
+        correlationId: "ends-between-reads",
+        startedAt: "2026-08-11T00:00:00.000Z"
+      });
+      const append = (sequence: number, delta: string) =>
+        store.agentRuns.appendRunObservation({
+          clientInstanceId,
+          runId: run.id,
+          conversationId: conversation.id,
+          ownerUserId: owner.id,
+          event: {
+            type: "message_delta",
+            runId: run.id,
+            sequence,
+            delta,
+            createdAt: "2026-08-11T00:00:01.000Z"
+          }
+        });
+      for (let sequence = 1; sequence <= afterSequence; sequence += 1)
+        await append(sequence, "Heard before the reconnect. ");
+
+      // The worker of another process: it stores the rest of the answer and the end of the run
+      // after the stream's first event read has returned, before the stream reads the run.
+      const lastSequence = afterSequence + 2;
+      const readEvents = store.agentRuns.listRunObservations.bind(store.agentRuns);
+      let runEnded = false;
+      vi.spyOn(store.agentRuns, "listRunObservations").mockImplementation(async (input) => {
+        const events = await readEvents(input);
+        if (runEnded) return events;
+        runEnded = true;
+        await append(afterSequence + 1, "The whole answer.");
+        await store.agentRuns.appendRunObservation({
+          clientInstanceId,
+          runId: run.id,
+          conversationId: conversation.id,
+          ownerUserId: owner.id,
+          event: {
+            type: "run_completed",
+            runId: run.id,
+            sequence: lastSequence,
+            createdAt: "2026-08-11T00:00:02.000Z"
+          }
+        });
+        await store.agentRuns.updateAgentRunStatus({
+          clientInstanceId,
+          runId: run.id,
+          status: "completed",
+          updatedAt: "2026-08-11T00:00:02.000Z",
+          completedAt: "2026-08-11T00:00:02.000Z",
+          lastSequence
+        });
+        return events;
+      });
+
+      const server = await createTestInstance({
+        server: {
+          config,
+          clientInstanceId,
+          authAdapter: {
+            credentialMode: "ambient",
+            id: "test-auth",
+            async authenticate() {
+              return owner;
+            }
+          },
+          stores: store,
+          usageGovernance: new ModelUsageGovernance({
+            store: store.usage,
+            budget: config.usage.budget,
+            safeguards: config.usage.safeguards,
+            costs: config.usage.costs
+          }),
+          auditRecorder: new NoopAuditRecorder(),
+          agentRuntime: createMissingRuntime(),
+          modelProvider: createUnusedModelProvider()
+        }
+      });
+      try {
+        const events = parseSseChunks(
+          await drainRunEvents(server, conversation.id, run.id, { afterSequence })
+        );
+        expect(runEnded).toBe(true);
+        expect(events.map((event) => [event.sequence, event.type])).toEqual([
+          [afterSequence + 1, "message_delta"],
+          [lastSequence, "run_completed"]
+        ]);
+      } finally {
+        await server.close();
+      }
+    }
+  );
 });

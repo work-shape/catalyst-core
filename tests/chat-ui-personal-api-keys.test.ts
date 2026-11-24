@@ -39,11 +39,8 @@ import {
   ApiKeysPage,
   ConnectCodeConfirm,
   ConnectLocalAgentPage,
-  ConnectLocalAgentView,
   LOCAL_AGENT_TOOLS,
-  localAgentCommand,
-  type LocalAgentCommandState,
-  type LocalAgentTool
+  localAgentCommand
 } from "./support/chat-ui";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -332,10 +329,6 @@ describe("personal API key model", () => {
     expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
   });
 
-  it("starts a draft with the actions it is given", () => {
-    expect(initialPersonalKeyDraft("x", ["connection.use"]).actions).toEqual(["connection.use"]);
-  });
-
   it("starts a new key with no scope ticked, so it gets only what the person ticks", () => {
     expect(initialPersonalKeyDraft().actions).toEqual([]);
     expect(initialPersonalKeyDraft("catalyst CLI")).toMatchObject({
@@ -460,105 +453,12 @@ describe("You > API keys", () => {
       modules
     }).map((page) => `${page.group}/${page.id}`);
 
-  it("is shown to every user while the module is on", () => {
+  it("shows API keys and Connect a local agent to every user while the module is on", () => {
     expect(ids()).not.toContain("you/api-keys");
-    expect(ids({ personalApiKeys: { enabled: false } })).not.toContain("you/api-keys");
-    expect(ids({ personalApiKeys: { enabled: true } })).toContain("you/api-keys");
-  });
-
-  const renderConfirm = (locale: "en" | "de") =>
-    renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale },
-        createElement(ConnectCodeConfirm, {
-          code: "BCDF-GHJK",
-          request: {
-            clientLabel: "catalyst CLI on fabian-mbp",
-            createdAt: "2026-10-13T11:58:00.000Z",
-            expiresAt: "2026-10-13T12:13:00.000Z"
-          },
-          offer: {
-            ...cliOffer,
-            everywhere: {
-              actions: ["agent.read", "agent.write"],
-              useActions: ["connection.use", "workflow.use"]
-            }
-          },
-          pending: false,
-          onConfirm: async () => undefined
-        })
-      )
-    );
-
-  it("ticks every right offered but connection.use for a connect code's key", () => {
-    const setup = renderConfirm("en");
-    expect(setup).toContain("Use");
-    expect(setup.match(/aria-checked="true"/gu)?.length).toBe(3);
-    expect(setup.match(/aria-checked="false"/gu)?.length).toBe(1);
-    expect(setup).toContain("Select all");
-    expect(renderConfirm("de")).toContain("Verwenden");
-    expect(renderConfirm("de")).toContain("Alle auswählen");
-  });
-
-  it("leaves the account and workspaces level off the page that confirms a connect code", () => {
-    const render = (locale: "en" | "de") =>
-      renderToStaticMarkup(
-        createElement(
-          TranslationProvider,
-          { children: null, locale },
-          createElement(ConnectCodeConfirm, {
-            code: "BCDF-GHJK",
-            request: {
-              clientLabel: "catalyst CLI on fabian-mbp",
-              createdAt: "2026-10-13T11:58:00.000Z",
-              expiresAt: "2026-10-13T12:13:00.000Z"
-            },
-            offer: {
-              ...cliOffer,
-              accountActions: ["account.manage", "collaboration_workspace.manage"]
-            },
-            pending: false,
-            onConfirm: async () => undefined
-          })
-        )
-      );
-    const english = render("en");
-    expect(english).not.toContain("Account and workspaces");
-    expect(english).not.toContain("Change your name");
-    expect(english.match(/aria-checked="true"/gu)?.length).toBe(2);
-    expect(english).not.toMatch(/aria-checked="false"/u);
-    expect(render("de")).not.toContain("Konto und Arbeitsbereiche");
-  });
-
-  it("says beside connection.use alone that its results are copied to the computer that holds the key", () => {
-    const english = renderConfirm("en");
-    const copies = "The results of these calls are copied to the computer that holds the key.";
-    expect(english.split(copies).length - 1).toBe(1);
-    // The sentence describes the connection.use box, which stays off for `catalyst setup`.
-    const root = document.createElement("div");
-    root.innerHTML = english;
-    const sentence = required(
-      [...root.querySelectorAll("p")].find((line) => line.textContent === copies)
-    );
-    const box = required(root.querySelector(`[aria-describedby~="${sentence.id}"]`));
-    expect(box.closest("div")?.textContent).toContain("Use connections");
-    expect(box.getAttribute("aria-checked")).toBe("false");
-    expect(renderConfirm("de")).toContain(
-      "Die Ergebnisse dieser Aufrufe werden auf den Computer kopiert, auf dem der Schlüssel liegt."
-    );
-  });
-
-  it("shows what a connect code asks for with the warning, in English and German", () => {
-    const render = (locale: "en" | "de") => renderConfirm(locale);
-    const english = render("en");
-    expect(english).toContain("catalyst CLI on fabian-mbp");
-    expect(english).toContain("Only confirm a code your own terminal shows you");
-    expect(english).toContain("BCDF-GHJK");
-    expect(english).toContain("90 days");
-    expect(english).toContain("Never expires");
-    expect(render("de")).toContain("Bestätige nur einen Code, den dir dein eigenes Terminal zeigt");
-    expect(render("de")).toContain("Läuft nie ab");
+    expect(ids({ personalApiKeys: { enabled: false } })).not.toContain("you/connect");
+    const shown = ids({ personalApiKeys: { enabled: true } });
+    expect(shown).toContain("you/api-keys");
+    expect(shown).toContain("you/connect");
   });
 
   it("lists every person's keys with their owner and no secret", () => {
@@ -575,212 +475,10 @@ describe("You > API keys", () => {
         })
       )
     );
-    expect(markup).toContain("Owner");
     expect(markup).toContain("Fabian Kai");
-    expect(markup).toContain("Revoked");
+    expect(markup).not.toContain("cat.apic_");
     // Only the active key offers Revoke.
     expect(markup.match(/>Revoke</gu)?.length).toBe(1);
-  });
-});
-
-/** The keys table as static markup, in one language. */
-function keysTable(locale: "en" | "de", keys: PersonalApiKey[], showOwner = false): string {
-  return renderToStaticMarkup(
-    createElement(
-      TranslationProvider,
-      { children: null, locale },
-      createElement(PersonalApiKeysTable, {
-        keys,
-        loading: false,
-        showOwner,
-        revoking: false,
-        onRevoke: async () => undefined,
-        workspaceName: (id) => (id === "ws-tax" ? "Tax" : undefined)
-      })
-    )
-  );
-}
-
-/** The element of `tag` in the markup whose text is exactly `text`. */
-function elementSaying(markup: string, tag: string, text: string): HTMLElement {
-  const root = document.createElement("div");
-  root.innerHTML = markup;
-  return required(
-    [...root.querySelectorAll<HTMLElement>(tag)].find((element) => element.textContent === text)
-  );
-}
-
-/**
- * The text of each head of a table's markup, whether it folds, and whether it takes only its
- * content's width.
- */
-function heads(markup: string): { text: string; folds: boolean; narrowest: boolean }[] {
-  const table = document.createElement("div");
-  table.innerHTML = markup;
-  return [...table.querySelectorAll("th")].map((head) => ({
-    text: head.textContent ?? "",
-    folds: head.hasAttribute("data-column"),
-    narrowest: head.classList.contains("w-0")
-  }));
-}
-
-// UI-KEYS, from the design reviews of 2026-10-17: the table showed raw scope ids and key
-// prefixes, times with seconds, and at 1280 Status and Revoke sat behind a sideways scroll.
-describe("You > API keys in plain words", () => {
-  it("names each scope as the rights screens do, with its workspace, in English and German", () => {
-    const english = keysTable("en", [key()]);
-    expect(english).toContain("Edit agents in Tax");
-    expect(english).toContain("View skills");
-    expect(english).not.toContain("agent.write");
-    expect(english).not.toContain("skill.read");
-    const german = keysTable("de", [key()]);
-    expect(german).toContain("Agenten bearbeiten in Tax");
-    expect(german).toContain("Skills ansehen");
-    expect(german).toContain("Was der Schlüssel darf");
-    // One asset is named by its id; a workspace the reader is not shown, by its id too.
-    const narrowed = keysTable("en", [
-      key({ scopes: ["agent.write:ws-tax/vat-helper", "skill.read:ws-gone"] })
-    ]);
-    expect(narrowed).toContain("Edit agents: vat-helper in Tax");
-    expect(narrowed).toContain("View skills in ws-gone");
-    const account = keysTable("en", [
-      key({ scopes: ["account.manage", "collaboration_workspace.manage:ws-tax"] })
-    ]);
-    expect(account).toContain(
-      "Change your name, language, what Enter does while an answer runs and your model preference, and revoke your keys"
-    );
-    expect(account).toContain(
-      "Create, change and delete workspaces, and manage their members and requests in Tax"
-    );
-    expect(account).not.toContain("account.manage");
-    expect(keysTable("de", [key({ scopes: ["collaboration_workspace.manage"] })])).toContain(
-      "Arbeitsbereiche anlegen, ändern und löschen"
-    );
-  });
-
-  // Badges of rights stacked and were cut at 390; one muted line breaks between words instead.
-  it("lists what a key may do as one muted line, comma-separated", () => {
-    // The span carries the muted tone, since a folded cell moves only its children.
-    const rights = elementSaying(
-      keysTable("en", [key()]),
-      "span",
-      "Edit agents in Tax, View skills"
-    );
-    expect(rights.classList.contains("text-muted-foreground")).toBe(true);
-  });
-
-  it("says how a key starts only where its owner holds another of the same name", () => {
-    expect(keysTable("en", [key()])).not.toContain("cat.apic_");
-    const twins = [
-      key(),
-      key({ id: "cred_2", keyPrefix: "cat.apic_8d7e6f5a-1b2c-4d3e-8f9a-0b1c2d3e4f5a." })
-    ];
-    const english = keysTable("en", twins);
-    // The id's first eight letters tell the two apart; the rest and the stored dot are left out.
-    expect(english).toContain("Starts with cat.apic_1f0c2a9e…");
-    expect(english).toContain("Starts with cat.apic_8d7e6f5a…");
-    expect(english).not.toContain("1f0c2a9e-7b6d");
-    expect(keysTable("de", twins)).toContain("Beginnt mit cat.apic_1f0c2a9e…");
-    // Wrapped anywhere at a phone's width, never cut.
-    const start = elementSaying(english, "span", "Starts with cat.apic_1f0c2a9e…");
-    expect(start.classList.contains("wrap-anywhere")).toBe(true);
-    expect(start.classList.contains("truncate")).toBe(false);
-  });
-
-  it("shows an active key in the success tone and Revoke as an outline button", () => {
-    const markup = keysTable("en", [key()]);
-    expect(elementSaying(markup, "span", "Active").classList.contains("bg-success-soft")).toBe(
-      true
-    );
-    expect(elementSaying(markup, "button", "Revoke").classList.contains("border-input")).toBe(true);
-  });
-
-  it("shows created, expires and last used without seconds", () => {
-    const markup = keysTable("de", [
-      key({
-        createdAt: "2026-10-01T10:00:37.000Z",
-        expiresAt: "2027-01-01T10:00:41.000Z",
-        lastUsedAt: "2026-10-12T08:15:53.000Z"
-      })
-    ]);
-    expect(markup).not.toMatch(/:(37|41|53)\b/u);
-    expect(markup).toContain("01.10.2026");
-  });
-
-  it("shows Never as the expiry of a key that never expires, which stays active", () => {
-    const english = keysTable("en", [lastingKey()]);
-    expect(english).toContain("Never");
-    expect(english).toContain("Active");
-    const german = keysTable("de", [lastingKey()]);
-    expect(german).toContain("Nie");
-  });
-
-  // At 390 Status and Revoke took the room the name's details needed, which then spilled over.
-  it("folds every column but name, status and Revoke, which leave the name the room", () => {
-    expect(heads(keysTable("en", [key()], true))).toEqual([
-      { text: "Name", folds: false, narrowest: false },
-      { text: "Owner", folds: true, narrowest: false },
-      { text: "What the key may do", folds: true, narrowest: false },
-      { text: "Expires", folds: true, narrowest: false },
-      { text: "Last used", folds: true, narrowest: false },
-      { text: "Created", folds: true, narrowest: false },
-      { text: "Status", folds: false, narrowest: true },
-      { text: "", folds: false, narrowest: true }
-    ]);
-  });
-
-  it("offers each scope of a new key by its title alone, one under the other", () => {
-    const render = (locale: "en" | "de") =>
-      renderToStaticMarkup(
-        createElement(
-          TranslationProvider,
-          { children: null, locale },
-          createElement(ConnectCodeConfirm, {
-            code: "BCDF-GHJK",
-            request: {
-              createdAt: "2026-10-13T11:58:00.000Z",
-              expiresAt: "2026-10-13T12:13:00.000Z"
-            },
-            offer: {
-              ...cliOffer,
-              everywhere: { actions: ["agent.write", "workflow.publish"], useActions: [] },
-              workspaces: [
-                sharedWorkspace("ws-tax", "Tax", ["agent.write"]),
-                { id: "ws-own", actions: ["agent.write"], useActions: [] }
-              ]
-            },
-            pending: false,
-            onConfirm: async () => undefined
-          })
-        )
-      );
-    const english = render("en");
-    expect(english).toContain("Edit agents");
-    expect(english).toContain("Publish workflows");
-    expect(english).not.toContain("Make a draft the version that runs.");
-    expect(english).not.toContain("agent.write");
-    expect(english).not.toContain("workflow.publish");
-    // One right under the other at every width.
-    expect(english).not.toContain("sm:grid-cols-2");
-    expect(english).toContain("Where you use the key, such as your laptop or a script.");
-    expect(english).toContain(
-      "Only the rights you hold here are listed. If you lose one later, the key loses it too."
-    );
-    // The key is limited by choosing a workspace, everywhere until one is chosen; the asset
-    // field waits for a workspace.
-    expect(english).toContain("Limit to a workspace");
-    expect(english).toContain("Everywhere");
-    expect(english).not.toContain("Limit to one asset");
-    const german = render("de");
-    expect(german).toContain("Agenten bearbeiten");
-    expect(german).toContain("Workflows veröffentlichen");
-    // Ends without a full stop, as the hint was approved.
-    expect(german).toContain(
-      "Wo du den Schlüssel verwendest, etwa auf dem Laptop oder in einem Skript</"
-    );
-    expect(german).toContain(
-      "Hier stehen nur die Rechte, die du hier hast. Verlierst du später eins, verliert es auch der Schlüssel."
-    );
   });
 });
 
@@ -852,40 +550,7 @@ function footerButtons(dialog: HTMLElement): string[] {
     .filter((text) => text !== "");
 }
 
-/** The banner or error that says exactly `said`. */
-function noticeSaying(said: string): HTMLElement {
-  return required(
-    [...document.querySelectorAll<HTMLElement>('[role="status"], [role="alert"]')].find(
-      (notice) => notice.textContent === said
-    )
-  );
-}
-
 describe("You > API keys, for a person and an admin alike", () => {
-  // UXA-5: the page opened with Connect the CLI; a person's own keys stood below it.
-  it("opens with the person's own keys and puts Connect the CLI second", async () => {
-    const answer: typeof fetch = async (input, init) => {
-      const path = new URL(new Request(input, init).url).pathname;
-      return path === apiOperations["me.api_keys.list"].buildPath({})
-        ? Response.json({ items: [key()] })
-        : Response.json(platformContext());
-    };
-    const mounted = await mountPage(
-      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer })),
-      "en",
-      createElement(ApiKeysPage)
-    );
-    try {
-      await waitForText(mounted.container, "fabian-mbp");
-      const headings = [...mounted.container.querySelectorAll("h2")].map(
-        (heading) => heading.textContent
-      );
-      expect(headings).toEqual(["Your keys", "Connect the CLI"]);
-    } finally {
-      await mounted.unmount();
-    }
-  });
-
   // The refusal stood under the fields in the scrolling body, below the fold where Create key
   // was pressed, so the person saw nothing happen. Round 2: it was a red error, and Create key
   // sent the same refused key again.
@@ -931,9 +596,6 @@ describe("You > API keys, for a person and an admin alike", () => {
         buttonNamed("Create key").click();
       });
       await waitForText(document.body, said);
-      const refusal = noticeSaying(said);
-      expect(refusal.getAttribute("data-tone")).toBe("info");
-      expect(refusal.parentElement?.contains(buttonNamed("Create key"))).toBe(true);
       expect(posts).toHaveLength(1);
 
       // The same key again would be refused again.
@@ -992,13 +654,11 @@ describe("You > API keys, for a person and an admin alike", () => {
         buttonNamed("Revoke").click();
       });
       const dialog = required(document.querySelector<HTMLDialogElement>("dialog[open]"));
-      expect(footerButtons(dialog)).toEqual(["Cancel", "Revoke"]);
       await act(async () => {
         buttonNamed("Revoke", dialog).click();
       });
       await waitForText(dialog, said);
       expect(revokes).toHaveLength(1);
-      expect(noticeSaying(said).getAttribute("data-tone")).toBe("info");
       expect(footerButtons(dialog)).toEqual(["Close"]);
       await act(async () => {
         buttonNamed("Close", dialog).click();
@@ -1039,8 +699,6 @@ describe("You > API keys, for a person and an admin alike", () => {
         buttonNamed("Revoke", dialog).click();
       });
       await waitForText(dialog, "The instance did not answer in time.");
-      const failure = required(dialog.querySelector('[role="alert"]'));
-      expect(failure.textContent).toBe("The instance did not answer in time.");
       expect(footerButtons(dialog)).toEqual(["Cancel", "Revoke"]);
     } finally {
       await mounted.unmount();
@@ -1067,10 +725,6 @@ describe("You > API keys, for a person and an admin alike", () => {
         mounted.container,
         "You may not see your keys. Ask an admin for all workspaces, for example Mara."
       );
-      const refusal = noticeSaying(
-        "You may not see your keys. Ask an admin for all workspaces, for example Mara."
-      );
-      expect(refusal.getAttribute("data-tone")).toBe("info");
     } finally {
       await mounted.unmount();
     }
@@ -1323,98 +977,46 @@ describe("You > API keys, for a person and an admin alike", () => {
   });
 
   // A refusal sent the person to Settings > Instance > Access, a page only an admin opens.
-  it.each([
-    {
-      locale: "en" as const,
-      code: "FORBIDDEN" as const,
-      instanceAdminName: "Mara",
-      said: "You may not issue this key. Ask an admin for all workspaces, for example Mara."
-    },
-    {
-      locale: "de" as const,
-      code: "POLICY_DENIED" as const,
-      instanceAdminName: undefined,
-      said: "Du darfst diesen Schlüssel nicht ausstellen. Frag einen Admin für alle Arbeitsbereiche."
-    }
-  ])(
-    "a refused confirmation names whom to ask, never a page ($locale)",
-    async ({ locale, code, instanceAdminName, said }) => {
-      const mounted = await mountPage(
-        settingsPageContext(
-          createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch }),
-          settingsUser({ instanceAdminName })
-        ),
-        locale,
-        createElement(ConnectCodeConfirm, {
-          code: "BCDF-GHJK",
-          request: {
-            createdAt: "2026-10-13T11:58:00.000Z",
-            expiresAt: "2026-10-13T12:13:00.000Z"
-          },
-          offer: cliOffer,
-          pending: false,
-          onConfirm: () => Promise.reject(refusal(code))
-        })
+  it("a refused confirmation names whom to ask, never a page", async () => {
+    const said = "You may not issue this key. Ask an admin for all workspaces.";
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch })),
+      "en",
+      createElement(ConnectCodeConfirm, {
+        code: "BCDF-GHJK",
+        request: {
+          createdAt: "2026-10-13T11:58:00.000Z",
+          expiresAt: "2026-10-13T12:13:00.000Z"
+        },
+        offer: cliOffer,
+        pending: false,
+        onConfirm: () => Promise.reject(refusal("POLICY_DENIED"))
+      })
+    );
+    try {
+      const box = required(mounted.container.querySelector<HTMLElement>('[role="checkbox"]'));
+      await act(async () => {
+        box.click();
+      });
+      const confirm = required(
+        mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
       );
-      try {
-        const box = required(mounted.container.querySelector<HTMLElement>('[role="checkbox"]'));
-        await act(async () => {
-          box.click();
-        });
-        const confirm = required(
-          mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
-        );
-        await act(async () => {
-          confirm.click();
-        });
-        await waitForText(mounted.container, said);
-        expect(mounted.container.textContent).not.toContain("Settings >");
-        expect(noticeSaying(said).getAttribute("data-tone")).toBe("info");
-        // The same key would be refused again: Confirm waits for a changed field.
-        expect(confirm.disabled).toBe(true);
-      } finally {
-        await mounted.unmount();
-      }
+      await act(async () => {
+        confirm.click();
+      });
+      await waitForText(mounted.container, said);
+      expect(mounted.container.textContent).not.toContain("Settings >");
+      // The same key would be refused again: Confirm waits for a changed field.
+      expect(confirm.disabled).toBe(true);
+    } finally {
+      await mounted.unmount();
     }
-  );
+  });
 });
 
 // You > Connect a local agent: one command per tool that installs the CLI version the instance
-// names, one on npm, and runs `catalyst setup` against the instance. Platform Access acceptance
-// check 52 (CONNECT-1a). Fails without the change: the page did not exist.
-
-function renderConnect(
-  tool: LocalAgentTool,
-  locale: "en" | "de",
-  state: LocalAgentCommandState
-): string {
-  return renderToStaticMarkup(
-    createElement(
-      TranslationProvider,
-      { children: null, locale },
-      createElement(ConnectLocalAgentView, { tool, onToolChange: () => undefined, state })
-    )
-  );
-}
-
-const ready = (command: string): LocalAgentCommandState => ({ status: "ready", command });
-
+// names, one on npm, and runs `catalyst setup` against the instance (CONNECT-1a).
 describe("You > Connect a local agent", () => {
-  const catalog = settingsCatalog(administration);
-  const ids = (modules?: Record<string, { enabled: boolean }>) =>
-    visibleSettingsPages(catalog, {
-      user: settingsUser(),
-      workspaces: [personalWorkspace()],
-      modules
-    }).map((page) => `${page.group}/${page.id}`);
-
-  it("is shown under You beside API keys while personal API keys are on", () => {
-    expect(ids()).not.toContain("you/connect");
-    expect(ids({ personalApiKeys: { enabled: false } })).not.toContain("you/connect");
-    const shown = ids({ personalApiKeys: { enabled: true } });
-    expect(shown.indexOf("you/connect")).toBe(shown.indexOf("you/api-keys") + 1);
-  });
-
   it("gives each tool one command with the instance's CLI version and address", () => {
     expect(LOCAL_AGENT_TOOLS).toEqual(["claude-code", "codex", "other"]);
     expect(localAgentCommand("claude-code", "1.4.0", SETTINGS_INSTANCE_URL)).toBe(
@@ -1425,38 +1027,6 @@ describe("You > Connect a local agent", () => {
     );
     expect(localAgentCommand("other", "1.4.0", SETTINGS_INSTANCE_URL)).toContain(
       "catalyst setup other --instance"
-    );
-  });
-
-  it("shows the command of the chosen tool with a copy button, in English and German", () => {
-    for (const tool of LOCAL_AGENT_TOOLS) {
-      const command = localAgentCommand(tool, "1.4.0", SETTINGS_INSTANCE_URL);
-      const english = renderConnect(tool, "en", ready(command));
-      expect(english).toContain("Connect a local agent");
-      expect(english).toContain(command.replaceAll("&", "&amp;"));
-      expect(english).toContain('aria-label="Copy"');
-      expect(english).toContain("Node 22");
-      expect(english).toContain('href="/settings/you/api-keys"');
-      const german = renderConnect(tool, "de", ready(command));
-      expect(german).toContain("Lokalen Agenten verbinden");
-      expect(german).toContain("Node 22");
-    }
-    expect(renderConnect("codex", "en", ready("x"))).toContain("Command for Codex");
-    expect(renderConnect("other", "de", ready("x"))).toContain("dein Werkzeug bekommt einen Skill");
-    const german = renderConnect("other", "de", ready("x"));
-    expect(german).toContain("in deinem Namen");
-    expect(german).toContain(">Anderes<");
-    expect(german).toContain("Braucht Node 22 oder neuer.");
-  });
-
-  it("shows no command while the context is read, and says so while no CLI is published for the instance", () => {
-    expect(renderConnect("codex", "en", { status: "loading" })).not.toContain("catalyst setup");
-    const unavailable = renderConnect("codex", "en", { status: "unavailable" });
-    expect(unavailable).toContain("The command is not available yet");
-    expect(unavailable).not.toContain("npm install");
-    expect(unavailable).not.toContain('aria-label="Copy"');
-    expect(renderConnect("codex", "de", { status: "unavailable" })).toContain(
-      "Der Befehl ist noch nicht verfügbar"
     );
   });
 

@@ -16,16 +16,12 @@ export {
   resolveRunConnectionTarget,
   staleThreadReread
 } from "../../../packages/chat-ui/src/chat/conversation/conversation-controller-state";
-export {
-  ConversationGone,
-  isConversationGone
-} from "../../../packages/chat-ui/src/chat/conversation/conversation-gone";
+export { isConversationGone } from "../../../packages/chat-ui/src/chat/conversation/conversation-gone";
 export {
   draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,
-  useDraftAttachmentController,
-  withoutDraftAttachment
+  useDraftAttachmentController
 } from "../../../packages/chat-ui/src/chat/conversation/draft-attachment-controller";
 export {
   type RunConnectionCompletion,
@@ -33,4 +29,3 @@ export {
   type RunCursorStorage,
   startRunConnectionManager
 } from "../../../packages/chat-ui/src/chat/conversation/run-connection-manager";
-export { PrivateBuildOffer } from "../../../packages/chat-ui/src/chat/conversation/conversation-subject";

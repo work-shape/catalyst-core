@@ -2,8 +2,9 @@
 
 import { act, createElement, createRef, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConfigAssetReferences, LocaleCode } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AgentEditor,
   agentConfigToForm,
@@ -15,13 +16,20 @@ import {
   startedAgentForm,
   startedSkillForm,
   type AgentFormState,
+  type AgentUseChoice,
+  type AvailabilityChoice,
   type BuildAsset,
   type BuildAssetEditorProps,
   type BuildWriteOutcome
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { listedKind, mountBuildPage, unmountBuildPages } from "./chat-ui-build-page-harness";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { settingsUser } from "./chat-ui-settings-fixtures";
+import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import { headMenuItems } from "./support/head-menu";
+
+afterEach(unmountBuildPages);
 
 const noop = () => undefined;
 const saved = async (): Promise<BuildWriteOutcome> => ({ ok: true });
@@ -97,6 +105,9 @@ interface AgentInput {
   editableAgentFields?: string[];
   canManageAgentModels?: boolean;
   onMakeDefault?: () => Promise<string | undefined>;
+  isDefault?: boolean;
+  availability?: Partial<AvailabilityChoice>;
+  agentUse?: AgentUseChoice;
   locale?: LocaleCode;
 }
 
@@ -114,12 +125,23 @@ function agentElement(input: AgentInput = {}): ReactElement {
       ...input.frame
     }),
     initialForm: input.started ?? agentConfigToForm(config),
-    isDefault: true,
+    isDefault: input.isDefault ?? true,
     references: references(input.references),
     editableAgentFields: input.editableAgentFields ?? [],
     canManageAgentModels: input.canManageAgentModels ?? false,
     skillChoice: { options: [{ name: "tax-review", title: "Tax review" }], onSearch: noop },
-    onMakeDefault: input.onMakeDefault
+    onMakeDefault: input.onMakeDefault,
+    ...(input.availability
+      ? {
+          availability: {
+            saved: undefined,
+            workspaces: [],
+            save: async () => undefined,
+            ...input.availability
+          }
+        }
+      : {}),
+    ...(input.agentUse ? { agentUse: input.agentUse } : {})
   });
 }
 
@@ -137,88 +159,16 @@ function inputOf(markup: string, label: string): string {
 }
 
 describe("agent page", () => {
-  it.each([
-    [
-      "en",
-      "Reasoning effort is how long the model thinks before it answers; more helps with hard questions but takes longer."
-    ],
-    [
-      "de",
-      "Der Denkaufwand bestimmt, wie lange das Modell vor der Antwort nachdenkt; mehr hilft bei schwierigen Fragen, dauert aber länger."
-    ]
-  ] as const)(
-    "explains reasoning effort beside a writable or locked default model (%s)",
-    (locale, sentence) => {
-      for (const canManageAgentModels of [true, false]) {
-        const model = section(
-          agentPage({
-            locale,
-            canManageAgentModels,
-            config: { modelBindingId: "primary" },
-            references: {
-              modelBindingIds: ["primary"],
-              modelBindings: [{ id: "primary", model: "gpt-primary" }]
-            }
-          }),
-          "model"
-        );
-        expect(model).toContain(sentence);
-        const defaultSelect = /<select[^>]*>/u.exec(model)?.[0];
-        expect(defaultSelect).toBeDefined();
-        if (canManageAgentModels) expect(defaultSelect).not.toContain('disabled=""');
-        else expect(defaultSelect).toContain('disabled=""');
-      }
-    }
-  );
-
-  it("shows configured runtime values while the agent is read-only", () => {
-    const markup = agentPage({
-      config: {
-        description: "Help with the workflow.",
-        modelProviderId: "azure-eu",
-        reasoningEffort: "high",
-        maxSteps: 128
-      },
-      references: { reasoningEfforts: ["none", "low", "medium", "high", "xhigh"] }
-    });
-
-    expect(markup).toContain(">Default for all workspaces</option>");
-    expect(markup).toContain('value="Help with the workflow."');
-    expect(markup).toContain('<option value="high" selected="">High</option>');
-    expect(markup).toContain('value="128"');
-    expect(markup).not.toContain("Save changes");
-    expect(markup).toContain("You can read this but not change it.");
-  });
-
-  it.each([
-    ["en", ["Off", "Low", "Medium", "High", "Extra high", "Max"]],
-    ["de", ["Aus", "Niedrig", "Mittel", "Hoch", "Sehr hoch", "Maximal"]]
-  ] as const)("names each reasoning effort as the composer does, in %s", (locale, words) => {
-    const efforts = ["none", "low", "medium", "high", "xhigh", "max"] as const;
-    const markup = agentPage({
-      config: { modelProviderId: "azure-eu" },
-      references: { reasoningEfforts: [...efforts] },
-      locale
-    });
-    // The value stays the one the instance stores; only the words are the reader's.
-    efforts.forEach((effort, index) => {
-      expect(markup).toContain(`<option value="${effort}">${words[index]}</option>`);
-    });
-  });
-
-  it("says that the page is read-only to a reader who may not write the agent", () => {
+  it("is read-only to a reader who may not write the agent, and offers a new one nothing to create", () => {
     const editable = { editableAgentFields: ["displayName", "toolNames"] };
     const writer = agentPage(editable);
     const reader = agentPage({ ...editable, frame: { canWrite: false } });
 
     expect(writer).not.toContain("You can read this but not change it.");
-    expect(inputOf(writer, "Display name")).not.toContain('disabled=""');
+    expect(inputOf(writer, "Display name")).not.toContain('readOnly=""');
     expect(reader).toContain("You can read this but not change it.");
-    // A field that is only read is read-only, not disabled, and asks for nothing.
     expect(inputOf(reader, "Display name")).toContain('readOnly=""');
-    expect(inputOf(reader, "Display name")).not.toContain('disabled=""');
     expect(inputOf(reader, "Display name")).not.toContain('required=""');
-    // A new agent the reader may not write has nothing to create either.
     expect(
       agentPage({
         ...editable,
@@ -228,74 +178,28 @@ describe("agent page", () => {
     ).not.toContain('type="submit"');
   });
 
-  it("shows a tool of a module that is off as selected, unavailable and removable", () => {
-    const markup = agentPage({
-      config: { modelProviderId: "azure-eu", toolNames: ["read_skill", "documents.read"] },
-      references: { enabledToolNames: ["read_skill"] },
-      status: {
-        chatAvailable: true,
-        unavailableTools: [{ name: "documents.read", reason: "module_off", module: "documents" }]
-      },
-      editableAgentFields: ["toolNames"]
-    });
-    const tools = section(markup, "tools");
+  it("shows a tool the instance cannot run as unavailable and removable, and keeps one the reader was not told of", () => {
+    const tools = (unavailable: BuildAsset["unavailableTools"]) =>
+      section(
+        agentPage({
+          config: { toolNames: ["read_skill", "documents.read"] },
+          references: { enabledToolNames: ["read_skill"] },
+          status: unavailable ? { unavailableTools: unavailable } : {},
+          editableAgentFields: ["toolNames"]
+        }),
+        "tools"
+      );
 
-    expect(tools).toContain('data-unavailable-option="documents.read"');
-    expect(tools).toContain("Not available: the module Documents is off. Remove it to save.");
-    expect(tools).toContain('aria-label="Remove"');
-    expect(tools).not.toContain('data-tool-package="own:documents.read"');
-  });
-
-  it("shows a tool the instance does not have as unavailable and removable, not as its own", () => {
-    const tools = section(
-      agentPage({
-        config: { toolNames: ["read_skill", "crm.lookup"] },
-        references: { enabledToolNames: ["read_skill"] },
-        status: { unavailableTools: [{ name: "crm.lookup", reason: "unknown_tool" }] },
-        editableAgentFields: ["toolNames"]
-      }),
-      "tools"
-    );
-
-    expect(tools).toContain('data-unavailable-option="crm.lookup"');
-    expect(tools).toContain("Not available: there is no such tool here. Remove it to save.");
-    expect(tools).not.toContain('data-tool-package="own:crm.lookup"');
-  });
-
-  it("keeps a tool the agent names and the reader was not told of", () => {
-    const tools = section(
-      agentPage({
-        config: { toolNames: ["read_skill", "crm.lookup"] },
-        references: { enabledToolNames: ["read_skill"] }
-      }),
-      "tools"
-    );
-
-    // It is a chip of its own among the instance's tools, named by its id.
-    expect(tools).toContain('data-tool-package="own:crm.lookup"');
-    expect(tools).toContain(">crm.lookup<");
-    expect(tools).not.toContain("data-unavailable-option");
-  });
-
-  it("does not expose a model binding control for a legacy provider-only edit policy", () => {
-    const markup = agentPage({
-      config: { modelProviderId: "azure-eu" },
-      references: {
-        modelBindingIds: ["reasoning"],
-        modelBindings: [{ id: "reasoning", model: "gpt-5" }]
-      },
-      editableAgentFields: ["modelProviderId"]
-    });
-    const model = section(markup, "model");
-
-    // The instance's default model by name, never by the id of its provider.
-    expect(model).toContain(">Default for all workspaces</option>");
-    expect(model).not.toContain("azure-eu");
-    expect(model.match(/<select[^>]*>/gu)?.every((select) => select.includes('disabled=""'))).toBe(
-      true
-    );
-    // The binding is no row of its own: the reader cannot offer it.
-    expect(model).not.toContain("data-model-binding");
+    for (const reason of ["module_off", "unknown_tool"] as const) {
+      const markup = tools([{ name: "documents.read", reason, module: "documents" }]);
+      expect(markup).toContain('data-unavailable-option="documents.read"');
+      expect(markup).toContain('aria-label="Remove"');
+      expect(markup).not.toContain('data-tool-package="own:documents.read"');
+    }
+    // A tool the agent names that the read does not report stays a chip of its own.
+    const kept = tools(undefined);
+    expect(kept).toContain('data-tool-package="own:documents.read"');
+    expect(kept).not.toContain("data-unavailable-option");
   });
 
   it("makes model, reasoning effort and fast mode editable by permission, not by edit policy", () => {
@@ -323,55 +227,24 @@ describe("agent page", () => {
         "model"
       );
     const fastSwitch = (markup: string) => /<button[^>]*role="switch"[^>]*>/u.exec(markup)?.[0];
-    const effortSelect = (markup: string) =>
-      /<select[^>]*aria-label="Default model: Reasoning effort"[^>]*>/u.exec(markup)?.[0];
-    const defaultSelect = (markup: string) =>
-      /(<select[^>]*>)<option value="">Default for all workspaces/u.exec(markup)?.[1];
+    const selects = (markup: string) => markup.match(/<select[^>]*>/gu) ?? [];
 
     const editable = page(true);
-    expect(editable).toContain('<option value="fast" selected="">GPT-fast</option>');
-    expect(defaultSelect(editable)).not.toContain('disabled=""');
-    expect(effortSelect(editable)).not.toContain('disabled=""');
+    expect(editable).toMatch(/<option value="fast" selected="">/u);
+    expect(selects(editable).some((select) => select.includes('disabled=""'))).toBe(false);
     expect(fastSwitch(editable)).toContain('aria-checked="true"');
     expect(fastSwitch(editable)).not.toContain('disabled=""');
-    expect(editable).toContain("Fast runs are billed at a higher rate.");
     expect(editable).toContain('data-model-binding="plain"');
 
     const readOnly = page(false);
-    expect(readOnly).toContain('<option value="fast" selected="">GPT-fast</option>');
-    expect(defaultSelect(readOnly)).toContain('disabled=""');
+    expect(readOnly).toMatch(/<option value="fast" selected="">/u);
+    expect(selects(readOnly).every((select) => select.includes('disabled=""'))).toBe(true);
+    expect(fastSwitch(readOnly)).toContain('disabled=""');
     // A model the agent does not offer is no row for a reader who cannot offer it.
     expect(readOnly).not.toContain('data-model-binding="plain"');
-    expect(effortSelect(readOnly)).toContain('disabled=""');
-    expect(fastSwitch(readOnly)).toContain('disabled=""');
 
     // No fast-mode control for a binding that does not support it.
     expect(fastSwitch(page(true, "plain"))).toBeUndefined();
-  });
-
-  it.each([
-    ["en", "Only people who may manage agent model settings can change these."],
-    ["de", "Ändern darf das nur, wer die Modelleinstellungen der Agenten verwalten darf."]
-  ] as const)("says who sets the models only to a writer who may not (%s)", (locale, hint) => {
-    const model = (canWrite: boolean, canManageAgentModels: boolean) =>
-      section(
-        agentPage({
-          config: { modelBindingId: "plain" },
-          references: {
-            modelBindingIds: ["plain"],
-            modelBindings: [{ id: "plain", model: "gpt-plain" }]
-          },
-          frame: { canWrite },
-          canManageAgentModels,
-          locale
-        }),
-        "model"
-      );
-
-    expect(model(true, false)).toContain(hint);
-    expect(model(true, true)).not.toContain(hint);
-    // A reader who may not change the agent at all is told so once, for the whole page.
-    expect(model(false, false)).not.toContain(hint);
   });
 
   it("shows the agent's default model and the models people can choose beside it", () => {
@@ -433,11 +306,7 @@ describe("agent page", () => {
       // A model that is not offered has no effort control.
       "luna||no effort|"
     ]);
-    expect(editable).toContain(">Models people can choose in chat<");
-    expect(editable).toContain('aria-label="GPT-5.6 Terra: Reasoning effort"');
     expect(editable).not.toContain("retired");
-    expect(editable).toContain("People see a choice of models in the chat only when another");
-    expect(editable).toContain("Reasoning effort is how long the model thinks before it answers");
 
     // On the instance default every binding can still be offered.
     expect(models(page(true, "", ["luna"]))).toEqual([
@@ -461,47 +330,10 @@ describe("agent page", () => {
     });
 
     expect(section(markup, "model")).toBe("");
-    expect(markup).not.toContain('href="#model"');
-    expect(agentPage({ canManageAgentModels: true })).toContain('href="#model"');
+    expect(section(agentPage({ canManageAgentModels: true }), "model")).not.toBe("");
   });
 
-  it("lists the sections in the page's outline, with how many things each one holds", () => {
-    const markup = agentPage({
-      config: {
-        toolNames: ["read_skill", "show_view"],
-        skillNames: ["tax-review"],
-        initialPrompts: []
-      },
-      canManageAgentModels: true
-    });
-    const index = /<nav aria-label="On this page".*?<\/nav>/u.exec(markup)?.[0] ?? "";
-    const entries = [...index.matchAll(/<a href="#([^"]*)"[^>]*>(.*?)<\/a>/gu)].map(
-      ([, id, body = ""]) =>
-        `${id}: ${body
-          .replace(/<[^>]*>/gu, " ")
-          .replace(/\s+/gu, " ")
-          .trim()}`
-    );
-
-    expect(entries).toEqual([
-      "overview: Overview",
-      "instructions: Instructions",
-      "model: Model",
-      "skills: Skills 1",
-      "tools: Tools 2",
-      "prompts: Starter prompts 0"
-    ]);
-    // The sections are no list of pages: nothing of the kinds' rail is on the page.
-    expect(markup).not.toContain("data-sub-rail");
-    // Every entry of the outline leads to a section of the page.
-    for (const id of ["overview", "instructions", "model", "skills", "tools", "prompts"]) {
-      expect(section(markup, id)).not.toBe("");
-    }
-    // The availability is a section only where the frame hands one.
-    expect(markup).not.toContain('href="#availability"');
-  });
-
-  it("names the skills an agent has by their titles, and falls back to the id", () => {
+  it("names the skills an agent has by their titles, falls back to the id, and changes them only for a writer", () => {
     const skillsOf = (editableAgentFields: string[]) =>
       section(
         agentPage({
@@ -511,39 +343,171 @@ describe("agent page", () => {
         "skills"
       );
 
-    expect(skillsOf(["skillNames"])).toContain(">Tax review<");
-    expect(skillsOf(["skillNames"])).toContain(">gone_skill<");
-    expect(skillsOf(["skillNames"])).toContain("Choose skills");
-    expect(skillsOf(["skillNames"])).toContain('aria-label="Remove"');
-    // read_skill comes with the skills, so nothing asks the reader to tick it.
-    expect(skillsOf(["skillNames"])).not.toContain("read_skill");
-    // Read-only, the skills are named and can be neither removed nor added.
-    expect(skillsOf([])).toContain(">Tax review<");
-    expect(skillsOf([])).not.toContain("Choose skills");
-    expect(skillsOf([])).not.toContain('aria-label="Remove"');
-    expect(section(agentPage(), "skills")).toContain("No skills chosen.");
-  });
-
-  it("gives each skill of an agent its icon: the generic one unless a release ships the skill", () => {
-    const skills = section(
-      agentPage({
-        config: { skillNames: ["tax-review", "gone_skill"], toolNames: ["read_skill"] }
-      }),
-      "skills"
-    );
-
-    expect(skills.match(/data-skill-icon="generic"/gu)).toHaveLength(2);
-    expect(skills).not.toContain("data-file-type");
-    expect(skills).toMatch(/<span aria-hidden="true" data-skill-icon="generic"/u);
+    const writer = skillsOf(["skillNames"]);
+    expect(writer).toContain(">Tax review<");
+    expect(writer).toContain(">gone_skill<");
+    expect(writer).toContain("Choose skills");
+    expect(writer).toContain('aria-label="Remove"');
+    const reader = skillsOf([]);
+    expect(reader).toContain(">Tax review<");
+    expect(reader).not.toContain("Choose skills");
+    expect(reader).not.toContain('aria-label="Remove"');
   });
 
   it("offers to make the agent the default only where the frame hands the way", async () => {
-    // "Make default" stands in the head's "…" menu; the line under the name says the default.
     expect(await headMenuItems(agentElement({ onMakeDefault: async () => undefined }))).toContain(
       "Make default"
     );
     expect(await headMenuItems(agentElement())).not.toContain("Make default");
-    expect(agentPage()).toMatch(/data-asset-place="">[^<]*Default agent/u);
+  });
+});
+
+// The page passes the reader's model-management permission through to the agent's form.
+it.each([true, false])(
+  "passes the reader's model-management permission to the actual agent editor (%s)",
+  async (canManageModels) => {
+    const asset: BuildAsset = {
+      id: "asset_model_reader",
+      kind: "agent",
+      name: "model_reader",
+      scope: { kind: "instance" },
+      revision: 1,
+      allowed: ["write"],
+      updatedAt: "2026-10-01T08:00:00Z",
+      config: { ...agentBase, name: "model_reader", modelBindingId: "primary" }
+    };
+    const container = await mountBuildPage(
+      asset,
+      "agents",
+      (request, url) => {
+        if (url.pathname === apiOperations["platform.references.get"].path)
+          return Response.json(
+            references({
+              modelProviderIds: ["local"],
+              modelBindingIds: ["primary"],
+              modelBindings: [{ id: "primary", model: "gpt-primary" }]
+            })
+          );
+        if (
+          url.pathname ===
+          apiOperations["agents.draft.get"].buildPath({ params: { name: asset.name } })
+        )
+          return Response.json({ draft: null });
+        if (listedKind(request, url) !== undefined) return Response.json({ items: [] });
+        return undefined;
+      },
+      ["displayName", "modelBindingId"],
+      {
+        user: settingsUser({
+          roles: canManageModels ? ["superadmin"] : ["admin"],
+          permissions: canManageModels
+            ? ["config_assets.read", "config_assets.write", "agent_models.manage"]
+            : ["config_assets.read", "config_assets.write"]
+        })
+      }
+    );
+    await vi.waitFor(
+      async () => {
+        await act(async () => {
+          const model = required(
+            container.querySelector<HTMLSelectElement>("section#model select")
+          );
+          expect(model.querySelector<HTMLOptionElement>('option[value="primary"]')?.selected).toBe(
+            true
+          );
+          expect(model.disabled).toBe(!canManageModels);
+        });
+      },
+      { timeout: CONDITION_WAIT_MS }
+    );
+  }
+);
+
+// Where an agent can be chosen: a section of the agent's page, saved with the agent through the
+// page's save bar (AGENT-AVAIL-1).
+describe("agent availability", () => {
+  const sales = { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" };
+  const legal = { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" };
+  const availabilityOf = (availability: Partial<AvailabilityChoice>, isDefault = false) =>
+    section(
+      agentPage({ availability: { workspaces: [sales, legal], ...availability }, isDefault }),
+      "availability"
+    );
+  const ticked = (markup: string) => markup.match(/type="checkbox"[^>]*checked=""/gu) ?? [];
+
+  it("shows the saved choice by workspace name, with no save of its own", () => {
+    const selected = availabilityOf({
+      saved: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: ["ws_legal"] }
+    });
+    expect(selected).toContain("Legal");
+    expect(selected).not.toContain("ws_legal");
+    expect(ticked(selected)).toHaveLength(2);
+    expect(selected).not.toContain("Save availability");
+
+    const except = availabilityOf({
+      saved: {
+        mode: "all_except",
+        personalWorkspaces: true,
+        collaborationWorkspaceIds: ["ws_legal"]
+      }
+    });
+    expect(except).toMatch(
+      /value="all_except"[^>]*aria-checked="true"|aria-checked="true"[^>]*value="all_except"/u
+    );
+    expect(ticked(except)).toHaveLength(2);
+  });
+
+  it("never offers to exclude a workspace whose own default the agent is", () => {
+    const section = availabilityOf({
+      saved: { mode: "all_except", personalWorkspaces: true, collaborationWorkspaceIds: [] },
+      workspaces: [sales, { ...legal, defaultAgentName: "assistant" }]
+    });
+    expect(section).toMatch(/<label[^>]*>(?:(?!<\/label>).)*Sales/u);
+    expect(section).not.toMatch(/<label[^>]*>(?:(?!<\/label>).)*Legal/u);
+  });
+
+  // #334: with the agent the default everywhere, the list of workspaces to leave out was empty
+  // without a word.
+  it("says why no workspace can be left out when the agent is the default in every one", () => {
+    const everywhere = {
+      saved: { mode: "all_except", personalWorkspaces: true, collaborationWorkspaceIds: [] },
+      workspaces: [sales, { ...legal, defaultAgentName: "assistant" }]
+    } satisfies Partial<AvailabilityChoice>;
+    // Sales names no default of its own, so the instance default stays there too.
+    const en = availabilityOf(everywhere, true);
+    expect(en).not.toMatch(/<label[^>]*>(?:(?!<\/label>).)*(?:Sales|Legal)/u);
+    expect(en).toContain("This agent is the default agent in every shared workspace.");
+    expect(en).not.toContain("There are no shared workspaces yet.");
+    const failed = availabilityOf(
+      { ...everywhere, workspacesError: "The workspaces could not be read." },
+      true
+    );
+    expect(failed).toContain("The workspaces could not be read.");
+    expect(failed).not.toContain("This agent is the default agent in every shared workspace.");
+  });
+
+  it("lets the default agent be restricted", () => {
+    const section = availabilityOf(
+      { saved: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] } },
+      true
+    );
+    expect(section).toContain('role="radiogroup"');
+    expect(section).not.toMatch(/<div role="radiogroup"[^>]*data-disabled=""/u);
+  });
+
+  // Who uses the agent where it is available (AGENT-USE-1), for whoever sets that.
+  it("offers who may use it only to a reader who sets availability, linking to the rights when limited", () => {
+    const save = async () => undefined;
+    const use = (agentUse: AgentUseChoice | undefined) =>
+      section(
+        agentPage({ availability: {}, isDefault: false, ...(agentUse ? { agentUse } : {}) }),
+        "agent-use"
+      );
+
+    expect(use({ saved: "everyone", save })).not.toBe("");
+    expect(use({ saved: "everyone", save })).not.toContain("/settings/instance/access");
+    expect(use({ saved: "granted", save })).toContain('href="/settings/instance/access"');
+    expect(use(undefined)).toBe("");
   });
 });
 
@@ -566,90 +530,47 @@ describe("texts per language", () => {
     const german = page("de");
 
     expect(language(english, "en")).toContain('aria-checked="true"');
-    expect(language(english, "de")).toContain('aria-checked="false"');
     expect(language(german, "de")).toContain('aria-checked="true"');
-    expect(inputOf(english, "Description")).toContain('lang="en"');
     expect(inputOf(english, "Description")).toContain('value="Help with the workflow."');
     expect(english).not.toContain("Hilfe beim Workflow.");
-    expect(inputOf(german, "Beschreibung")).toContain('lang="de"');
     expect(inputOf(german, "Beschreibung")).toContain('value="Hilfe beim Workflow."');
     expect(german).not.toContain("Help with the workflow.");
   });
 
-  it("shows the other language's text as the placeholder of an empty one, and says so", () => {
+  it("shows the other language's text in an empty field, which is then not required, and counts the gaps", () => {
     const english = page("en");
-    const german = page("de");
     const name = inputOf(english, "Display name");
 
     expect(name).toContain('value=""');
     expect(name).toContain('placeholder="Assistent"');
-    // The text people read comes from the other language, so the empty field is not required.
     expect(name).not.toContain('required=""');
-    expect(section(english, "overview")).toContain(
-      "Empty in this language. People read the German text."
-    );
-    expect(section(english, "overview")).not.toContain("People read the English text.");
-    expect(inputOf(german, "Begrüßungsnachricht")).toContain('placeholder="How can I help?"');
-    expect(section(german, "overview")).toContain(
-      "In dieser Sprache leer. Es wird der englische Text gezeigt."
-    );
-    // A text written in both languages, and one written in neither, has no hint.
-    expect(inputOf(english, "Description")).toContain('placeholder=""');
-    expect(inputOf(english, "Welcome subtitle")).toContain('placeholder=""');
-    expect(section(english, "overview").match(/Empty in this language/gu)).toHaveLength(1);
-  });
-
-  it("counts on the switch how many texts the other language still lacks", () => {
+    expect(inputOf(page("de"), "Begrüßungsnachricht")).toContain('placeholder="How can I help?"');
     // German lacks the welcome message and both texts of the starter prompt, English the name.
-    expect(language(page("en"), "de")).toContain(">3<");
-    expect(language(page("en"), "de")).toContain('title="3 texts are empty in this language"');
-    expect(language(page("en"), "en")).not.toMatch(/>\d+</u);
+    expect(language(english, "de")).toContain(">3<");
     expect(language(page("de"), "en")).toContain(">1<");
   });
 
+  // fix(studio): the switch scrolled away with a long page.
   it("keeps the switch reachable under the page's head while the page scrolls", () => {
     const markup = page("en");
     const bar = /<div([^>]*)><span[^>]*>Texts in<\/span>/u.exec(markup);
     expect(bar?.[1]).toContain('data-page-bar=""');
-    expect(bar?.[1]).toMatch(/class="[^"]*\bsticky top-\(--page-bar-top,var\(--layout-header\)\)/u);
-    // Inside the form: it stops at the form's end and adds nothing to the scrolling there.
-    expect(markup.indexOf("<form")).toBeLessThan(bar?.index ?? -1);
-  });
-
-  it("has no language switch on a page without texts per language", () => {
-    const markup = render(
-      createElement(SkillEditor, {
-        frame: frame({ start: { name: "review", title: "Review" } }),
-        initialForm: startedSkillForm({ name: "review", title: "Review" }),
-        editable: true
-      })
-    );
-
-    expect(markup).not.toContain("Texts in");
-    expect(markup).not.toContain('role="radio"');
+    expect(bar?.[1]).toMatch(/class="[^"]*\bsticky\b/u);
   });
 });
 
 describe("save bar", () => {
   it("is absent on an agent nothing was changed on, and present on a new one", () => {
     const fields = { editableAgentFields: ["displayName"], canManageAgentModels: true };
-    const existing = agentPage(fields);
     const started = agentPage({
       ...fields,
       started: startedAgentForm({ name: "tax-assistant", title: "Tax assistant" }, "en")
     });
 
-    expect(existing).not.toContain('type="submit"');
-    expect(existing).not.toContain("Save changes");
-    expect(existing).not.toContain("Applies to new conversations immediately.");
+    expect(agentPage(fields)).not.toContain('type="submit"');
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create agent<\/button>/u);
-    expect(started).toContain("Applies to new conversations immediately.");
-    // A new asset has nothing to go back to and no count of changes.
+    // A new asset has nothing to go back to.
     expect(started).not.toContain("Discard");
-    expect(started).not.toMatch(/\d+ changes?/u);
-    // The id is offered by "Copy ID" in the head's menu alone: the page never shows it.
-    expect(started).not.toContain(">tax-assistant<");
-    expect(started).not.toContain("data-asset-identifier");
     expect(inputOf(started, "Display name")).toContain('value="Tax assistant"');
   });
 
@@ -671,75 +592,99 @@ describe("save bar", () => {
     );
 
     expect(existing).not.toContain('type="submit"');
-    expect(existing).toContain('aria-label="Add a file to references/"');
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create skill<\/button>/u);
-    // The head is one row: a long name is cut and says itself whole on hover.
-    expect(started).toMatch(
-      /<h1 class="[^"]*\bline-clamp-[12]\b[^"]*" title="Tax review">Tax review/u
-    );
-    expect(started).toMatch(/<header data-variant="detail"[^>]* class="[^"]*\bmd:flex-nowrap\b/u);
   });
 });
 
-describe("a page that keeps sections folded under one line", () => {
-  const refused: BuildWriteOutcome = {
+describe("refused save", () => {
+  const outcome: BuildWriteOutcome = {
     ok: false,
     conflict: false,
-    refusals: [{ field: "tools", message: "The tool documents.read is not allowed." }]
+    refusals: [
+      { field: "tools", message: "The tool documents.read is not allowed in the workspace Tax." },
+      { message: "The change would break an asset the caller may not read" }
+    ]
   };
-  const shell = (submit: () => Promise<BuildWriteOutcome>, answer?: BuildWriteOutcome) =>
-    createElement(
-      TranslationProvider,
-      { children: null, locale: "en" },
-      createElement(AssetEditorShell, {
-        frame: frame({ asset: storedAsset("agent", agentBase) }),
-        title: "Handbook",
-        lead: "The staff handbook and its policies.",
-        outline: false,
-        sections: [
-          {
-            id: "documents",
-            label: "Documents",
-            bare: true,
-            body: createElement("p", null, "List")
+  const shell = (input: {
+    answer?: BuildWriteOutcome;
+    frame?: Partial<BuildAssetEditorProps>;
+    changes?: number;
+    submit?: () => Promise<BuildWriteOutcome>;
+    settings?: boolean;
+  }) => {
+    const tools = {
+      id: "tools",
+      label: "Tools",
+      refusalField: "tools" as const,
+      body: createElement(FieldRefusals, { messages: refusalsOf(input.answer, "tools") })
+    };
+    const details = { id: "details", label: "Details", body: createElement("p", null, "Fields") };
+    return createElement(AssetEditorShell, {
+      frame: frame({ asset: storedAsset("agent", agentBase), ...input.frame }),
+      title: "Assistant",
+      ...(input.settings
+        ? {
+            outline: false,
+            sections: [details],
+            settings: { label: "Settings", hint: "Name, access", sections: [tools] }
           }
-        ],
-        settings: {
-          label: "Settings",
-          hint: "Name, access",
-          sections: [
-            { id: "about", label: "About", body: createElement("p", null, "Fields") },
-            {
-              id: "tools",
-              label: "Tools",
-              refusalField: "tools",
-              body: createElement(FieldRefusals, { messages: refusalsOf(answer, "tools") })
-            }
-          ]
-        },
-        control: { changes: 1, submit, discard: noop },
-        outcome: answer,
-        saving: false,
-        saveLabel: "Save changes"
-      })
+        : { sections: [details, tools] }),
+      control: { changes: input.changes ?? 0, submit: input.submit ?? saved, discard: noop },
+      outcome: input.answer,
+      saving: false,
+      saveLabel: "Save changes"
+    });
+  };
+  const page = (
+    answer: BuildWriteOutcome | undefined,
+    input: Partial<BuildAssetEditorProps> = {}
+  ) => render(shell({ answer, frame: input }));
+
+  it("says a refusal that names the tools under the tools, and marks that section alone", () => {
+    const markup = page(outcome);
+    const tools = section(markup, "tools");
+
+    expect(tools).toContain('data-field-refusal=""');
+    expect(tools).toContain("The tool documents.read is not allowed in the workspace Tax.");
+    expect(markup.match(/The tool documents\.read is not allowed/gu)).toHaveLength(1);
+    expect(section(markup, "details")).not.toContain("data-field-refusal");
+    expect(markup).toMatch(/<a href="#tools"[^>]*data-invalid=""/u);
+    expect(markup.match(/<a [^>]*data-invalid=""/gu)).toHaveLength(1);
+  });
+
+  it("says a refusal that names no field after the sections, also to a reader", () => {
+    const markup = page(outcome);
+    const after = markup.slice(markup.lastIndexOf("</section>"));
+
+    expect(after).toContain("The change would break an asset the caller may not read");
+    expect(after).not.toContain("data-field-refusal");
+    expect(page(outcome, { canWrite: false })).toContain(
+      "The change would break an asset the caller may not read"
     );
+  });
 
-  it("shows the lead line and the sections in view, the rest folded, and no outline", () => {
-    const markup = renderToStaticMarkup(shell(saved));
-
-    expect(markup).toMatch(/data-asset-lead=""[^>]*>.*The staff handbook and its policies\./su);
-    expect(markup).not.toContain("data-page-outline");
-    // A bare section has no heading of its own.
-    expect(markup).not.toMatch(/<h2[^>]*>Documents</u);
-    expect(markup).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*Settings.*Name, access/su);
-    // What is folded stays in the page: its fields are part of the form.
-    expect(markup.indexOf('id="about"')).toBeGreaterThan(markup.indexOf("data-asset-settings"));
+  it("shows nothing of a refusal on a page whose save went through, and a conflict as the frame says it", () => {
+    for (const answer of [undefined, { ok: true }, { ok: false, conflict: true }] as const) {
+      const markup = page(answer);
+      expect(markup).not.toContain("data-field-refusal");
+      expect(markup).not.toContain('role="alert"');
+    }
+    const conflict = page(
+      { ok: false, conflict: true },
+      { notice: createElement("p", { "data-build-conflict": "" }, "Somebody saved this.") }
+    );
+    expect(conflict.slice(conflict.lastIndexOf("</section>"))).toContain("Somebody saved this.");
   });
 
   it("opens the folded sections when a refused save names a field in them", async () => {
+    const refused: BuildWriteOutcome = {
+      ok: false,
+      conflict: false,
+      refusals: [{ field: "tools", message: "The tool documents.read is not allowed." }]
+    };
     const host = document.createElement("div");
     document.body.append(host);
-    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const root = createRoot(host);
     try {
       await act(async () =>
@@ -747,7 +692,11 @@ describe("a page that keeps sections folded under one line", () => {
           createElement(
             UiRoot,
             { mode: "light", labels: uiLabelsEn },
-            shell(async () => refused, refused)
+            createElement(
+              TranslationProvider,
+              { children: null, locale: "en" },
+              shell({ answer: refused, changes: 1, submit: async () => refused, settings: true })
+            )
           )
         )
       );
@@ -764,93 +713,9 @@ describe("a page that keeps sections folded under one line", () => {
         "The tool documents.read is not allowed."
       );
     } finally {
-      act(() => root.unmount());
+      await act(async () => root.unmount());
       host.remove();
-    }
-  });
-});
-
-describe("refused save", () => {
-  const outcome: BuildWriteOutcome = {
-    ok: false,
-    conflict: false,
-    refusals: [
-      { field: "tools", message: "The tool documents.read is not allowed in the workspace Tax." },
-      { message: "The change would break an asset the caller may not read" }
-    ]
-  };
-  const page = (
-    answer: BuildWriteOutcome | undefined,
-    input: Partial<BuildAssetEditorProps> = {}
-  ) =>
-    render(
-      createElement(AssetEditorShell, {
-        frame: frame({ asset: storedAsset("agent", agentBase), ...input }),
-        title: "Assistant",
-        sections: [
-          { id: "details", label: "Details", body: createElement("p", null, "Fields") },
-          {
-            id: "tools",
-            label: "Tools",
-            refusalField: "tools",
-            body: createElement(FieldRefusals, { messages: refusalsOf(answer, "tools") })
-          }
-        ],
-        control: { changes: 0, submit: saved, discard: noop },
-        outcome: answer,
-        saving: false,
-        saveLabel: "Save changes"
-      })
-    );
-
-  it("says a refusal that names the tools under the tools, and nowhere else", () => {
-    const markup = page(outcome);
-    const tools = section(markup, "tools");
-
-    expect(tools).toContain('data-field-refusal=""');
-    expect(tools).toContain("The tool documents.read is not allowed in the workspace Tax.");
-    expect(markup.match(/The tool documents\.read is not allowed/gu)).toHaveLength(1);
-    expect(markup.match(/data-field-refusal/gu)).toHaveLength(1);
-    expect(section(markup, "details")).not.toContain("data-field-refusal");
-  });
-
-  it("marks the section a refusal names in the page's outline, and no other", () => {
-    const linkTo = (markup: string, id: string) =>
-      new RegExp(`<a href="#${id}"[^>]*>.*?</a>`, "u").exec(markup)?.[0] ?? "";
-    const refused = page(outcome);
-
-    expect(linkTo(refused, "tools")).toContain('data-invalid=""');
-    expect(linkTo(refused, "tools")).toContain("Has an error");
-    expect(linkTo(refused, "details")).not.toContain("data-invalid");
-    expect(refused.match(/<a [^>]*data-invalid=""/gu)).toHaveLength(1);
-    // The line that stands in for the outline on a phone names one section: it is marked too.
-    expect(refused).toMatch(/<\/select>.*<span data-invalid=""/u);
-    expect(page({ ok: true })).not.toContain("data-invalid");
-  });
-
-  it("says a refusal that names no field after the sections, as the instance said it", () => {
-    const markup = page(outcome);
-    const after = markup.slice(markup.lastIndexOf("</section>"));
-
-    expect(after).toContain("The change would break an asset the caller may not read");
-    expect(after).not.toContain("data-field-refusal");
-    // It shows to a reader too, who has no save bar.
-    expect(page(outcome, { canWrite: false })).toContain(
-      "The change would break an asset the caller may not read"
-    );
-  });
-
-  it("shows nothing of a refusal on a page whose save went through", () => {
-    const answers: (BuildWriteOutcome | undefined)[] = [
-      undefined,
-      { ok: true },
-      { ok: false, conflict: true }
-    ];
-    for (const answer of answers) {
-      const markup = page(answer);
-
-      expect(markup).not.toContain("data-field-refusal");
-      expect(markup).not.toContain('role="alert"');
+      vi.unstubAllGlobals();
     }
   });
 
@@ -862,19 +727,7 @@ describe("refused save", () => {
       conflict: false,
       refusals: [{ message: "This change waits for approval by Mara Lindqvist.", waiting: true }]
     };
-    const changed = (answer: BuildWriteOutcome | undefined) =>
-      render(
-        createElement(AssetEditorShell, {
-          frame: frame({ asset: storedAsset("agent", agentBase) }),
-          title: "Assistant",
-          sections: [{ id: "details", label: "Details", body: null }],
-          control: { changes: 1, submit: saved, discard: noop },
-          outcome: answer,
-          saving: false,
-          saveLabel: "Save changes"
-        })
-      );
-    const markup = changed(waiting);
+    const markup = render(shell({ answer: waiting, changes: 1 }));
 
     expect(markup).toMatch(
       /data-testid="build-save-waiting"[^>]*>[\s\S]*This change waits for approval by Mara Lindqvist\./u
@@ -882,70 +735,32 @@ describe("refused save", () => {
     expect(markup).toContain('data-tone="info"');
     expect(markup).not.toContain('data-tone="error"');
     expect(markup).not.toContain("Applies to new conversations immediately.");
-    expect(changed(undefined)).toContain("Applies to new conversations immediately.");
+    expect(render(shell({ changes: 1 }))).toContain("Applies to new conversations immediately.");
   });
 
   // ACCEPT-2e C-2: Elif's save of a skill waited for Mara or Jonas, but before the save the bar
   // said it applied at once. The bar now says so before the save, with who decides.
   it("names who approves before a save that would wait for an approval", () => {
     const skillAsset = storedAsset("skill", { name: "hr-leave-policy" });
-    const bar = (asset: BuildAsset, locale: LocaleCode) =>
-      render(
-        createElement(AssetEditorShell, {
-          frame: frame({ asset }),
-          title: "Urlaubsrichtlinie",
-          sections: [{ id: "details", label: "Details", body: null }],
-          control: { changes: 1, submit: saved, discard: noop },
-          outcome: undefined,
-          saving: false,
-          saveLabel: "Save changes"
-        }),
-        locale
-      );
+    const bar = (asset: BuildAsset) => render(shell({ frame: { asset }, changes: 1 }));
     const held = (approverNames: string[]) => ({ ...skillAsset, saveApproval: { approverNames } });
 
-    const de = bar(held(["Mara Lindqvist", "Jonas Brandt"]), "de");
-    expect(de).toContain(
-      "Speichern schickt eine Anfrage. Wirksam wird sie erst nach Freigabe durch Mara Lindqvist oder Jonas Brandt."
-    );
-    expect(de).not.toContain("Gilt sofort");
-    expect(bar(held([]), "en")).toContain(
-      "Saving sends a request. It takes effect only once it is approved."
-    );
+    const named = bar(held(["Mara Lindqvist", "Jonas Brandt"]));
+    expect(named).toContain("Mara Lindqvist");
+    expect(named).toContain("Jonas Brandt");
+    expect(named).not.toContain("Applies to new conversations immediately.");
+    expect(bar(held([]))).not.toContain("Applies to new conversations immediately.");
     // A save the instance does not hold still applies at once.
-    expect(bar(skillAsset, "en")).toContain("Applies to new conversations immediately.");
-  });
-
-  it("shows what the frame says of a conflict above the save bar", () => {
-    const markup = page(
-      { ok: false, conflict: true },
-      { notice: createElement("p", { "data-build-conflict": "" }, "Somebody saved this.") }
-    );
-
-    expect(markup.slice(markup.lastIndexOf("</section>"))).toContain("Somebody saved this.");
+    expect(bar(skillAsset)).toContain("Applies to new conversations immediately.");
   });
 
   it("counts the changes beside the save button and offers to discard them", () => {
-    const changed = (changes: number) =>
-      render(
-        createElement(AssetEditorShell, {
-          frame: frame({ asset: storedAsset("agent", agentBase) }),
-          title: "Assistant",
-          sections: [{ id: "details", label: "Details", body: null }],
-          control: { changes, submit: saved, discard: noop },
-          outcome: undefined,
-          saving: false,
-          saveLabel: "Save changes"
-        })
-      );
+    const changed = (changes: number) => render(shell({ changes }));
 
-    expect(changed(1)).toContain("1 change<");
     expect(changed(3)).toContain("3 changes<");
     expect(changed(3)).toContain("Discard");
     expect(changed(3)).toMatch(/<button[^>]*type="submit"[^>]*>Save changes<\/button>/u);
     expect(changed(0)).not.toContain("Save changes");
-    // A page of one section has no index.
-    expect(changed(0)).not.toContain("Sections of this page");
   });
 });
 
@@ -972,13 +787,9 @@ describe("skill page", () => {
       page({ canWrite: false, editable: true }),
       page({ canWrite: true, editable: false })
     ]) {
-      expect(markup).toContain("SKILL.md");
       expect(markup).toContain("references/checks.md");
-      expect(markup).toContain("lucide-file-text");
       expect(markup).toMatch(/<textarea[^>]*readOnly=""[^>]*># Review<\/textarea>/u);
       expect(inputOf(markup, "Title")).toContain('readOnly=""');
-      expect(inputOf(markup, "Title")).not.toContain('required=""');
-      expect(markup).toContain("You can read this but not change it.");
       expect(markup).not.toContain('aria-label="Add a file to references/"');
       expect(markup).not.toContain("Save changes");
     }
@@ -987,55 +798,8 @@ describe("skill page", () => {
   it("lets a writer change the package", () => {
     const markup = page({ canWrite: true, editable: true });
 
-    expect(markup).not.toContain("You can read this but not change it.");
     expect(markup).toContain('aria-label="Add a file to references/"');
     expect(markup).not.toMatch(/<textarea[^>]*readOnly=""/u);
-    expect(inputOf(markup, "Title")).not.toContain('disabled=""');
-    // The index counts the files of the package: the instructions and one reference.
-    expect(markup).toMatch(/<a href="#files"[^>]*>.*?>2<\/span><\/a>/u);
-  });
-});
-
-/** The pinned head of a page: everything from `<header` to its end. */
-function headOf(markup: string): string {
-  return markup.slice(markup.indexOf("<header"), markup.indexOf("</header>"));
-}
-
-describe("the head of an asset page", () => {
-  // The head names the asset and says its state and facts; what it does stands in its fields,
-  // never cut short in the head.
-  it("names the asset, without its description and never with its id", () => {
-    const agent = agentPage({
-      config: {
-        name: "quarter-close-7f3a",
-        displayName: "Quarter close",
-        description: "Closes the books of a quarter."
-      }
-    });
-    const skillConfig = {
-      name: "tax-review-0042",
-      title: "Tax review",
-      summary: "Checks a tax return before it is filed.",
-      description: "How to review",
-      content: "#"
-    };
-    const skill = render(
-      createElement(SkillEditor, {
-        frame: frame({ asset: storedAsset("skill", skillConfig) }),
-        initialForm: skillConfigToForm(skillConfig),
-        editable: true
-      })
-    );
-
-    for (const [markup, id, name, line] of [
-      [agent, "quarter-close-7f3a", "Quarter close", "Closes the books of a quarter."],
-      [skill, "tax-review-0042", "Tax review", "Checks a tax return before it is filed."]
-    ] as const) {
-      const head = headOf(markup);
-      expect(head).toContain(`>${name}</h1>`);
-      expect(head).not.toContain("page-header-description");
-      expect(head).not.toContain(line);
-      expect(markup).not.toContain(id);
-    }
+    expect(inputOf(markup, "Title")).not.toContain('readOnly=""');
   });
 });

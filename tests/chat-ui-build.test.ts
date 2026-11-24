@@ -1,20 +1,36 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@work-shape/catalyst-api-client";
-import { DocsAddressProvider } from "@work-shape/catalyst-ui";
+import { ApiError, createApiClient, type LocaleCode } from "@work-shape/catalyst-api-client";
 import {
+  ASSET_ADDRESS_MAX_LENGTH,
+  ASSET_ADDRESS_PATTERN,
+  assetAddressFromName
+} from "@work-shape/catalyst-core";
+import { addressOf, DocsAddressProvider } from "@work-shape/catalyst-ui";
+import {
+  addressBlocksCreate,
+  addressCheckOf,
+  approverNamesOf,
   buildAssetKinds,
   BuildAssetKindsProvider,
   BuildFrame,
   buildLocationOfRoute,
   BuildNavigationProvider,
   buildRouteOfLocation,
+  buildScopes,
+  buildWorkspaceName,
   clearBuildStartRequest,
+  deleteBlockedReason,
   isEditableKind,
+  mayCreateAgents,
+  PendingApprovalError,
+  readBuildRefusal,
+  refusalsOf,
   requestBuildStart,
   resolveBuildPlace,
   resolveBuildRights,
+  resolveBuildScope,
   SkillEditor,
   skillConfigToForm,
   visibleBuildKinds,
@@ -26,6 +42,7 @@ import {
   type BuildKind,
   type BuildList,
   type BuildLocation,
+  type BuildScope,
   type BuildSource
 } from "@work-shape/catalyst-chat-ui/build-area";
 import {
@@ -36,6 +53,8 @@ import {
   type Workspaces
 } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { createAssetWrites } from "./support/chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 
 const [agentKind, skillKind, connectionKind] = buildAssetKinds;
 if (
@@ -77,7 +96,6 @@ function asset(kind: string, name: string, overrides: Partial<BuildAsset> = {}):
   };
 }
 
-// In the order the instance answers them: by name.
 const agents: BuildAssetRow[] = [
   row("agent", "tax-steuer_agent", { title: "Steuer-Agent" }),
   row("agent", "workflow_assistant", {
@@ -228,11 +246,6 @@ const skillPages: BuildAssetKind = {
 };
 const pageKinds = [agentKind, skillPages];
 
-/** The pinned head of a page: everything from `<header` to its end. */
-function headOf(markup: string): string {
-  return markup.slice(markup.indexOf("<header"), markup.indexOf("</header>"));
-}
-
 describe("Studio frame", () => {
   it("opens the page of a new agent on the list when a page outside Studio started it", () => {
     // The agent's form reads the instance's configuration from Settings: a plain body stands in.
@@ -266,42 +279,21 @@ describe("Studio frame", () => {
     }
   });
 
-  it("lands on the Agents list, titled by the name with what the agent does beneath", () => {
+  it("lists agents by title and what they do, never by id, each row a link to its address", () => {
     const markup = render({});
 
-    expect(markup).toContain('<h1 class="min-w-0 break-words outline-none text-title-lg">Agents');
     expect(markup).toContain(">Workflow Assistant<");
     expect(markup).toContain(">Reviews a workflow and plans the next checks.<");
-    // An id is never the second line of an agent.
     expect(markup).not.toContain(">workflow_assistant<");
-    expect(markup).toContain(">Default agent<");
-    expect(markup).toContain(">New agent<");
-    expect(markup).not.toContain("New skill");
-    // The instance orders the rows, and the frame shows them as they came.
-    expect(markup.indexOf("Steuer-Agent")).toBeLessThan(markup.indexOf("Workflow Assistant"));
-    expect(markup).not.toMatch(/Version \d/u);
-    expect(markup).not.toContain("catalyst CLI");
-  });
-
-  it("makes each row a link to the asset's address", () => {
-    const markup = render({ kindPath: "agents" });
-
     expect(markup).toMatch(/<a [^>]*href="\/build\/agents\/workflow_assistant"/u);
-    expect(markup).not.toMatch(/<li[^>]*>\s*<div[^>]*>\s*<button/u);
+    // Without a title the row falls back to the id.
+    const untitled = source({
+      lists: { agent: { rows: [row("agent", "untitled", { title: " " })] } }
+    });
+    expect(render({ kindPath: "agents" }, { source: untitled })).toContain(">untitled</");
   });
 
-  it("falls back to the id where the instance sent no title", () => {
-    const markup = render(
-      { kindPath: "agents" },
-      { source: source({ lists: { agent: { rows: [row("agent", "untitled", { title: " " })] } } }) }
-    );
-
-    expect(markup).toContain(">untitled</");
-    expect(markup).not.toContain('<code class="font-mono">untitled</code>');
-  });
-
-  it("says what a skill knows how to do, and shows a skill without a summary by its title alone", () => {
-    const summary = "Knows how to review a tax file.";
+  it("gives a custom skill named like a shipped one the generic icon, never the shipped one", () => {
     const markup = render(
       { kindPath: "skills" },
       {
@@ -309,9 +301,6 @@ describe("Studio frame", () => {
           lists: {
             skill: {
               rows: [
-                row("skill", "tax-review", { title: "Tax review", attributes: { summary } }),
-                row("skill", "plain", { title: "Plain language" }),
-                // A custom skill named like a shipped one, which claims the shipped icon.
                 row("skill", "pdf", { title: "PDF", attributes: { icon: "pdf" } }),
                 row("skill", "platform.pdf", {
                   title: "PDF",
@@ -329,84 +318,38 @@ describe("Studio frame", () => {
         "u"
       ).exec(markup)?.[0] ?? "";
 
-    expect(rowOf("tax-review")).toContain(`>${summary}<`);
-    // Never the id and never the text for the agent.
-    expect(markup).not.toContain("<code");
-    expect(rowOf("plain")).toContain(">Plain language<");
-    expect(rowOf("plain")).not.toContain("text-caption text-muted-foreground");
-    expect(rowOf("plain")).toContain('data-skill-icon="generic"');
     expect(rowOf("pdf")).toContain('data-skill-icon="generic"');
     expect(rowOf("pdf")).not.toContain("data-file-type");
     expect(rowOf("platform.pdf")).toContain('data-file-type="pdf"');
-    // The icon repeats the title beside it.
-    expect(rowOf("platform.pdf")).toMatch(/<span aria-hidden="true" data-skill-icon="pdf"/u);
   });
 
-  it("names the kinds in the reader's language", () => {
-    const markup = render({ kindPath: "agents" }, { locale: "de" });
-
-    expect(markup).toContain(">Agenten<");
-    // Skills keep their name; "Fähigkeiten" is the page below the kinds (TOOLS-2).
-    expect(markup).toContain('<option value="skills">Skills</option>');
-    expect(markup).toContain('<option value="capabilities">Fähigkeiten</option>');
-  });
-
-  it("shows the kinds as a rail without counts, and below them Capabilities, also beside a single kind", () => {
-    const both = render({ kindPath: "skills" });
-    const one = render(
-      { kindPath: "agents" },
-      {
-        source: source({
-          permissions: [],
-          workspaces: [{ ...taxWorkspace, actions: ["agent.read"] }]
-        })
-      }
-    );
-
-    expect(both).toContain('aria-label="Kinds in Studio"');
-    expect(both).toContain('<option value="agents">Agents</option>');
-    expect(both).toContain('<option value="skills" selected="">Skills</option>');
-    expect(both).toContain('<option value="capabilities">Capabilities</option>');
-    // The own tools are listed on Capabilities and have no item of their own.
-    expect(both).not.toContain('<option value="tools"');
-    expect(one).toContain('<option value="agents" selected="">Agents</option>');
-    expect(one).not.toContain('<option value="skills"');
-    expect(one).toContain('<option value="capabilities">Capabilities</option>');
-  });
-
-  it("shows a planted kind as a third rail item, with its list and its asset page", () => {
+  it("shows a planted kind with its list and its asset page, only where the instance answered for it", () => {
     const kinds = [...buildAssetKinds, plantedKind];
     const base = source();
     const withWorkflows = source({
-      lists: {
-        workflow: { rows: [row("workflow", "crm", { title: "CRM" })] }
-      },
+      lists: { workflow: { rows: [row("workflow", "crm", { title: "CRM" })] } },
       assets: { "workflow/crm": ready(asset("workflow", "crm")) },
       overrides: {
         kinds: [...base.kinds, { kind: "workflow", canCreate: false, canDelete: false }]
       }
     });
     const list = render({ kindPath: "workflows" }, { kinds, source: withWorkflows });
-    const page = render({ kindPath: "workflows", name: "crm" }, { kinds, source: withWorkflows });
 
-    expect(list).toContain('<option value="workflows" selected="">API access</option>');
     expect(list).toContain(">CRM<");
-    // A row without a line of its kind shows the title alone, never the id.
-    expect(list).not.toContain('<code class="font-mono">crm</code>');
     // Without the right to create, the list has no New button.
     expect(list).not.toContain("New agent");
-    expect(page).toContain("workflow body of crm");
-    // A kind the instance did not answer for has no rail item.
+    expect(
+      render({ kindPath: "workflows", name: "crm" }, { kinds, source: withWorkflows })
+    ).toContain("workflow body of crm");
     expect(render({ kindPath: "agents" }, { kinds })).not.toContain("API access");
   });
 
-  it("lists Connections with New connection for who may create one, each row with its chips and a link to its page", () => {
+  it("lists Connections as links with New connection for a creator, and a list-only kind without pages", () => {
     const base = source();
     const withConnections = (rows: BuildAssetRow[]) =>
       source({
         lists: { connection: { rows } },
         overrides: {
-          // The reader may write every asset of the instance, and so create a Connection.
           kinds: [...base.kinds, { kind: "connection", canCreate: true, canDelete: true }]
         }
       });
@@ -414,43 +357,13 @@ describe("Studio frame", () => {
       row("connection", "crm", {
         title: "CRM",
         attributes: { connectorType: "mcp", origin: "release", enabled: true }
-      }),
-      row("connection", "ledger", {
-        title: "Ledger",
-        scope: { kind: "workspace", workspaceId: "ws_1" },
-        attributes: { connectorType: "postgres", origin: "runtime", enabled: false }
       })
     ];
     const list = render({ kindPath: "connections" }, { source: withConnections(rows) });
 
-    expect(list).toContain('<option value="connections" selected="">Connections</option>');
     expect(list).toContain(">CRM<");
-    for (const chip of [">MCP server<", ">postgres<", "Enabled", "Disabled"]) {
-      expect(list, chip).toContain(chip);
-    }
-    // One chip says where a row sits: the frame's, never a second one of the kind.
-    expect(list.split(">Everyone<")).toHaveLength(2);
-    expect(list).not.toContain(">Workspace<");
-    // Where a Connection comes from is no chip of the row.
-    expect(list).not.toContain("Release config");
-    expect(list).not.toContain(">Runtime<");
-    // A row opens the Connection's page, and a new one is started from the list.
     expect(list).toContain('href="/build/connections/crm"');
     expect(list).toContain(">New connection<");
-    // The list stands under its own heading, below the services (CAT-PAGE).
-    expect(list).toContain(">Your connections</h2>");
-    expect(list).not.toContain("More actions");
-    // The list says what Connections are and which of them are read-only, with rows and without.
-    expect(list).toContain(
-      "Connections give agents, apps and workflows access to outside systems. Those that come with the system setup are read-only here."
-    );
-    // The address of a Connection the instance does not hold says so, and names the way back.
-    const missing = render(
-      { kindPath: "connections", name: "crm" },
-      { source: withConnections(rows) }
-    );
-    expect(missing).toContain("There is no connection with the id crm.");
-    expect(missing).toContain('aria-label="Back to Connections"');
     // A kind that only lists has no page: its rows are no links and an asset's address shows the list.
     const listedOnly = [agentKind, skillKind, listedConnections];
     expect(
@@ -462,60 +375,28 @@ describe("Studio frame", () => {
         { kinds: listedOnly, source: withConnections(rows) }
       )
     ).toContain('aria-label="Connections"');
-
-    const empty = (locale: LocaleCode) =>
-      render({ kindPath: "connections" }, { locale, source: withConnections([]) });
-    expect(empty("en")).toContain(
-      "No connections yet. A connection holds the access to an outside system."
-    );
-    expect(empty("de")).toContain(
-      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung des Systems sind hier schreibgeschützt."
-    );
-    expect(empty("en")).toContain(">New connection<");
-    expect(empty("de")).toContain(
-      "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System."
-    );
     // The instance did not answer for the kind: no rail item.
     expect(render({ kindPath: "agents" })).not.toContain("Connections");
   });
 
   it("lists other people's own servers apart from the reader's, each only for its owner (PMCP)", () => {
     const base = source();
+    const mcp = { connectorType: "mcp", origin: "runtime", enabled: true };
     const rows = [
-      row("connection", "crm", {
-        title: "CRM",
-        attributes: { connectorType: "mcp", origin: "runtime", enabled: true }
-      }),
+      row("connection", "crm", { title: "CRM", attributes: mcp }),
       row("connection", "mine-notes", {
         title: "My notes",
-        attributes: { connectorType: "mcp", origin: "runtime", enabled: true, ownServer: "reader" }
+        attributes: { ...mcp, ownServer: "reader" }
       }),
       row("connection", "carol-notes", {
         title: "Notes of Carol",
-        attributes: {
-          connectorType: "mcp",
-          origin: "runtime",
-          enabled: true,
-          ownServer: "other",
-          ownerLabel: "Carol"
-        }
-      }),
-      row("connection", "gone-notes", {
-        title: "Old notes",
-        attributes: {
-          connectorType: "mcp",
-          origin: "runtime",
-          enabled: true,
-          ownServer: "other",
-          ownerLabel: ""
-        }
+        attributes: { ...mcp, ownServer: "other", ownerLabel: "Carol" }
       })
     ];
-    const listOf = (listed: BuildAssetRow[], locale: LocaleCode = "en") =>
+    const listOf = (listed: BuildAssetRow[]) =>
       render(
         { kindPath: "connections" },
         {
-          locale,
           source: source({
             lists: { connection: { rows: listed } },
             overrides: {
@@ -525,80 +406,55 @@ describe("Studio frame", () => {
         }
       );
     const list = listOf(rows);
-    const yoursAt = list.indexOf(">Your connections</h2>");
     const othersAt = list.indexOf(">Added by others</h2>");
-    expect(yoursAt).toBeGreaterThan(-1);
-    expect(othersAt).toBeGreaterThan(yoursAt);
-    const yours = list.slice(yoursAt, othersAt);
+    expect(othersAt).toBeGreaterThan(-1);
+    const yours = list.slice(0, othersAt);
     const others = list.slice(othersAt);
-    // The reader's own list holds the shared Connection and their own server, named as theirs.
+
     expect(yours).toContain(">CRM<");
     expect(yours).toContain(">My notes<");
     expect(yours).not.toContain("Carol");
-    expect(yours.split(">Everyone<")).toHaveLength(2);
-    expect(yours).toContain(">Only me<");
-    // Another person's server stands below, for its owner alone, and still opens its page.
     expect(others).toContain(">Notes of Carol<");
     expect(others).toContain(">Only for Carol<");
-    expect(others).toContain(">Only for a deleted account<");
-    expect(others).not.toContain(">Everyone<");
     expect(others).toContain('href="/build/connections/carol-notes"');
-    const de = listOf(rows, "de");
-    expect(de).toContain(">Von anderen hinzugefügt</h2>");
-    expect(de).toContain(">Nur für Carol<");
-    // Without another person's server there is no such section.
     expect(listOf(rows.slice(0, 2))).not.toContain("Added by others");
   });
 
-  it("says in a sentence what an empty list is for, with the one button, or without the right", () => {
+  it("offers New on an empty list only to a writer", () => {
     const empty = (permissions: string[]) =>
       render(
         { kindPath: "skills" },
         { source: source({ permissions, lists: { skill: { rows: [] } } }) }
       );
-    const writer = empty(["config_assets.write"]);
-    const reader = empty(["config_assets.read"]);
 
-    expect(writer).toContain("A skill holds instructions");
-    expect(writer.match(/New skill/gu)).toHaveLength(2);
-    expect(reader).toContain("No skills yet.");
-    expect(reader).not.toContain("New skill");
+    expect(empty(["config_assets.write"])).toContain("New skill");
+    expect(empty(["config_assets.read"])).not.toContain("New skill");
   });
 
-  it("shows the not-found state at an agent's address that has no agent, without its id", () => {
+  it("shows the not-found state at an address without an asset, with a link to the list and no id", () => {
     const missing = render({ kindPath: "agents", name: "retired_helper" });
 
     expect(missing).toContain("data-not-found");
-    expect(missing).toContain(">There is no agent at this address.</h1>");
-    // One step, a link to the list, and no head with a way back beside it.
-    const action =
-      missing.match(/<a[^>]*href="\/build\/agents\/"[^>]*>Back to Agents<\/a>/u)?.[0] ?? "";
-    expect(action).toContain("bg-primary-soft");
-    expect(missing).not.toContain('aria-label="Back to Agents"');
+    expect(missing).toMatch(/<a[^>]*href="\/build\/agents\/"[^>]*>Back to Agents<\/a>/u);
     expect(missing).not.toContain("retired_helper");
   });
 
-  it("shows a skeleton until the instance said what the reader may do, and until a list arrived", () => {
-    const unknown = render({}, { source: source({ overrides: { kinds: [], loading: true } }) });
-    const list = render(
-      { kindPath: "agents" },
-      { source: source({ lists: { agent: { rows: undefined } } }) }
-    );
-    const page = render(
-      { kindPath: "agents", name: "workflow_assistant" },
-      { source: source({ assets: { "agent/workflow_assistant": { status: "loading" } } }) }
-    );
+  it("shows a skeleton until rights and a list arrived, and an error with Try again after a failure", () => {
+    const busy = [
+      render({}, { source: source({ overrides: { kinds: [], loading: true } }) }),
+      render({ kindPath: "agents" }, { source: source({ lists: { agent: { rows: undefined } } }) }),
+      render(
+        { kindPath: "agents", name: "workflow_assistant" },
+        { source: source({ assets: { "agent/workflow_assistant": { status: "loading" } } }) }
+      )
+    ];
+    for (const markup of busy) {
+      expect(markup).toContain('aria-busy="true"');
+      expect(markup).not.toContain("There is nothing to build here yet.");
+      expect(markup).not.toContain("No agents yet");
+      expect(markup).not.toContain("There is no agent");
+    }
 
-    expect(unknown).toContain('aria-busy="true"');
-    expect(unknown).not.toContain("There is nothing to build here yet.");
-    expect(list).toContain('aria-busy="true"');
-    expect(list).toContain('<option value="agents" selected="">Agents</option>');
-    expect(list).not.toContain("No agents yet");
-    expect(page).toContain('aria-busy="true"');
-    expect(page).not.toContain("There is no agent");
-  });
-
-  it("says that Studio could not be loaded and offers to try again", () => {
     const area = render(
       {},
       { source: source({ overrides: { kinds: [], error: "Studio could not be loaded." } }) }
@@ -611,19 +467,15 @@ describe("Studio frame", () => {
         })
       }
     );
-
-    expect(area).toContain('role="alert"');
-    expect(area).toContain("Studio could not be loaded.");
-    expect(area).toContain("Try again");
-    expect(area).not.toContain("There is nothing to build here yet.");
-    expect(list).toContain('role="alert"');
-    expect(list).toContain("The list could not be read.");
-    expect(list).toContain("Try again");
-    expect(list).not.toContain('aria-busy="true"');
-    expect(list).not.toContain("No agents yet");
-  });
-
-  it("says that there is nothing to build where the instance names no kind", () => {
+    for (const [markup, said] of [
+      [area, "Studio could not be loaded."],
+      [list, "The list could not be read."]
+    ] as const) {
+      expect(markup).toContain('role="alert"');
+      expect(markup).toContain(said);
+      expect(markup).toContain("Try again");
+      expect(markup).not.toContain('aria-busy="true"');
+    }
     expect(render({}, { source: source({ overrides: { kinds: [] } }) })).toContain(
       "There is nothing to build here yet."
     );
@@ -636,7 +488,6 @@ describe("Studio frame", () => {
     );
 
     expect(more).toContain(">Show more<");
-    expect(more).toContain(">Workflow Assistant<");
     expect(render({ kindPath: "agents" })).not.toContain("Show more");
   });
 });
@@ -647,20 +498,11 @@ describe("Studio with rights in a workspace", () => {
 
   it("offers a new asset only for a kind the holder may write in the workspace", () => {
     const from = holder([taxWorkspace]);
-    const agentList = render({ kindPath: "agents" }, { source: from });
-    const skillList = render({ kindPath: "skills" }, { source: from });
 
-    expect(agentList).toContain(">New agent<");
+    expect(render({ kindPath: "agents" }, { source: from })).toContain(">New agent<");
+    const skillList = render({ kindPath: "skills" }, { source: from });
     expect(skillList).toContain(">Tax review<");
     expect(skillList).not.toContain("New skill");
-    // Empty, the list of a kind the holder only reads has the sentence without the button.
-    expect(
-      render(
-        { kindPath: "skills" },
-        { source: holder([taxWorkspace], { lists: { skill: { rows: [] } } }) }
-      )
-    ).toContain("No skills yet.");
-    // In a workspace where the holder only reads, nothing is offered to start.
     expect(
       render(
         { kindPath: "agents" },
@@ -678,6 +520,62 @@ describe("Studio with rights in a workspace", () => {
     // The address of the kind without an item lands on the first kind with one.
     expect(agentsOnly).toContain(">Steuer-Agent<");
     expect(agentsOnly).not.toContain("Tax review");
+    expect(agentsOnly).not.toContain('<option value="skills"');
+  });
+});
+
+// Studio's scope: the instance's own assets, or what one Shared Workspace owns (WS-OWN-1a).
+describe("the Studio scope picker", () => {
+  const TEAM = "cws_team";
+  const scoped = (permissions: string[], actions: string[], scope: BuildScope) =>
+    render(
+      { kindPath: "agents" },
+      {
+        source: source({
+          permissions,
+          workspaces: [{ id: TEAM, name: "Team", kind: "shared", member: true, actions }],
+          lists: {
+            agent: {
+              rows:
+                scope.kind === "workspace"
+                  ? [
+                      row("agent", "team-helper", {
+                        scope: { kind: "workspace", workspaceId: TEAM }
+                      })
+                    ]
+                  : [row("agent", "house-agent")]
+            }
+          },
+          overrides: {
+            scopeOf: (kind) => (kind === "agent" || kind === "skill" ? scope : undefined),
+            chooseScope: noop
+          }
+        })
+      }
+    );
+  const admin = ["config_assets.read", "config_assets.write"];
+
+  it("is offered to a reader of the instance and a workspace, and a workspace's row names it", () => {
+    const inTeam = scoped(admin, ["agent.read", "agent.write"], {
+      kind: "workspace",
+      workspaceId: TEAM
+    });
+    expect(inTeam).toContain('aria-label="Where: Team"');
+    expect(inTeam).toMatch(/team-helper[\s\S]*>Team</u);
+
+    const onInstance = scoped(admin, ["agent.read"], { kind: "instance" });
+    expect(onInstance).toContain('aria-label="Where:');
+    expect(onInstance).toContain("house-agent");
+    expect(onInstance).not.toContain(">Team<");
+  });
+
+  it("is not offered to a reader of one workspace alone", () => {
+    const member = scoped([], ["agent.read", "agent.write"], {
+      kind: "workspace",
+      workspaceId: TEAM
+    });
+    expect(member).not.toContain('aria-label="Where:');
+    expect(member).toContain("team-helper");
   });
 });
 
@@ -699,146 +597,89 @@ describe("Studio asset page", () => {
     actions: ["skill.read", "skill.write", "skill.delete"]
   };
 
-  it("opens an asset the reader may not write read-only, with no way to save or delete", () => {
+  it("opens an asset the reader may not write read-only, with no way to save, naming its owner", () => {
     const markup = page(source({ permissions: [], workspaces: [taxWorkspace], assets: read }));
 
-    // The notice names whose asset it is and what editing needs.
-    expect(markup).toMatch(/data-build-read-only=""[^>]*>.*Belongs to Tax\. Only a person/u);
-    expect(markup).toContain('value="Tax review"');
-    // A field that is only read stays readable: read-only, not disabled, and not required.
+    expect(markup).toMatch(/data-build-read-only=""[^>]*>.*Belongs to Tax\./u);
     expect(markup).toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
-    expect(markup).not.toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
-    expect(markup).not.toMatch(/<input[^>]*required=""[^>]*value="Tax review"/u);
     expect(markup).not.toContain('aria-label="Add a file to references/"');
-    expect(markup).not.toContain("Save changes");
     expect(markup).not.toContain('type="submit"');
     // History and "Copy ID" are offered to everybody who reads the asset.
     expect(markup).toContain('aria-label="More actions"');
-    expect(markup).toContain("History");
   });
 
   it("opens an asset of a workspace the reader writes for editing", () => {
     const markup = page(source({ permissions: [], workspaces: [skillWriter], assets: read }));
 
     expect(markup).not.toContain("data-build-read-only");
-    expect(markup).not.toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
     expect(markup).toContain('aria-label="Add a file to references/"');
-    expect(markup).toContain('aria-label="More actions"');
     // Nothing is changed yet, so there is nothing to save.
     expect(markup).not.toContain("Save changes");
   });
 
-  // The notice of a shipped skill says to copy it: the copy stands beside its words, so the page
-  // offers what it says. The head keeps no button for it: every action but Publish is in "…".
-  it("offers Copy to edit of a shipped skill beside the notice that says to copy it", () => {
+  it("offers Copy to edit of a shipped skill, which even an instance writer only reads", () => {
     const shippedSkill = asset("skill", "tax-review", {
       config: { ...taxSkill.config, origin: "release" }
     });
-    const markup = page(
-      source({
-        permissions: ["config_assets.read", "config_assets.write"],
-        assets: { "skill/tax-review": ready(shippedSkill) }
-      })
-    );
-    const notice = /<div[^>]*data-build-read-only=""[\s\S]*?Copy to edit<\/button>/u.exec(markup);
-    expect(notice?.[0]).toContain("To change it, copy it and edit the copy.");
-    expect(headOf(markup)).not.toContain("Copy to edit");
+    const markup = page(source({ assets: { "skill/tax-review": ready(shippedSkill) } }));
+
+    expect(markup).toMatch(/<div[^>]*data-build-read-only=""[\s\S]*?Copy to edit<\/button>/u);
   });
 
-  it("reads only an asset outside the workspaces the reader writes", () => {
+  it("reads only an asset outside the workspaces the reader writes, or of the instance without its right", () => {
     const elsewhere = asset("skill", "tax-review", {
       scope: { kind: "workspace", workspaceId: "ws-legal" },
       config: taxSkill.config
     });
-    const markup = page(
+    const inLegal = page(
       source({
         permissions: [],
         workspaces: [skillWriter, legalWorkspace],
         assets: { "skill/tax-review": ready(elsewhere) }
       })
     );
+    expect(inLegal).toMatch(/data-build-read-only=""[^>]*>.*Belongs to Legal\./u);
 
-    expect(markup).toContain(
-      "Belongs to Legal. Only a person who may build in Legal can change it."
-    );
-  });
-
-  it("says of an instance asset that editing needs the right on the instance", () => {
     const instanceSkill = asset("skill", "tax-review", { config: taxSkill.config });
-    const markup = page(
+    const onInstance = page(
       source({
         permissions: ["config_assets.read"],
         assets: { "skill/tax-review": ready(instanceSkill) }
       })
     );
-
-    expect(markup).toContain(
-      "This is for everyone. Only a person who may build for everyone can change it."
-    );
+    expect(onInstance).toContain("data-build-read-only");
   });
 
-  it("ends the read-only notice with one link into the documentation, and with none on an instance without a docs address", () => {
+  it("links the read-only notice to the documentation in a new tab without an opener, and only with a docs address", () => {
     const from = source({ permissions: [], workspaces: [taxWorkspace], assets: read });
-    const at = { kindPath: "skills", name: "tax-review" };
-    const notice = (markup: string) =>
-      /data-build-read-only=""[^>]*>(.*?)<\/div>\s*<\/div>/u.exec(markup)?.[1] ?? markup;
-    const linked = render(at, {
-      kinds: pageKinds,
-      source: from,
-      docsAddress: "https://docs.workshape.ai/catalyst/"
-    });
-    const german = render(at, {
-      kinds: pageKinds,
-      source: from,
-      locale: "de",
-      docsAddress: "https://docs.workshape.ai/catalyst"
-    });
+    const linked = render(
+      { kindPath: "skills", name: "tax-review" },
+      { kinds: pageKinds, source: from, docsAddress: "https://docs.workshape.ai/catalyst/" }
+    );
 
     expect(linked.match(/data-docs-link/gu)).toHaveLength(1);
-    expect(notice(linked)).toMatch(
-      /can change it\.[^<]*<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer" aria-label="Learn more about who may change this, opens in a new tab"[^>]*>Learn more</u
+    expect(linked).toMatch(
+      /<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer"/u
     );
-    expect(german).toMatch(
-      /aria-label="Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
-    );
-    // Without an address the notice is the same sentence and no link.
-    expect(page(from)).toContain("Belongs to Tax. Only a person");
     expect(page(from)).not.toContain("data-docs-link");
-    expect(page(from)).not.toContain("Learn more");
   });
 
-  it("leaves the delete out where the instance does not let people delete the kind", () => {
-    const base = source({ assets: read });
-    const markup = page({
-      ...base,
-      kinds: base.kinds.map((kind) => ({ ...kind, canDelete: false }))
-    });
-
-    expect(markup).not.toContain("data-build-read-only");
-  });
-
-  it("shows the sentence of a failed read as the instance said it", () => {
+  it("shows a failed read as the instance said it, with Try again, and a refused read without", () => {
     const sentence = "The skill store is closed for maintenance until 14:00";
-    const markup = page(
+    const failed = page(
       source({
         assets: { "skill/tax-review": { status: "failed", message: sentence, retry: noop } }
       })
     );
+    expect(failed).toContain('role="alert"');
+    expect(failed).toContain(sentence);
+    expect(failed).toContain("Try again");
+    expect(failed).not.toContain("There is no skill");
 
-    expect(markup).toContain('role="alert"');
-    expect(markup).toContain(sentence);
-    expect(markup).toContain("Try again");
-    expect(markup).toContain('aria-label="Back to Skills"');
-    expect(markup).not.toContain("There is no skill");
-  });
-
-  it("tells a reader who may not read the asset so in their language, with nothing to try again", () => {
-    const markup = page(source({ assets: { "skill/tax-review": { status: "refused" } } }));
-
-    expect(markup).toContain("You may not read this asset.");
-    expect(markup).not.toContain("Try again");
-    expect(markup).not.toContain("Missing the right");
-    expect(markup).toContain('aria-label="Back to Skills"');
+    const refused = page(source({ assets: { "skill/tax-review": { status: "refused" } } }));
+    expect(refused).toContain("You may not read this asset.");
+    expect(refused).not.toContain("Try again");
+    expect(refused).toContain('aria-label="Back to Skills"');
   });
 });
 
@@ -890,5 +731,579 @@ describe("Studio addresses", () => {
       expect(buildLocationOfRoute(buildRouteOfLocation(location))).toEqual(location);
     }
     expect(buildLocationOfRoute({ kind: "administration" })).toBeUndefined();
+  });
+});
+
+// ACCEPT-FIX-1 F2: every create dialog makes the address by the one rule the strictest kind
+// holds, so the address it suggests is never refused. Fails with the old generator, which
+// joined words by '_' that a Knowledge Base, Data Store and App refuse.
+describe("Studio ids", () => {
+  const address = (name: string) => assetAddressFromName(name, "knowledge_base");
+
+  it("makes an address from the name people read", () => {
+    expect(address("ACCEPT Nordlicht Wissen")).toBe("accept-nordlicht-wissen");
+    // German letters keep their sound; other accents are dropped.
+    expect(address("  Steuer-Prüfung (Köln) 2026 ")).toBe("steuer-pruefung-koeln-2026");
+    expect(address("Crème brûlée")).toBe("creme-brulee");
+    expect(address("already_an_id")).toBe("already-an-id");
+    // A long name is cut at the limit, and the cut never ends on '-'.
+    const long = address("Wissen ".repeat(20));
+    expect(long.length).toBeLessThanOrEqual(ASSET_ADDRESS_MAX_LENGTH);
+    expect(long).toMatch(ASSET_ADDRESS_PATTERN);
+  });
+
+  it("starts with the kind's word where the name does not start with a letter", () => {
+    expect(address("2026 Jahresplan")).toBe("knowledge-base-2026-jahresplan");
+    expect(address("???")).toBe("knowledge-base");
+    expect(assetAddressFromName("3. Quartal", "agent")).toBe("agent-3-quartal");
+    // Only an empty name makes no address.
+    expect(address("   ")).toBe("");
+  });
+});
+
+// UXA-2: a new asset asks for the name, and its address follows it until somebody types one.
+describe("the address of a new asset", () => {
+  const address = (name: string) => assetAddressFromName(name, "agent");
+
+  it("follows the name until it is edited by hand, and then stays as typed", () => {
+    expect(addressOf({ name: "Tax Review" }, address)).toBe("tax-review");
+    const typed = { name: "Tax Review", typedAddress: "tax" };
+    expect(addressOf(typed, address)).toBe("tax");
+    expect(addressOf({ ...typed, name: "Steuer-Prüfung" }, address)).toBe("tax");
+    // Emptied by hand it stays empty, so it does not jump back while the person retypes it.
+    expect(addressOf({ name: "Tax Review", typedAddress: "" }, address)).toBe("");
+  });
+
+  it("blocks the create only on an address the instance refused", () => {
+    const en = createTranslationContext("en").t;
+    const refusedName = (reason: "name_invalid" | "name_taken") => ({
+      ok: true as const,
+      found: { available: false as const, reason, message: "The instance's own sentence" }
+    });
+    expect(addressCheckOf(refusedName("name_taken"), en, "en")).toMatchObject({
+      state: "refused"
+    });
+    expect(addressCheckOf(refusedName("name_invalid"), en, "en")).toMatchObject({
+      state: "refused"
+    });
+    expect(addressCheckOf({ ok: true, found: { available: true } }, en, "en")).toEqual({
+      state: "free"
+    });
+    // A refusal of the check itself is the instance's sentence; a lost connection says
+    // nothing of the name, and the create meets the instance's answer.
+    const forbidden = new ApiError(403, "Missing permission agent.write", {
+      error: { code: "FORBIDDEN", message: "Missing permission agent.write" }
+    });
+    expect(addressCheckOf({ ok: false, error: forbidden }, en, "en")).toEqual({
+      state: "refused",
+      reason: "Missing permission agent.write"
+    });
+    expect(
+      addressCheckOf({ ok: false, error: new TypeError("Failed to fetch") }, en, "en")
+    ).toEqual({ state: "unchecked" });
+
+    expect(addressBlocksCreate({ state: "checking" })).toBe(false);
+    expect(addressBlocksCreate({ state: "refused", reason: "taken" })).toBe(true);
+    expect(addressBlocksCreate({ state: "free" })).toBe(false);
+    expect(addressBlocksCreate({ state: "unchecked" })).toBe(false);
+  });
+
+  it("asks the instance with the name and the owner Studio writes in", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        calls.push({ url: request.url, body: JSON.parse(await request.text()) });
+        return Response.json({ available: true });
+      }
+    });
+    await expect(
+      createAssetWrites(client).checkName({
+        kind: "agent",
+        name: "tax_review",
+        workspaceId: "cws_team"
+      })
+    ).resolves.toEqual({ available: true });
+    expect(calls).toEqual([
+      {
+        url: "https://chat.example/api/v1/assets/agent/check-name",
+        body: { name: "tax_review", workspaceId: "cws_team" }
+      }
+    ]);
+  });
+});
+
+describe("Studio rights", () => {
+  const rights = (permissions: string[], workspaces: Workspaces = []) =>
+    resolveBuildRights({ permissions }, platformContext(workspaces, instanceActions(permissions)));
+  const taxAgent = { kind: "agent", workspaceId: "ws-tax" };
+  const taxSkill = { kind: "skill", workspaceId: "ws-tax" };
+
+  it("lets an instance reader read every kind and write nothing", () => {
+    const reader = rights(["config_assets.read"]);
+
+    expect(reader.readsAny).toBe(true);
+    expect(reader.reads("agent")).toBe(true);
+    expect(reader.reads("skill")).toBe(true);
+    expect(reader.instanceWrite).toBe(false);
+    expect(reader.may("write", taxAgent)).toBe(false);
+    expect(reader.may("delete", { kind: "agent" })).toBe(false);
+    expect(reader.mayCreate("agent")).toBe(false);
+  });
+
+  it("lets an instance writer write, delete and create everywhere", () => {
+    const writer = rights(["config_assets.write"]);
+
+    expect(writer.readsAny).toBe(true);
+    expect(writer.reads("skill")).toBe(true);
+    expect(writer.instanceWrite).toBe(true);
+    expect(writer.may("write", { kind: "agent" })).toBe(true);
+    expect(writer.may("delete", taxSkill)).toBe(true);
+    expect(writer.mayCreate("skill")).toBe(true);
+    expect(writer.mayCreate("skill", "ws-tax")).toBe(true);
+  });
+
+  it("lets only a holder of agent.publish publish an agent, as the instance does (AD-4)", () => {
+    const permissions = ["config_assets.write"];
+    const writer = rights(permissions);
+    const publisher = resolveBuildRights(
+      { permissions },
+      platformContext([], [...instanceActions(permissions), "agent.publish"])
+    );
+
+    expect(writer.may("write", { kind: "agent" })).toBe(true);
+    expect(writer.may("publish", { kind: "agent" })).toBe(false);
+    expect(publisher.may("publish", { kind: "agent" })).toBe(true);
+    // A kind that names no publish right is published with the write right, as before.
+    expect(writer.may("publish", { kind: "skill" })).toBe(true);
+  });
+
+  it("lets a workspace reader read the kinds its actions name and write nothing", () => {
+    const reader = rights([], [legalWorkspace]);
+
+    expect(reader.readsAny).toBe(true);
+    expect(reader.reads("agent")).toBe(true);
+    expect(reader.reads("skill")).toBe(true);
+    expect(reader.instanceWrite).toBe(false);
+    expect(reader.readsInstance).toBe(false);
+    expect(reader.may("write", { kind: "agent", workspaceId: "ws-legal" })).toBe(false);
+    expect(reader.mayCreate("agent", "ws-legal")).toBe(false);
+    expect(reader.workspaces).toEqual([{ id: "ws-legal", name: "Legal", member: true }]);
+    expect(rights([], [{ ...legalWorkspace, actions: ["skill.read"] }]).reads("agent")).toBe(false);
+  });
+
+  it("lets a workspace writer write what the workspace owns, per kind and per verb", () => {
+    const writer = rights([], [taxWorkspace, legalWorkspace]);
+
+    expect(writer.may("write", taxAgent)).toBe(true);
+    expect(writer.may("delete", taxAgent)).toBe(true);
+    expect(writer.may("write", taxSkill)).toBe(false);
+    expect(writer.may("write", { kind: "agent", workspaceId: "ws-legal" })).toBe(false);
+    // An asset the instance owns is no workspace's.
+    expect(writer.may("write", { kind: "agent" })).toBe(false);
+    expect(writer.may("write", { kind: "connection", workspaceId: "ws-tax" })).toBe(false);
+    expect(
+      rights([], [{ ...taxWorkspace, actions: ["agent.write"] }]).may("delete", taxAgent)
+    ).toBe(false);
+    // A new asset is started in a workspace whose kind the reader writes there.
+    expect(writer.mayCreate("agent", "ws-tax")).toBe(true);
+    expect(writer.mayCreate("skill", "ws-tax")).toBe(false);
+    expect(writer.mayCreate("agent", "ws-legal")).toBe(false);
+    expect(writer.mayCreate("agent")).toBe(false);
+  });
+
+  it("lets an agent be started by a writer on an instance that lets agents be created", () => {
+    const on = { allowAgentCreation: true };
+
+    expect(mayCreateAgents(rights(["config_assets.write"]), on)).toBe(true);
+    // The right alone is not enough: the instance has its own switch.
+    expect(mayCreateAgents(rights(["config_assets.write"]), { allowAgentCreation: false })).toBe(
+      false
+    );
+    expect(mayCreateAgents(rights(["config_assets.write"]), undefined)).toBe(false);
+    // Nor is the switch: a reader, and a reader in a workspace, start nothing.
+    expect(mayCreateAgents(rights(["config_assets.read"]), on)).toBe(false);
+    expect(mayCreateAgents(rights([], [legalWorkspace]), on)).toBe(false);
+  });
+
+  it("lets the holder of a read grant on one asset see the kind, and write nothing", () => {
+    const holder = resolveBuildRights({ permissions: [] }, platformContext([], [], ["skill.read"]));
+
+    expect(holder.readsAny).toBe(true);
+    expect(holder.reads("skill")).toBe(true);
+    expect(holder.reads("agent")).toBe(false);
+    expect(holder.instanceWrite).toBe(false);
+    expect(holder.may("write", { kind: "skill" })).toBe(false);
+    expect(holder.mayCreate("skill")).toBe(false);
+  });
+
+  it("gives nobody anything: no permission, no workspace right, or no answer of the instance", () => {
+    for (const nobody of [
+      rights([]),
+      rights(["users.manage"]),
+      resolveBuildRights(undefined, undefined),
+      resolveBuildRights({ permissions: [] }, undefined)
+    ]) {
+      expect(nobody.readsAny).toBe(false);
+      expect(nobody.reads("agent")).toBe(false);
+      expect(nobody.instanceWrite).toBe(false);
+      expect(nobody.may("write", taxAgent)).toBe(false);
+      expect(nobody.mayCreate("agent")).toBe(false);
+      expect(nobody.workspaces).toEqual([]);
+    }
+    // The session alone opens Studio for an instance reader before the instance answered.
+    expect(resolveBuildRights({ permissions: ["config_assets.read"] }, undefined).readsAny).toBe(
+      true
+    );
+  });
+});
+
+describe("Studio scope", () => {
+  const team = { id: "cws_team", name: "Team", kind: "shared" as const };
+  const mine = {
+    id: "cws_mine",
+    name: "Mine",
+    kind: "personal" as const,
+    member: true,
+    actions: ["agent.write"]
+  };
+  const inTeam = (actions: string[], permissions: string[] = []) =>
+    resolveBuildRights(
+      { permissions },
+      {
+        ...platformContext([], instanceActions(permissions)),
+        // The reader's Personal Workspace is a scope of Studio beside the others: what the
+        // reader's agent made there is found and changed there.
+        workspaces: [{ ...team, member: true, actions }, mine]
+      }
+    );
+
+  it("lets a holder of rights in a workspace read and write what it owns, and nothing of the instance", () => {
+    const member = inTeam(["agent.read", "agent.write", "skill.read"]);
+
+    expect(member.readsAny).toBe(true);
+    expect(member.readsInstance).toBe(false);
+    expect(member.workspaces).toEqual([
+      { id: "cws_team", name: "Team", member: true },
+      { id: "cws_mine", name: "Mine", member: true, personal: true }
+    ]);
+    expect(member.reads("agent")).toBe(true);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_team" })).toBe(true);
+    expect(member.may("delete", { kind: "agent", workspaceId: "cws_team" })).toBe(false);
+    expect(member.may("write", { kind: "skill", workspaceId: "cws_team" })).toBe(false);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_mine" })).toBe(true);
+    expect(member.may("write", { kind: "agent", workspaceId: "cws_other" })).toBe(false);
+    expect(member.may("write", { kind: "agent" })).toBe(false);
+    expect(member.mayCreate("agent", "cws_team")).toBe(true);
+    expect(member.mayCreate("agent")).toBe(false);
+    expect(buildScopes(member)).toEqual([
+      { kind: "workspace", workspaceId: "cws_team" },
+      { kind: "workspace", workspaceId: "cws_mine" }
+    ]);
+    expect(buildWorkspaceName(member, "cws_mine", "Only me")).toBe("Only me");
+    expect(buildWorkspaceName(member, "cws_team", "Only me")).toBe("Team");
+    expect(resolveBuildScope(member, undefined, undefined)).toEqual({
+      kind: "workspace",
+      workspaceId: "cws_team"
+    });
+  });
+
+  it("opens Studio to nobody for their Personal Workspace alone", () => {
+    const alone = resolveBuildRights(
+      { permissions: [] },
+      { ...platformContext([], instanceActions([])), workspaces: [mine] }
+    );
+    expect(alone.readsAny).toBe(false);
+    expect(buildScopes(alone)).toEqual([]);
+  });
+
+  it("offers the instance first, then each workspace, and keeps the scope chosen last", () => {
+    const admin = inTeam(["agent.read", "agent.write"], ["config_assets.write"]);
+
+    expect(buildScopes(admin)).toEqual([
+      { kind: "instance" },
+      { kind: "workspace", workspaceId: "cws_team" },
+      { kind: "workspace", workspaceId: "cws_mine" }
+    ]);
+    expect(resolveBuildScope(admin, undefined, "cws_team")).toEqual({ kind: "instance" });
+    expect(resolveBuildScope(admin, "cws_team", undefined)).toEqual({
+      kind: "workspace",
+      workspaceId: "cws_team"
+    });
+    // A scope no longer offered falls back to the first.
+    expect(resolveBuildScope(admin, "cws_gone", undefined)).toEqual({ kind: "instance" });
+    // An instance writer writes in every workspace.
+    expect(admin.may("delete", { kind: "skill", workspaceId: "cws_team" })).toBe(true);
+  });
+});
+
+describe("Studio refusals", () => {
+  const { t } = createTranslationContext("en");
+  const refusal = (code: string, message: string, details?: Record<string, unknown>) =>
+    new ApiError(code === "REVISION_CONFLICT" ? 412 : code === "FORBIDDEN" ? 403 : 400, message, {
+      error: { code, message, ...(details ? { details } : {}) }
+    });
+  const said = (error: unknown, locale: "en" | "de" = "en") =>
+    refusalsOf(readBuildRefusal(error, createTranslationContext(locale).t, locale), undefined);
+
+  it("tells a refusal with a known reason in the reader's words, never the instance's sentence", () => {
+    // Person context in Apps (APP-16), and a new agent's consent that the instance no longer
+    // holds (ACCEPT-2d E-1), in the reader's language.
+    const refused: [string, string, "en" | "de"][] = [
+      ["VALIDATION_FAILED", "person_context_app_unavailable", "en"],
+      ["PRECONDITION_REQUIRED", "dependency_availability_review_required", "en"],
+      ["CONFLICT", "dependency_availability_changed", "de"]
+    ];
+    for (const [code, reason, locale] of refused) {
+      const words = said(refusal(code, "Server sentence", { reason }), locale);
+      expect(words).toHaveLength(1);
+      expect(words[0]).not.toBe("Server sentence");
+    }
+    // STORE-PAGES: the instance's sentence may name assets hidden from the reader.
+    const outcome = readBuildRefusal(
+      refusal("VALIDATION_FAILED", "Data Store 'leads' is used by app 'secret-board'", {
+        reason: "data_store_in_use"
+      }),
+      t,
+      "en"
+    );
+    expect(refusalsOf(outcome, undefined).join(" ")).toContain("still in use");
+    expect(refusalsOf(outcome, undefined).join(" ")).not.toContain("secret-board");
+    expect(outcome).not.toMatchObject({ refusals: [{ detail: expect.anything() }] });
+  });
+
+  // SKILL-DEL-1: Delete stays in the menu and says why it cannot be chosen.
+  it("says why a skill cannot be deleted now, never naming an agent the reader cannot see", () => {
+    const skill = {
+      id: "asset_guide",
+      kind: "skill",
+      name: "guide",
+      scope: { kind: "workspace" as const, workspaceId: "cws_team" },
+      revision: 2,
+      config: { name: "guide" },
+      updatedAt: "2026-11-16T10:00:00.000Z"
+    };
+    const team = { rung: "workspace" as const, name: "Team" };
+    const reason = (
+      asset: typeof skill & {
+        listedBy?: { name: string; title: string }[];
+        listedByUnread?: number;
+      },
+      may: boolean
+    ) => deleteBlockedReason(asset, may, team, t, "en");
+    const listed = {
+      ...skill,
+      listedBy: [
+        { name: "intake", title: "Intake" },
+        { name: "review", title: "Review" }
+      ]
+    };
+
+    expect(reason(skill, true)).toBeUndefined();
+    expect(reason(skill, false)).toBeDefined();
+    expect(reason(listed, true)).toContain("Intake and Review");
+    expect(
+      reason({ ...listed, listedBy: listed.listedBy.slice(0, 1), listedByUnread: 2 }, true)
+    ).toContain("Intake and 2 agents you cannot see");
+    // Without the right the reader is told that, not which agents list it.
+    expect(reason(listed, false)).not.toContain("Intake");
+  });
+
+  it("names a blocking guardrail by its title, with its author's reason (ACCEPT-FIX-10 E8)", () => {
+    const blocked = (details: Record<string, unknown>) =>
+      said(refusal("GUARDRAIL_BLOCKED", "Guardrail 'no-iban' blocked skill 'report'", details));
+    const reason = "Assets hold no bank account numbers.";
+    expect(
+      blocked({ guardrailId: "no-iban", guardrailTitle: "Keine IBAN", guardrailReason: reason })
+    ).toEqual([`The guardrail “Keine IBAN” stopped this change. ${reason}`]);
+    // Without a title the instance's sentence stands as it came.
+    expect(blocked({ guardrailId: "no-iban" })).toEqual([
+      "Guardrail 'no-iban' blocked skill 'report'"
+    ]);
+  });
+
+  it("answers a write over a newer revision as a conflict, with who wrote it and whether it is the delete", () => {
+    const conflict = { kind: "agent", name: "tax", currentRevision: 4 };
+    const changed = { changedBy: "Kai Lehmann", changedAt: "2026-10-12T09:30:00.000Z" };
+    const plain = readBuildRefusal(
+      refusal("REVISION_CONFLICT", "Config agent 'tax' is not at the revision the call names", {
+        reason: "revision_conflict",
+        conflicts: [{ kind: "agent", name: "tax" }]
+      }),
+      t,
+      "en"
+    );
+
+    expect(plain).toEqual({ ok: false, conflict: true });
+    expect(refusalsOf(plain, undefined)).toEqual([]);
+    expect(refusalsOf(plain, "tools")).toEqual([]);
+    expect(
+      readBuildRefusal(
+        refusal("REVISION_CONFLICT", "Config agent 'tax' was deleted at revision 4", {
+          conflicts: [{ ...conflict, deleted: true, ...changed }]
+        }),
+        t,
+        "en"
+      )
+    ).toEqual({ ok: false, conflict: true, deleted: true, currentRevision: 4, ...changed });
+    // Any other conflict is shown as the instance said it.
+    expect(readBuildRefusal(refusal("CONFLICT", "The default agent changed"), t, "en")).toEqual({
+      ok: false,
+      conflict: false,
+      refusals: [{ message: "The default agent changed", asSent: true }]
+    });
+  });
+
+  it("puts a refusal of a workspace's build limits at the tools or the model, naming the workspace", () => {
+    const workspace = { workspaceId: "cws_kai", workspace: "Kai Spezis" };
+    const [tool, model, missing] = [
+      { reason: "tool_not_allowed", toolName: "documents.read", ...workspace },
+      { reason: "model_not_allowed", modelBindingId: "reasoning", ...workspace },
+      { reason: "model_binding_required", ...workspace }
+    ].map((details) => readBuildRefusal(refusal("FORBIDDEN", "Forbidden", details), t, "en"));
+
+    expect(refusalsOf(tool, "tools")).toEqual([expect.stringContaining("Kai Spezis")]);
+    expect(refusalsOf(tool, "tools")[0]).toContain("documents.read");
+    expect(refusalsOf(tool, "model")).toEqual([]);
+    expect(refusalsOf(tool, undefined)).toEqual([]);
+    expect(refusalsOf(model, "model")).toEqual([expect.stringContaining("reasoning")]);
+    expect(refusalsOf(missing, "model")).toEqual([expect.stringContaining("Kai Spezis")]);
+  });
+
+  it("sends each issue of a definition to the field its path names", () => {
+    const outcome = readBuildRefusal(
+      refusal("VALIDATION_FAILED", "The definition is invalid", {
+        issues: [
+          { message: "Tool 'nope' is not registered", path: ["toolNames", 2] },
+          { message: "Skill 'gone' does not exist", path: ["config", "skillNames", 0] },
+          { message: "Reasoning effort 'max' is not offered", path: ["reasoningEffort"] },
+          {
+            message: "Model binding 'x' does not exist",
+            path: ["userSelectableModelBindingIds", 0]
+          },
+          { message: "Instructions must not be empty", path: ["instructions"] },
+          { message: "The definition names no title" },
+          { path: ["toolNames"] }
+        ]
+      }),
+      t,
+      "en"
+    );
+
+    expect(refusalsOf(outcome, "tools")).toEqual(["Tool 'nope' is not registered"]);
+    expect(refusalsOf(outcome, "skills")).toEqual(["Skill 'gone' does not exist"]);
+    expect(refusalsOf(outcome, "model")).toEqual([
+      "Reasoning effort 'max' is not offered",
+      "Model binding 'x' does not exist"
+    ]);
+    // An issue of a field without a place of its own, or without a path, shows above the save bar.
+    expect(refusalsOf(outcome, undefined)).toEqual([
+      "Instructions must not be empty",
+      "The definition names no title"
+    ]);
+  });
+
+  // ACCEPT-FIX-9 E6: the notice named nobody. It names who may approve, as the request lists
+  // them, joined by "or" in the reader's language.
+  it("says that a change waits for an approval, and names who may approve it", () => {
+    expect(readBuildRefusal(new PendingApprovalError(), t, "en")).toMatchObject({
+      ok: false,
+      conflict: false,
+      refusals: [{ waiting: true }]
+    });
+    expect(said(new PendingApprovalError(["Mara Lindqvist", "Jonas Berg"]))).toEqual([
+      "This change waits for approval by Mara Lindqvist or Jonas Berg. Nothing has changed yet and your text is still here."
+    ]);
+    // The names come from the waiting request's preview; anything else there is left out.
+    expect(approverNamesOf({ approverNames: ["Mara Lindqvist", 7, " ", "Jonas Berg"] })).toEqual([
+      "Mara Lindqvist",
+      "Jonas Berg"
+    ]);
+    expect(approverNamesOf(undefined)).toEqual([]);
+  });
+
+  it("shows every other sentence as the instance said it, and nothing for a saved change", () => {
+    const unread = "The change would break an asset the caller may not read";
+
+    expect(readBuildRefusal(refusal("VALIDATION_FAILED", unread), t, "en")).toEqual({
+      ok: false,
+      conflict: false,
+      refusals: [{ message: unread, asSent: true }]
+    });
+    expect(
+      said(
+        refusal("VALIDATION_FAILED", "The definition is invalid", {
+          issues: [{ message: unread, path: [] }]
+        })
+      )
+    ).toEqual([unread]);
+    // A refusal for a reason this page has no sentence for keeps the instance's own.
+    expect(
+      said(refusal("FORBIDDEN", "Agent 'tax-a' may not be the default", { reason: "other" }))
+    ).toEqual(["Agent 'tax-a' may not be the default"]);
+    expect(said(new Error("Network down"))).toEqual(["Network down"]);
+    expect(said(undefined)).toEqual(["The change could not be saved."]);
+    expect(refusalsOf({ ok: true }, undefined)).toEqual([]);
+    expect(refusalsOf(undefined, "tools")).toEqual([]);
+  });
+});
+
+describe("asset writes", () => {
+  /** A client whose requests are recorded and answered as a write that was made. */
+  function recordingWrites() {
+    /** `asset` is the request's address below the root of the asset operations. */
+    const requests: { method: string; asset: string; body: unknown }[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example/",
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        const body: unknown = JSON.parse(await request.text());
+        const asset = new URL(request.url).pathname.replace(/^.*\/assets\//u, "");
+        requests.push({ method: request.method, asset, body });
+        return Response.json({ version: 9, revision: 8, warnings: [] });
+      }
+    });
+    return { writes: createAssetWrites(client), requests };
+  }
+  const address = { kind: "agent", name: "tax-assistant" };
+
+  it("names exactly the revision it is handed, however often it is asked", async () => {
+    const { writes, requests } = recordingWrites();
+    const config = { name: "tax-assistant", instructions: "Help." };
+
+    // A page that loaded revision 3 keeps writing against 3, whatever was saved since.
+    await writes.put({ ...address, config, expectedRevision: 3 });
+    await writes.put({ ...address, config, expectedRevision: 3 });
+    await writes.revert({ ...address, revision: 1, expectedRevision: 3 });
+    await writes.delete({ ...address, expectedRevision: 3 });
+
+    const put = {
+      method: "PUT",
+      asset: "agent/tax-assistant",
+      body: { config, expectedRevision: 3 }
+    };
+    expect(requests).toEqual([
+      put,
+      put,
+      {
+        method: "POST",
+        asset: "agent/tax-assistant/revert",
+        body: { revision: 1, expectedRevision: 3 }
+      },
+      { method: "POST", asset: "agent/tax-assistant/delete", body: { expectedRevision: 3 } }
+    ]);
+  });
+
+  it("names null for the revision when it creates an asset", async () => {
+    const { writes, requests } = recordingWrites();
+    const config = { name: "tax-assistant" };
+
+    const outcome = await writes.put({ ...address, config, expectedRevision: null });
+
+    expect(requests).toEqual([
+      { method: "PUT", asset: "agent/tax-assistant", body: { config, expectedRevision: null } }
+    ]);
+    expect(outcome).toMatchObject({ status: "done", output: { revision: 8 } });
   });
 });

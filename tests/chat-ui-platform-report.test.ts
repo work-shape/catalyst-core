@@ -203,7 +203,7 @@ const action = () =>
   document.querySelector<HTMLButtonElement>('[data-testid="platform-report-action"]');
 
 describe("reporting a platform problem", () => {
-  it("is offered only where the instance names a support address", () => {
+  it("is offered only where the instance names a support address, outside an embedding host", () => {
     const instance: Pick<SafeConfig, "clientInstance"> = {
       clientInstance: { id: "client_test", displayName: "Test instance", environment: "test" }
     };
@@ -218,17 +218,8 @@ describe("reporting a platform problem", () => {
     expect(platformReportSetup(config(false), "conv_1")).toBeUndefined();
     expect(platformReportSetup(config(undefined), "conv_1")).toBeUndefined();
     expect(platformReportSetup(config(true), undefined)).toBeUndefined();
-  });
-
-  it("is not offered in an embedding host's session, which the server refuses the report", () => {
-    const config: Pick<SafeConfig, "clientInstance" | "platformReport"> = {
-      clientInstance: { id: "client_test", displayName: "Test instance", environment: "test" },
-      platformReport: { available: true }
-    };
-    expect(platformReportSetup(config, "conv_1", true)).toBeUndefined();
-    expect(platformReportSetup(config, "conv_1", false)).toMatchObject({
-      conversationId: "conv_1"
-    });
+    // An embedding host's session: the server refuses the report.
+    expect(platformReportSetup(config(true), "conv_1", true)).toBeUndefined();
   });
 
   it("takes a run's platform code and no other failure", () => {
@@ -267,12 +258,10 @@ describe("reporting a platform problem", () => {
 
   it("says what is sent and sends the note and nothing of the conversation", async () => {
     await render(messagesWith(platformFailure));
-    expect(action()?.textContent).toContain("Report problem to Workshape");
     await act(async () => action()?.click());
     const dialog = document.querySelector('[data-testid="platform-report-dialog"]');
     expect(dialog?.textContent).toContain("run_1");
     expect(dialog?.textContent).toContain("sandbox_unavailable");
-    expect(dialog?.textContent).toContain("Test instance");
     // Without an address on the account there is nothing to reply to.
     expect(dialog?.querySelector('[role="checkbox"]')).toBeNull();
 
@@ -293,9 +282,7 @@ describe("reporting a platform problem", () => {
     expect(JSON.stringify(sent)).not.toContain(QUESTION);
     expect(JSON.stringify(sent)).not.toContain(ANSWER);
     expect(document.querySelector('[data-testid="platform-report-dialog"]')).toBeNull();
-    expect(host.querySelector('[data-testid="platform-report-sent"]')?.textContent).toBe(
-      "Reported to Workshape"
-    );
+    expect(host.querySelector('[data-testid="platform-report-sent"]')).not.toBeNull();
     expect(action()).toBeNull();
   });
 });

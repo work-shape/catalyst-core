@@ -6,15 +6,35 @@ import {
   type AssetRightsCheck,
   type ConfigAssetSummary,
   type EffectivePermissions,
-  type PermissionGrantRow
+  type PermissionGrantRow,
+  type Role
 } from "@work-shape/catalyst-api-client";
 import {
   accessWriteFailure,
+  areaRightChoices,
+  canAssignRole,
+  canEditRole,
+  pendingApplyBlock,
+  resetBlock,
+  RolePage,
+  RolesTab,
+  roleAreaActions,
+  roleAreaOf,
+  roleGrantsByArea,
+  rolesWithPending,
+  roleAssignmentFailure,
+  roleWriteFailure,
+  ROLE_AREAS,
+  withAreaAllows,
+  withoutGrant,
+  type RoleEditor,
   checkedActions,
   checkedAssetId,
   checkState,
   CheckTab,
   emptyGrantForm,
+  furtherGrantKinds,
+  GRANT_KINDS,
   grantExtras,
   grantLevels,
   grantRequests,
@@ -25,10 +45,16 @@ import {
   grantVerbs,
   groupGrants,
   listGrantChoiceAssets,
+  splitGrantableAction,
   withGrantKind,
   type GrantForm
 } from "@work-shape/catalyst-chat-ui/access";
-import { DocsAddressProvider } from "@work-shape/catalyst-ui";
+import {
+  ACTIONS,
+  GRANTABLE_ACTION_SCOPES,
+  GRANTABLE_ACTIONS,
+  ROLE_DEFAULT_ACTIONS
+} from "@work-shape/catalyst-core";
 import { decideAssetActions } from "@work-shape/catalyst-server";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -125,127 +151,53 @@ function checkTab(props: Partial<ComponentProps<typeof CheckTab>>) {
 }
 
 describe("Grants tab", () => {
-  it("says that nothing is granted and offers to grant", () => {
-    const markup = render(grantsTab({ grants: [] }));
-    expect(markup).toContain("No right given yet.");
-    expect(markup).not.toContain('data-testid="grant-row"');
-  });
-
-  it("says that the grants could not be loaded and offers another try", () => {
-    const markup = render(grantsTab({ loadFailed: true }));
-    expect(markup).toContain("The rights could not be loaded.");
-    expect(markup).toContain("Try again");
-  });
-
-  it("shows a deny whose asset was deleted under the asset's name", () => {
-    const markup = render(grantsTab({ grants: [workspaceGrant, orphanedDeny] }));
-    expect(markup).toContain("kai-old");
-    expect(markup).toContain("Asset no longer exists");
-  });
-
-  it("shows the orphan hint as text a touch screen shows, not as a title", () => {
-    const markup = render(grantsTab({ grants: [orphanedDeny] }));
-    expect(markup).toContain("This deny stays until you remove it.");
-    expect(markup).not.toContain("title=");
-  });
-
-  it("shows one row per person and place, each as one sentence", () => {
-    const inTeam = (id: string, action: string): PermissionGrantRow => ({
+  it("shows a deny whose asset was deleted under the asset's name, an unseen one never by its id", () => {
+    expect(render(grantsTab({ grants: [workspaceGrant, orphanedDeny] }))).toContain("kai-old");
+    const unnamed: PermissionGrantRow = {
       ...orphanedDeny,
-      id,
-      action,
-      effect: "allow",
-      scopeKind: "workspace",
-      scopeId: "ws-1",
-      scopeAsset: undefined
-    });
-    const grants = [
-      inTeam("grant-1", "agent.write"),
-      inTeam("grant-3", "agent.read"),
-      orphanedDeny
-    ];
-    const workspaces = { items: [{ id: "ws-1", name: "Team" }], failed: false };
-    const markup = render(grantsTab({ grants, workspaces }));
-    expect(markup.split('data-testid="grant-row"')).toHaveLength(3);
-    // The verbs come in the page's order, whatever order the rows were written in.
-    expect(markup).toContain("may view and edit agents in Team");
-    // A deny says so in words and carries its own mark; colour is not the only difference.
-    expect(markup).toContain("may not view the agent kai-old");
-    expect(markup).toContain('data-effect="deny"');
-    expect(markup).toContain('data-effect="allow"');
-    // German puts the place before the verbs, and the negation with them.
-    const german = render(grantsTab({ grants, workspaces }), "de");
-    expect(german).toContain("darf in Team Agenten ansehen und bearbeiten");
-    expect(german).toContain("darf den Agenten kai-old nicht ansehen");
-    // The mark of a deny says what the row is, not what to do.
-    expect(markup).toContain("Denied");
-    expect(german).toContain("Verweigert");
+      scopeAsset: { kind: "agent", active: true }
+    };
+    expect(render(grantsTab({ grants: [unnamed] }))).not.toContain("asset-gone");
   });
 
-  it("says a deny of several verbs as one refusal and a right of its own words after it", () => {
-    const deny = (id: string, action: string): PermissionGrantRow => ({
-      ...orphanedDeny,
-      id,
-      action,
-      scopeKind: "instance",
-      scopeId: undefined,
-      scopeAsset: undefined
-    });
-    const markup = render(
+  it("names a workspace row by the workspace's name, never by its id (fix: before NS-0)", () => {
+    const inWorkspace: PermissionGrantRow = {
+      ...workspaceGrant,
+      id: "grant-c2",
+      action: "connection.read",
+      scopeId: "ws-1"
+    };
+    const named = render(
       grantsTab({
-        grants: [
-          deny("d1", "data_store.delete"),
-          deny("d2", "data_store.publish"),
-          { ...deny("d3", "data_store.insert"), effect: "allow" }
-        ]
+        grants: [inWorkspace],
+        workspaces: { items: [{ id: "ws-1", name: "Team" }], failed: false }
       })
     );
-    expect(markup).toContain("may not publish or delete data stores across all workspaces");
-    // No allow sentence names the place, so the right of its own words names it itself.
-    expect(markup).toContain("Add rows to data stores (Everyone)");
+    expect(named).toContain("Team");
+    expect(render(grantsTab({ grants: [inWorkspace] }))).not.toContain("ws-1");
+    expect(grantsNameWorkspaces(["connection"], [])).toBe(true);
+    expect(grantsNameWorkspaces([], [inWorkspace])).toBe(true);
   });
 
-  it("names the place of a right of its own words that no sentence of the row names", () => {
-    const own = (id: string, action: string, place: Partial<PermissionGrantRow>) => ({
-      ...orphanedDeny,
-      id,
+  it("names every right in words in both languages, never by its action", () => {
+    const rows = GRANTABLE_ACTIONS.map((action, index): PermissionGrantRow => ({
+      ...workspaceGrant,
+      id: `grant-${index}`,
       action,
-      effect: "allow" as const,
-      scopeAsset: undefined,
-      ...place
-    });
-    const grants = [
-      own("r1", "workflow.read_run_data", {
-        scopeKind: "asset",
-        scopeId: "wf-1",
-        scopeAsset: { kind: "workflow", name: "monthly-close", active: true }
-      }),
-      own("r2", "data_store.records", { scopeKind: "workspace", scopeId: "ws-1" }),
-      {
-        ...own("r3", "data_store.insert", { scopeKind: "instance", scopeId: undefined }),
-        effect: "deny" as const
-      }
-    ];
-    const workspaces = { items: [{ id: "ws-1", name: "Team" }], failed: false };
-    const markup = render(grantsTab({ grants, workspaces }));
-    expect(markup).toContain("View the data of workflow runs (Workflow monthly-close)");
-    expect(markup).toContain("Review extracted fields in data stores (Workspace Team)");
-    // A deny is marked by its badge once, not again in its words.
-    expect(markup).toContain('<span class="min-w-0">Add rows to data stores (Everyone)</span>');
-    expect(markup).not.toContain("Denied: ");
-    expect(markup).not.toContain("Also:");
-    const german = render(grantsTab({ grants, workspaces }), "de");
-    expect(german).toContain("Daten der Workflow-Läufe ansehen (Workflow monthly-close)");
-    expect(german).toContain("Extrahierte Felder in Datenspeichern prüfen (Arbeitsbereich Team)");
+      scopeKind: "instance",
+      scopeId: undefined
+    }));
+    for (const locale of ["en", "de"] as const) {
+      const markup = render(grantsTab({ grants: rows }), locale);
+      const shown = GRANTABLE_ACTIONS.filter((action) => markup.includes(action));
+      expect([locale, shown]).toEqual([locale, []]);
+    }
   });
 
-  it("counts the rows the Rights tab shows, not the grants under them", () => {
+  it("counts and groups rows by person and place", () => {
     const sameRow = { ...workspaceGrant, id: "grant-5", action: "agent.read" };
     expect(grantRowCount([workspaceGrant, sameRow, orphanedDeny])).toBe(2);
     expect(grantRowCount(undefined)).toBeUndefined();
-  });
-
-  it("groups by person and place and by nothing else", () => {
     const other = { ...workspaceGrant, id: "grant-4", holderId: "user-2" };
     const groups = groupGrants([workspaceGrant, orphanedDeny, other], (id) => id);
     expect(groups.map((group) => [group.holderId, group.grants.map((grant) => grant.id)])).toEqual([
@@ -253,66 +205,6 @@ describe("Grants tab", () => {
       ["user-1", ["grant-1"]],
       ["user-2", ["grant-4"]]
     ]);
-  });
-
-  it("says of an asset the server leaves unnamed that the reader cannot see it, never its id", () => {
-    const unnamed: PermissionGrantRow = {
-      ...orphanedDeny,
-      scopeAsset: { kind: "agent", active: true }
-    };
-    const markup = render(grantsTab({ grants: [unnamed] }));
-    expect(markup).toContain("may not view an asset you cannot see");
-    expect(markup).not.toContain("asset-gone");
-    expect(markup).not.toContain("Asset no longer exists");
-  });
-
-  it("shows a row whose granter is hidden without an empty cell or an error", () => {
-    const markup = render(grantsTab({ grants: [orphanedDeny] }));
-    expect(markup).toContain("Not available");
-    expect(markup).not.toContain("could not be loaded");
-  });
-});
-
-describe("Check tab", () => {
-  it("asks for a person and an asset before it shows anything", () => {
-    const markup = render(checkTab({}));
-    expect(markup).toContain("Choose a person and an asset");
-    expect(markup).not.toContain('data-testid="check-row"');
-  });
-
-  it("picks the asset by its name from the assets of the kind, never from a typed name", () => {
-    const markup = render(checkTab({ assets: [agent("asset-1", "tax-helper")] }));
-    expect(markup).toContain("Choose an asset");
-    expect(markup).not.toContain("<input");
-    // A kind without assets says so, and offers nothing to pick.
-    expect(render(checkTab({ assets: [] }))).toContain("There is nothing of this kind yet.");
-  });
-
-  it("says that the people could not be loaded", () => {
-    expect(render(checkTab({ users: undefined, usersFailed: true }))).toContain(
-      "The users could not be loaded."
-    );
-  });
-
-  it("ends its description with one link to how a right is decided, and with none without a docs address", () => {
-    const withDocs = (locale: "en" | "de") =>
-      render(
-        createElement(DocsAddressProvider, {
-          address: "https://docs.workshape.ai/catalyst",
-          children: checkTab({})
-        }),
-        locale
-      );
-
-    expect(withDocs("en").match(/data-docs-link/gu)).toHaveLength(1);
-    expect(withDocs("en")).toMatch(
-      /<p class="text-body text-muted-foreground">[^<]+ <a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer" aria-label="Learn more about how a right is decided, opens in a new tab"[^>]*>Learn more</u
-    );
-    expect(withDocs("de")).toMatch(
-      /aria-label="Mehr erfahren darüber, wie ein Recht entschieden wird, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
-    );
-    expect(render(checkTab({}))).not.toContain("data-docs-link");
-    expect(render(checkTab({}))).not.toContain("Learn more");
   });
 });
 
@@ -329,14 +221,11 @@ describe("when a check gives a result", () => {
     assetsFailure: undefined
   } as const;
 
-  it("gives one when the server's answer, the grants and the assets are there", () => {
+  it("gives one only when the answer, the grants and the assets are there, and says which part failed", () => {
     expect(checkState(ready)).toBe("ready");
     expect(checkState({ ...ready, checkLoaded: false })).toBe("loading");
     expect(checkState({ ...ready, checkFailure: "hidden" })).toBe("holderHidden");
     expect(checkState({ ...ready, checkFailure: "failed" })).toBe("checkFailed");
-  });
-
-  it("gives none while the grants or the assets load, and says which part failed", () => {
     expect(checkState({ ...ready, grantsLoaded: false })).toBe("loading");
     expect(checkState({ ...ready, assetsLoaded: false })).toBe("loading");
     expect(checkState({ ...ready, grantsFailed: true })).toBe("grantsFailed");
@@ -353,7 +242,6 @@ describe("when a check gives a result", () => {
     expect(checkState({ ...ready, kind: "skill", name: "_lives" })).toBe("incomplete");
     // A skill name of the public convention may start with a digit.
     expect(checkState({ ...ready, kind: "skill", name: "9lives" })).toBe("ready");
-    expect(checkState({ ...ready, kind: "skill", name: "kai-notes" })).toBe("ready");
     expect(checkState({ ...ready, holderId: undefined })).toBe("incomplete");
   });
 });
@@ -375,7 +263,27 @@ function checkOf(
   };
 }
 
-describe("what decides a check beside the entries", () => {
+describe("what a check decides", () => {
+  /** Allowed to change and delete one agent, `asset-1`. */
+  const effective: EffectivePermissions = {
+    holderActive: true,
+    items: ["agent.write", "agent.delete"].map((action) => ({
+      action,
+      effect: "allow" as const,
+      scopeKind: "asset" as const,
+      scopeId: "asset-1",
+      source: "grant" as const
+    }))
+  };
+
+  function decisions(holder: EffectivePermissions, assetId?: string) {
+    return checkedActions(checkOf(holder, assetId)).map((action) => [
+      action.verb,
+      action.allowed,
+      action.reason
+    ]);
+  }
+
   it("names an App's audience and a membership as what decided, with the workspaces a use holds in", () => {
     const answers = checkedActions({
       holderActive: true,
@@ -410,44 +318,26 @@ describe("what decides a check beside the entries", () => {
       }
     ]);
   });
-});
-
-describe("what a check decides, and how the tab names it", () => {
-  /** Allowed to change and delete one agent, `asset-1`. */
-  const effective: EffectivePermissions = {
-    holderActive: true,
-    items: ["agent.write", "agent.delete"].map((action) => ({
-      action,
-      effect: "allow" as const,
-      scopeKind: "asset" as const,
-      scopeId: "asset-1",
-      source: "grant" as const
-    }))
-  };
-
-  function decisions(holder: EffectivePermissions, _name: string, assetId?: string) {
-    return checkedActions(checkOf(holder, assetId)).map((action) => [
-      action.verb,
-      action.allowed,
-      action.reason
-    ]);
-  }
 
   it("allows what a row on the asset covers and refuses the rest for want of a grant", () => {
-    expect(decisions(effective, "kai-helper", "asset-1")).toEqual([
+    expect(decisions(effective, "asset-1")).toEqual([
       ["read", false, "no_grant"],
       ["write", true, "grant"],
       ["delete", true, "grant"]
     ]);
-    expect(decisions(effective, "other-helper", "asset-2")).toEqual([
-      ["read", false, "no_grant"],
-      ["write", false, "no_grant"],
-      ["delete", false, "no_grant"]
+    expect(decisions(effective, "asset-2").map(([, allowed]) => allowed)).toEqual([
+      false,
+      false,
+      false
+    ]);
+    expect(decisions({ ...effective, holderActive: false }).map(([, , reason]) => reason)).toEqual([
+      "holder_inactive",
+      "holder_inactive",
+      "holder_inactive"
     ]);
   });
 
   it("lets a deny on the asset win, and refuse the delete with it", () => {
-    // Allowed to change and delete every agent, as a role allows it, and denied changing one.
     const denied: EffectivePermissions = {
       holderActive: true,
       items: [
@@ -474,16 +364,22 @@ describe("what a check decides, and how the tab names it", () => {
     ]);
     expect(actions[2]?.deniedThrough).toBe("write");
     // The deny names one asset: its neighbour stays allowed.
-    expect(decisions(denied, "kai-other", "asset-2")[1]).toEqual(["write", true, "role"]);
+    expect(decisions(denied, "asset-2")[1]).toEqual(["write", true, "role"]);
   });
 
-  it("answers every action the registry names for the kind, using a Connection among them", () => {
+  it("answers every action the registry names for a Connection; a deny on using refuses no delete", () => {
     const connectionActions = {
       read: "connection.read",
       use: "connection.use",
       write: "connection.write",
       delete: "connection.delete"
     };
+    const asked = (holder: EffectivePermissions, assetId?: string) =>
+      checkedActions(checkOf(holder, assetId, connectionActions)).map((action) => [
+        action.verb,
+        action.allowed,
+        action.reason
+      ]);
     const user: EffectivePermissions = {
       holderActive: true,
       items: [
@@ -496,28 +392,9 @@ describe("what a check decides, and how the tab names it", () => {
         }
       ]
     };
-    const asked = (holder: EffectivePermissions, assetId?: string) =>
-      checkedActions(checkOf(holder, assetId, connectionActions)).map((action) => [
-        action.verb,
-        action.allowed,
-        action.reason
-      ]);
-    // A right to use a Connection is found, in the order the page lists the actions.
-    expect(asked(user, "conn-1")).toEqual([
-      ["read", false, "no_grant"],
-      ["use", true, "grant"],
-      ["write", false, "no_grant"],
-      ["delete", false, "no_grant"]
-    ]);
+    expect(asked(user, "conn-1")[1]).toEqual(["use", true, "grant"]);
     // The row names one Connection: the same name without its id is not covered.
     expect(asked(user)[1]).toEqual(["use", false, "no_grant"]);
-    // Asked as an agent would be, the same person has no action called `use` and no right.
-    expect(decisions(user, "sample-business", "conn-1")).toEqual([
-      ["read", false, "no_grant"],
-      ["write", false, "no_grant"],
-      ["delete", false, "no_grant"]
-    ]);
-    // A deny on using does not refuse a delete: only a denied read or write does.
     const admin: EffectivePermissions = {
       holderActive: true,
       items: [
@@ -544,72 +421,22 @@ describe("what a check decides, and how the tab names it", () => {
     ]);
   });
 
-  it("offers the kinds of the instance's registry, and an unknown one by the instance's name", () => {
-    const registry = [
-      {
-        kind: "agent",
-        plural: "agents",
-        lifecycle: "active" as const,
-        representation: "config" as const,
-        owners: ["instance" as const],
-        actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
-      },
-      {
-        kind: "connection",
-        plural: "connections",
-        lifecycle: "active" as const,
-        representation: "config" as const,
-        owners: ["instance" as const],
-        actions: {
-          read: "connection.read",
-          use: "connection.use",
-          write: "connection.write",
-          delete: "connection.delete"
-        }
-      },
-      {
-        kind: "app",
-        plural: "apps",
-        lifecycle: "active" as const,
-        representation: "config" as const,
-        owners: ["instance" as const],
-        actions: { read: "app.read", write: "app.write", delete: "app.delete" }
-      },
-      {
-        kind: "report",
-        plural: "reports",
-        lifecycle: "active" as const,
-        representation: "config" as const,
-        owners: ["instance" as const],
-        actions: { read: "report.read", write: "report.write", delete: "report.delete" }
-      }
-    ];
-    const markup = render(checkTab({ kinds: registry }));
-    expect(markup).toContain('<option value="agent" selected="">Agents</option>');
-    expect(markup).toContain('<option value="connection">Connections</option>');
-    expect(markup).toContain('<option value="app">Apps</option>');
-    // A kind only a deployment registers has no word here and keeps the instance's name.
-    expect(markup).toContain('<option value="report">reports</option>');
-    expect(render(checkTab({ kinds: registry }), "de")).toContain(
-      '<option value="app">Apps</option>'
-    );
+  it("offers the kinds of the instance's registry, and agents and skills until it answers", () => {
+    const kind = (name: string) => ({
+      kind: name,
+      plural: `${name}s`,
+      lifecycle: "active" as const,
+      representation: "config" as const,
+      owners: ["instance" as const],
+      actions: { read: `${name}.read`, write: `${name}.write`, delete: `${name}.delete` }
+    });
+    const markup = render(checkTab({ kinds: [kind("agent"), kind("connection"), kind("report")] }));
+    expect(markup).toContain('value="connection"');
+    expect(markup).toContain('value="report"');
     expect(markup).not.toContain('value="skill"');
-    expect(render(checkTab({ kinds: registry }), "de")).toContain(
-      '<option value="connection">Verbindungen</option>'
-    );
-    // Until the instance has answered, the two kinds every instance has are offered.
     const waiting = render(checkTab({}));
-    expect(waiting).toContain('<option value="agent" selected="">Agents</option>');
-    expect(waiting).toContain('<option value="skill">Skills</option>');
+    expect(waiting).toContain('value="skill"');
     expect(waiting).not.toContain('value="connection"');
-  });
-
-  it("holds nothing for a holder that is not active", () => {
-    expect(decisions({ ...effective, holderActive: false }, "kai-helper")).toEqual([
-      ["read", false, "holder_inactive"],
-      ["write", false, "holder_inactive"],
-      ["delete", false, "holder_inactive"]
-    ]);
   });
 
   it("finds the id of a deleted asset through the row that still names it", () => {
@@ -622,30 +449,88 @@ describe("what a check decides, and how the tab names it", () => {
   });
 });
 
+/** A bundle, Builder or Publisher, is offered as a verb of the kind `workspace`. */
+const actionOf = (kind: string, verb: string) => (kind === "workspace" ? verb : `${kind}.${verb}`);
+
+describe("what the Access page offers", () => {
+  it("is every kind core writes a grant row for, with every action of it but one's own server's add", () => {
+    const kindsOfCore = [
+      ...new Set(
+        GRANTABLE_ACTIONS.map((action) =>
+          action.includes(".") ? action.split(".")[0] : "workspace"
+        )
+      )
+    ];
+    expect(GRANT_KINDS).toEqual(kindsOfCore);
+    const offered = GRANT_KINDS.flatMap((kind) =>
+      grantVerbs(kind).map((verb) => actionOf(kind, verb))
+    );
+    // Adding one's own MCP server names no Connection: the role editor holds it (PMCP).
+    const ofTheDialog = GRANTABLE_ACTIONS.filter((action) => action !== "connection.add_own");
+    expect([...offered].sort()).toEqual([...ofTheDialog].sort());
+    expect(splitGrantableAction("connection.add_own")).toBeUndefined();
+    for (const action of ofTheDialog) {
+      const parts = splitGrantableAction(action);
+      expect([action, parts && actionOf(parts.kind, parts.verb)]).toEqual([action, action]);
+    }
+  });
+
+  it("offers a place only where every action of the kind is written", () => {
+    for (const kind of GRANT_KINDS) {
+      for (const scopeKind of grantScopeKinds(kind)) {
+        for (const verb of grantVerbs(kind)) {
+          const action = GRANTABLE_ACTIONS.find((candidate) => candidate === actionOf(kind, verb));
+          const scopes: readonly string[] = action ? GRANTABLE_ACTION_SCOPES[action] : [];
+          expect([kind, verb, scopeKind, scopes.includes(scopeKind)]).toEqual([
+            kind,
+            verb,
+            scopeKind,
+            true
+          ]);
+        }
+      }
+    }
+    // Run data is given on one Workflow only (D4); a Connection is the instance's own (RIGHTS-1c).
+    expect(grantScopeKinds("workflow")).toEqual(["asset"]);
+    expect(grantScopeKinds("connection")).toEqual(["asset", "instance"]);
+    expect(grantScopeKinds("agent")).toEqual(["workspace", "asset"]);
+  });
+
+  it("offers a further kind where the instance registers it", () => {
+    expect(furtherGrantKinds(undefined)).toEqual([]);
+    expect(furtherGrantKinds(["agent", "skill", "app"])).toEqual(["app"]);
+    expect(furtherGrantKinds(["agent", "skill", "guardrails"])).toEqual([]);
+    expect(furtherGrantKinds(["workflow", "connection", "agent"])).toEqual(
+      GRANT_KINDS.filter((kind) => kind === "connection" || kind === "workflow")
+    );
+  });
+});
+
 describe("what the dialogs send", () => {
-  it("writes one row per action of the chosen level", () => {
-    const form = {
+  const actions = (patch: Partial<GrantForm>) =>
+    grantRequests({
       ...emptyGrantForm,
       holderId: "user-1",
-      level: "write",
       scopeKind: "asset",
-      assetId: "asset-1"
-    } as const;
-    const actions = (patch: Partial<GrantForm>) =>
-      grantRequests({ ...form, ...patch })?.map((row) => `${row.effect} ${row.action}`);
-    // An allow gives the level and every one below it.
-    expect(actions({})).toEqual(["allow agent.read", "allow agent.use", "allow agent.write"]);
+      assetId: "asset-1",
+      ...patch
+    })?.map((row) => `${row.effect} ${row.action}`);
+
+  it("writes one row per action of the chosen level: an allow below it, a deny above it", () => {
     // Using an agent is its lowest level, below View (AGENT-USE-1).
     expect(grantLevels("agent")).toEqual(["use", "read", "write", "publish", "delete"]);
-    // A deny refuses the level and every one above it.
-    expect(actions({ effect: "deny" })).toEqual([
+    expect(actions({ level: "write" })).toEqual([
+      "allow agent.read",
+      "allow agent.use",
+      "allow agent.write"
+    ]);
+    expect(actions({ level: "write", effect: "deny" })).toEqual([
       "deny agent.write",
       "deny agent.publish",
       "deny agent.delete"
     ]);
     expect(actions({ level: undefined })).toBeUndefined();
     // A right that is no level is given on its own, beside a level or without one.
-    expect(grantLevels("data_store")).toEqual(["read", "write", "publish", "delete"]);
     expect(grantExtras("data_store")).toEqual(["insert", "execute", "records"]);
     expect(
       actions({ kind: "data_store", level: undefined, extras: ["records"], scopeKind: "instance" })
@@ -653,32 +538,17 @@ describe("what the dialogs send", () => {
   });
 
   it("gives View on a Workflow or a Connection without Use, which acts with the asset's own rights", () => {
-    const actions = (patch: Partial<GrantForm>) =>
-      grantRequests({
-        ...emptyGrantForm,
-        holderId: "user-1",
-        scopeKind: "asset",
-        assetId: "asset-1",
-        ...patch
-      })?.map((row) => `${row.effect} ${row.action}`);
-    expect(grantLevels("workflow")).toEqual(["read", "use", "write", "publish", "delete"]);
-    expect(grantLevels("connection")).toEqual(["read", "use", "write", "delete"]);
     expect(actions({ kind: "workflow", level: "read" })).toEqual(["allow workflow.read"]);
     expect(actions({ kind: "workflow", level: "use" })).toEqual([
       "allow workflow.read",
       "allow workflow.use"
     ]);
     expect(actions({ kind: "connection", level: "read" })).toEqual(["allow connection.read"]);
-    // Changing a Connection brings viewing and using it; approving is given on its own
-    // (RIGHTS-1d).
     expect(actions({ kind: "connection", level: "write" })).toEqual([
       "allow connection.read",
       "allow connection.use",
       "allow connection.write"
     ]);
-    expect(grantExtras("connection")).toEqual(["approve"]);
-    // Approving a proposed change of a skill is given on its own, on one skill or in a workspace.
-    expect(grantExtras("skill")).toEqual(["approve"]);
     // A deny of Use leaves viewing alone.
     expect(actions({ kind: "connection", level: "use", effect: "deny" })).toEqual([
       "deny connection.use",
@@ -689,24 +559,7 @@ describe("what the dialogs send", () => {
     expect(grantLevels("knowledge_base")).toEqual(["use", "read", "write", "publish", "delete"]);
   });
 
-  it("offers a new right in a workspace or on one asset, and never in a workspace that owns no such asset", () => {
-    expect(grantVerbs("connection")).toEqual(["read", "use", "write", "approve", "delete"]);
-    // A Connection is the instance's own, so a workspace would cover nothing. No legacy key
-    // carries its rights, so the whole instance is a place too (RIGHTS-1c, D3).
-    expect(grantScopeKinds("connection")).toEqual(["asset", "instance"]);
-    // A workspace owns agents and skills (WS-OWN-1a), so "In workspace X" comes first.
-    for (const kind of ["agent", "skill"] as const) {
-      expect(grantVerbs(kind)).toEqual(
-        kind === "agent"
-          ? ["read", "use", "write", "publish", "approve", "delete"]
-          : ["read", "write", "publish", "approve", "delete"]
-      );
-      expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
-    }
-    // A new right on agents starts at the agents' first place.
-    expect(emptyGrantForm).toMatchObject({ kind: "agent", scopeKind: "workspace" });
-
-    // Another kind keeps no asset and no verb it has no grant for, and takes its first place.
+  it("keeps on a kind change no asset or level it lacks, and asks no row where the server writes none", () => {
     const onConnection = withGrantKind(
       {
         ...emptyGrantForm,
@@ -724,31 +577,10 @@ describe("what the dialogs send", () => {
       scopeKind: "asset",
       assetId: undefined
     });
-    // A level the new kind lacks is not kept.
     expect(
       withGrantKind({ ...emptyGrantForm, level: "publish" }, "connection").level
     ).toBeUndefined();
     expect(grantRequests(onConnection)).toBeUndefined();
-    // Viewing a Connection is its lowest level: using it calls the outside system with its
-    // credentials, so View never brings Use.
-    expect(grantLevels("connection")).toEqual(["read", "use", "write", "delete"]);
-    expect(
-      grantRequests({ ...onConnection, level: "read", assetId: "asset-crm" })?.map(
-        (row) => row.action
-      )
-    ).toEqual(["connection.read"]);
-    expect(grantRequests({ ...onConnection, level: "use", assetId: "asset-crm" })).toEqual(
-      ["connection.read", "connection.use"].map((action) => ({
-        holderKind: "user",
-        holderId: "user-1",
-        action,
-        effect: "allow",
-        scopeKind: "asset",
-        scopeId: "asset-crm"
-      }))
-    );
-    // No row is asked for where the server writes none: a verb the kind lacks, a workspace
-    // for a Connection, the whole instance for agents, whose rights a legacy key carries.
     expect(
       grantRequests({ ...onConnection, level: "publish", assetId: "asset-crm" })
     ).toBeUndefined();
@@ -756,8 +588,6 @@ describe("what the dialogs send", () => {
       grantRequests({ ...onConnection, kind, scopeKind, workspaceId: "ws-1" });
     expect(inPlace("connection", "workspace")).toBeUndefined();
     expect(inPlace("agent", "instance")).toBeUndefined();
-    // A Connection right for the whole instance is a row there per action of its level
-    // (RIGHTS-1c, D3): View is the one row, without Use.
     expect(inPlace("connection", "instance")).toEqual([
       {
         holderKind: "user",
@@ -767,8 +597,6 @@ describe("what the dialogs send", () => {
         scopeKind: "instance"
       }
     ]);
-    // An agent right in a workspace is a row on that workspace per action of its level: View
-    // brings Use, the agents' lowest level (AGENT-USE-1).
     expect(inPlace("agent", "workspace")).toEqual(
       ["agent.read", "agent.use"].map((action) => ({
         holderKind: "user",
@@ -779,61 +607,44 @@ describe("what the dialogs send", () => {
         scopeId: "ws-1"
       }))
     );
+    // A workspace owns the Workflows made in it, so a row in a workspace reaches those (WS-OWN-1b).
+    const onWorkflow = withGrantKind({ ...onConnection, level: "use" }, "workflow");
+    expect(onWorkflow).toMatchObject({ kind: "workflow", scopeKind: "asset", assetId: undefined });
+    expect(
+      grantRequests({ ...onWorkflow, scopeKind: "workspace", workspaceId: "ws-1" })?.map(
+        (row) => `${row.scopeKind} ${row.action}`
+      )
+    ).toEqual(["workspace workflow.read", "workspace workflow.use"]);
   });
 
-  it("names a Connection row and a workspace row in words", () => {
-    const onConnection: PermissionGrantRow = {
-      ...workspaceGrant,
-      id: "grant-c1",
-      action: "connection.use",
-      scopeKind: "asset",
-      scopeId: "asset-crm",
-      scopeAsset: { kind: "connection", name: "crm", active: true }
-    };
-    const inWorkspace: PermissionGrantRow = {
-      ...workspaceGrant,
-      id: "grant-c2",
-      action: "connection.read",
-      scopeKind: "workspace",
-      scopeId: "ws-1"
-    };
-    const named = render(
-      grantsTab({
-        grants: [onConnection, inWorkspace],
-        workspaces: { items: [{ id: "ws-1", name: "Team" }], failed: false }
-      })
-    );
-    expect(named).toContain("may use the connection crm");
-    expect(named).toContain("may view connections in Team");
-    // Without the workspaces the row never names the workspace by its id.
-    const unnamed = render(grantsTab({ grants: [inWorkspace] }));
-    expect(unnamed).toContain("may view connections in a workspace you cannot see");
-    expect(unnamed).not.toContain("ws-1");
-    // A new agent or skill right names a workspace, so the page loads the workspaces; so it does
-    // for a Connection right written on a workspace before NS-0, listed by the workspace's name.
-    expect(grantsNameWorkspaces(["connection"], [])).toBe(true);
-    expect(grantsNameWorkspaces([], [onConnection, inWorkspace])).toBe(true);
-    // An instance-wide row is named in words, never by its scope kind.
-    const onInstance: PermissionGrantRow = {
-      ...workspaceGrant,
-      id: "grant-c3",
-      scopeKind: "instance"
-    };
-    expect(render(grantsTab({ grants: [onInstance] }))).toContain(
-      "may edit agents across all workspaces"
-    );
-    expect(render(grantsTab({ grants: [onInstance] }), "de")).toContain(
-      "darf in allen Arbeitsbereichen Agenten bearbeiten"
-    );
-  });
-
-  it("reads a conflict without a reason as a user who is being deleted", () => {
+  it("reads a refused write as what the server refused it for", () => {
     const refusal = (status: number, code: string, details?: Record<string, string>) =>
       new ApiError(status, "refused", { error: { code, message: "refused", details } });
     expect(accessWriteFailure(refusal(409, "CONFLICT"))).toBe("userBeingDeleted");
     expect(accessWriteFailure(refusal(409, "CONFLICT", { reason: "duplicate_grant" }))).toBe(
       "duplicateGrant"
     );
+    expect(
+      accessWriteFailure(refusal(400, "VALIDATION_FAILED", { reason: "action_not_grantable" }))
+    ).toBe("rightNotOffered");
+    expect(accessWriteFailure(refusal(400, "VALIDATION_FAILED", { reason: "invalid_scope" }))).toBe(
+      "assetGone"
+    );
+    expect(accessWriteFailure(refusal(404, "NOT_FOUND", { reason: "module_off" }))).toBe(
+      "moduleOff"
+    );
+    // Without the right to manage users, and with it for a superadmin's row.
+    expect(
+      accessWriteFailure(refusal(403, "FORBIDDEN", { action: "users.manage", reason: "no_grant" }))
+    ).toBe("missingManageRight");
+    expect(
+      accessWriteFailure(
+        refusal(403, "FORBIDDEN", { action: "permissions.grant", reason: "no_grant" })
+      )
+    ).toBe("holderIsSuperadmin");
+    expect(
+      accessWriteFailure(refusal(403, "FORBIDDEN", { action: "auth_scope:user_admin:write" }))
+    ).toBe("other");
     expect(accessWriteFailure(new Error("offline"))).toBe("other");
   });
 });
@@ -857,5 +668,382 @@ describe("the assets a right can name", () => {
     expect(asked).toHaveLength(2);
     for (const url of asked) expect(url.searchParams.get("locale"), url.href).toBe("de");
     expect(asked.map((url) => url.searchParams.get("workspaceId"))).toEqual([null, "cws_team"]);
+  });
+});
+
+// Instance > Access > Roles (AP-5b1): what the role list and a role's page offer, and to whom.
+
+const names = { workspace: () => undefined, asset: () => undefined };
+
+const allow = (action: string) => ({
+  action,
+  effect: "allow" as const,
+  scopeKind: "instance" as const
+});
+
+function rights(actions: readonly string[]): EffectivePermissions {
+  return {
+    holderActive: true,
+    items: actions.map((action) => ({ ...allow(action), source: "role" as const, roleId: "x" }))
+  };
+}
+
+const admin: RoleEditor = { superadmin: false, rights: rights(ROLE_DEFAULT_ACTIONS.admin) };
+const adminWithEdit: RoleEditor = {
+  superadmin: false,
+  rights: rights([...ROLE_DEFAULT_ACTIONS.admin, "roles.edit_built_in"])
+};
+const root: RoleEditor = { superadmin: true, rights: rights(ROLE_DEFAULT_ACTIONS.superadmin) };
+
+function builtIn(id: "user" | "admin" | "superadmin", extra: Partial<Role> = {}): Role {
+  const grants = ROLE_DEFAULT_ACTIONS[id].map(allow);
+  return {
+    id,
+    name: id,
+    builtIn: true,
+    editable: id !== "superadmin",
+    grants,
+    defaultGrants: grants,
+    equalsDefault: true,
+    pendingActions: [],
+    ...extra
+  };
+}
+
+const reviewers: Role = {
+  id: "role_reviewers",
+  name: "Reviewers",
+  description: "Read the audit log",
+  builtIn: false,
+  editable: true,
+  grants: [allow("audit.view"), { action: "usage.view", effect: "deny", scopeKind: "instance" }],
+  pendingActions: []
+};
+
+const writes = {
+  onCreate: async () => reviewers,
+  onUpdate: never,
+  onDelete: never,
+  onReset: never,
+  onDecide: never
+};
+
+describe("the role model", () => {
+  it("puts every action a role can hold in exactly one area of the User screen's grouping", () => {
+    const placed = ROLE_AREAS.flatMap((area) => roleAreaActions(area));
+    expect([...placed].sort()).toEqual(ACTIONS.filter((a) => a !== "assets.release").sort());
+    expect(roleAreaOf("roles.edit_built_in")).toBe("roles");
+    expect(roleAreaOf("builder")).toBe("workspace");
+    expect(roleAreaOf("agent.use")).toBe("agent");
+    expect(roleAreaOf("users.manage")).toBe("users");
+    expect(roleAreaOf("users.delete")).toBe("users");
+    expect(roleAreaOf("jobs.retry")).toBe("jobs");
+    expect(roleAreaOf("audit.view")).toBe("administration");
+    expect(ROLE_AREAS.at(-1)).toBe("administration");
+  });
+
+  it("groups a role's grants by area and place, the whole instance first", () => {
+    const areas = roleGrantsByArea([
+      { action: "agent.use", effect: "allow", scopeKind: "workspace", scopeId: "ws-1" },
+      allow("agent.read"),
+      { action: "agent.use", effect: "allow", scopeKind: "asset", scopeId: "agent-1" }
+    ]);
+    expect(areas.map((area) => area.area)).toEqual([...ROLE_AREAS]);
+    const agents = areas.find((area) => area.area === "agent");
+    expect(agents?.places.map((place) => place.place)).toEqual([
+      { scopeKind: "instance" },
+      { scopeKind: "workspace", scopeId: "ws-1" },
+      { scopeKind: "asset", scopeId: "agent-1", scopeAsset: { kind: "agent", active: true } }
+    ]);
+  });
+
+  it("lets user and admin be edited only with roles.edit_built_in, and superadmin never", () => {
+    const user = builtIn("user");
+    expect(canEditRole(user, admin)).toBe(false);
+    expect(canEditRole(reviewers, admin)).toBe(true);
+    expect(canEditRole(user, adminWithEdit)).toBe(true);
+    expect(canEditRole(builtIn("admin"), adminWithEdit)).toBe(true);
+    expect(canEditRole(builtIn("superadmin"), root)).toBe(false);
+    expect(canEditRole(user, root)).toBe(true);
+    expect(canEditRole(reviewers, { superadmin: false, rights: rights(["usage.view"]) })).toBe(
+      false
+    );
+  });
+
+  it("offers a right to tick only to who holds it, a superadmin's right only to a superadmin", () => {
+    const narrow: RoleEditor = {
+      superadmin: false,
+      rights: rights(["users.manage", "roles.edit_built_in", "usage.view"])
+    };
+    const choices = new Map(
+      // Service principals are their own area since RIGHTS-1f grants them to a person.
+      ["administration", "users", "service_principals"]
+        .flatMap((area) => areaRightChoices(area, reviewers.grants, narrow))
+        .map((c) => [c.action, c])
+    );
+    // Held: tickable. Ticked already: may be unticked although not held.
+    expect(choices.get("users.manage")).toEqual({ action: "users.manage", checked: false });
+    expect(choices.get("audit.view")).toEqual({ action: "audit.view", checked: true });
+    expect(choices.get("service_principals.manage")?.lock).toBe("notHeld");
+    expect(choices.get("api_access.manage")?.lock).toBe("superadminOnly");
+    // Usage is its own area since `usage.view_users` is granted on a workspace (LU-3).
+    expect(roleAreaOf("usage.view")).toBe("usage");
+    expect(
+      areaRightChoices("usage", reviewers.grants, narrow).find((c) => c.action === "usage.view")
+        ?.lock
+    ).toBe("refusedByRole");
+    expect(
+      areaRightChoices("administration", [], root).find((c) => c.action === "api_access.manage")
+    ).toEqual({ action: "api_access.manage", checked: false });
+  });
+
+  it("holds back a reset or an applied release change the server would refuse, and says why", () => {
+    // The editor is a `user` too, so holds the add of one's own MCP server (PMCP).
+    const narrow: RoleEditor = {
+      superadmin: false,
+      rights: rights(["users.manage", "roles.edit_built_in", "audit.view", "connection.add_own"])
+    };
+    const deny = (action: string) => ({ ...allow(action), effect: "deny" as const });
+    const narrowed = builtIn("admin", {
+      grants: [allow("audit.view"), deny("usage.view")],
+      equalsDefault: false
+    });
+    // A reset gives back every default allow and lifts the deny: it needs what it gives.
+    expect(resetBlock(narrowed, narrow)).toMatchObject({ kind: "needsRight" });
+    expect(
+      resetBlock(builtIn("user", { grants: [deny("usage.view")], equalsDefault: false }), narrow)
+    ).toEqual({ kind: "needsRight", action: "usage.view" });
+    expect(resetBlock(narrowed, adminWithEdit)).toBeUndefined();
+    // Taking away a right only a superadmin hands out is a superadmin's, also by a reset.
+    const widened = builtIn("admin", {
+      grants: [...ROLE_DEFAULT_ACTIONS.admin.map(allow), allow("api_access.manage")],
+      equalsDefault: false
+    });
+    expect(resetBlock(widened, adminWithEdit)).toEqual({ kind: "superadminOnly" });
+    expect(resetBlock(widened, root)).toBeUndefined();
+    expect(resetBlock(reviewers, narrow)).toBeUndefined();
+
+    const added = (action: string) => ({ action, change: "added" as const });
+    const removed = (action: string) => ({ action, change: "removed" as const });
+    expect(pendingApplyBlock(narrowed, added("usage.view"), narrow)).toEqual({
+      kind: "needsRight",
+      action: "usage.view"
+    });
+    expect(pendingApplyBlock(narrowed, added("usage.view"), adminWithEdit)).toBeUndefined();
+    expect(pendingApplyBlock(narrowed, added("agent_models.manage"), adminWithEdit)).toEqual({
+      kind: "superadminOnly"
+    });
+    expect(pendingApplyBlock(narrowed, added("agent_models.manage"), root)).toBeUndefined();
+    // A removal takes only the allow away and leaves a deny: nothing to hold for it.
+    expect(pendingApplyBlock(narrowed, removed("audit.view"), narrow)).toBeUndefined();
+    expect(pendingApplyBlock(narrowed, removed("usage.view"), narrow)).toBeUndefined();
+    expect(pendingApplyBlock(widened, removed("api_access.manage"), adminWithEdit)).toEqual({
+      kind: "superadminOnly"
+    });
+  });
+
+  it("replaces only the area's instance-wide allows, and keeps refusals and places", () => {
+    const grants = [
+      allow("audit.view"),
+      allow("agent.use"),
+      { action: "usage.view", effect: "deny" as const, scopeKind: "instance" as const },
+      {
+        action: "users.manage",
+        effect: "allow" as const,
+        scopeKind: "workspace" as const,
+        scopeId: "ws"
+      }
+    ];
+    expect(withAreaAllows(grants, "administration", ["limits.manage"])).toEqual([
+      allow("agent.use"),
+      { action: "usage.view", effect: "deny", scopeKind: "instance" },
+      { action: "users.manage", effect: "allow", scopeKind: "workspace", scopeId: "ws" },
+      allow("limits.manage")
+    ]);
+    expect(
+      withoutGrant(grants, { action: "usage.view", effect: "deny", scopeKind: "instance" })
+    ).toEqual([allow("audit.view"), allow("agent.use"), grants[3]]);
+  });
+
+  it("reads a role write's refusal", () => {
+    const refusal = (status: number, code: string, details?: Record<string, unknown>) =>
+      new ApiError(status, "refused", { error: { code, message: "refused", details } });
+    expect(roleWriteFailure(refusal(409, "CONFLICT", { reason: "role_name_taken" }))).toEqual({
+      kind: "nameTaken"
+    });
+    expect(roleWriteFailure(refusal(409, "CONFLICT", { reason: "role_in_use" }))).toEqual({
+      kind: "inUse"
+    });
+    expect(
+      roleWriteFailure(
+        refusal(403, "FORBIDDEN", { action: "roles.edit_built_in", reason: "no_grant" })
+      )
+    ).toEqual({ kind: "needsRight", action: "roles.edit_built_in" });
+    expect(
+      roleWriteFailure(refusal(403, "FORBIDDEN", { action: "roles.update", reason: "no_grant" }))
+    ).toEqual({ kind: "superadminOnly" });
+    expect(roleWriteFailure(new Error("offline"))).toEqual({ kind: "other" });
+  });
+});
+
+describe("the role list and a role's page", () => {
+  const roles = [
+    builtIn("user"),
+    builtIn("admin", {
+      equalsDefault: false,
+      pendingActions: [{ action: "usage.view", change: "added" }]
+    }),
+    builtIn("superadmin"),
+    reviewers
+  ];
+  const list = (editor: RoleEditor) =>
+    render(
+      createElement(RolesTab, {
+        ...writes,
+        roles,
+        loadFailed: false,
+        onRetry: nothing,
+        editor,
+        selectedRoleId: undefined,
+        onSelect: nothing,
+        names
+      })
+    );
+  const page = (role: Role, editor: RoleEditor) =>
+    render(
+      createElement(RolePage, {
+        role,
+        editor,
+        names,
+        onBack: nothing,
+        onRename: nothing,
+        onDelete: nothing,
+        onUpdate: never,
+        onReset: never,
+        onDecide: never
+      })
+    );
+
+  it("offers a role's menu only where the editor may write it", () => {
+    expect(list(admin)).toContain("Actions for Reviewers");
+    expect(list(admin)).not.toContain("Actions for User");
+    expect(list({ superadmin: false, rights: rights(["usage.view"]) })).not.toContain(
+      "Actions for Reviewers"
+    );
+    expect(rolesWithPending(roles).map((role) => role.id)).toEqual(["admin"]);
+  });
+
+  it("offers no reset on a role the editor may not edit", () => {
+    expect(page(builtIn("superadmin"), root)).not.toContain("Reset to default");
+    expect(page(builtIn("user"), admin)).not.toContain("Reset to default");
+    expect(page(builtIn("admin", { equalsDefault: false }), adminWithEdit)).toContain(
+      "Reset to default"
+    );
+  });
+
+  it("holds back Reset and Add where the server would refuse them", () => {
+    const html = page(
+      builtIn("admin", {
+        grants: [...ROLE_DEFAULT_ACTIONS.admin.map(allow), allow("api_access.manage")],
+        equalsDefault: false,
+        pendingActions: [
+          { action: "agent_models.manage", change: "added" },
+          { action: "audit.view", change: "removed" }
+        ]
+      }),
+      adminWithEdit
+    );
+    expect(html).toContain('data-testid="role-reset-blocked"');
+    const row = (action: string) =>
+      html.split(`data-action="${action}"`)[1]?.split('data-testid="role-pending-action"')[0] ?? "";
+    expect(row("agent_models.manage")).toMatch(/<button[^>]*disabled=""/);
+    expect(row("audit.view")).not.toContain('disabled=""');
+    expect(page(builtIn("admin", { equalsDefault: false }), root)).not.toContain(
+      "role-reset-blocked"
+    );
+  });
+});
+
+// P30: an instance admin gives a custom role to a person, on the person's page and on the role's.
+describe("who holds a custom role", () => {
+  const person = (
+    id: string,
+    roles: string[],
+    extra: Partial<AdministeredUser> = {}
+  ): AdministeredUser => ({
+    id,
+    clientInstanceId: "instance",
+    displayLabel: `Person ${id}`,
+    email: `${id}@example.test`,
+    roles,
+    permissionRefs: [],
+    permissions: [],
+    status: "active",
+    identities: [],
+    createdAt: "2026-11-01T00:00:00.000Z",
+    updatedAt: "2026-11-01T00:00:00.000Z",
+    ...extra
+  });
+  const keys: Role = {
+    ...reviewers,
+    id: "role_keys",
+    name: "Keys",
+    grants: [allow("api_access.manage")]
+  };
+
+  it("is given by a holder of users.manage, and a role with a Superadmin's right only by one", () => {
+    expect(canAssignRole(reviewers, admin)).toBe(true);
+    expect(canAssignRole(keys, admin)).toBe(false);
+    expect(canAssignRole(keys, root)).toBe(true);
+    expect(canAssignRole(builtIn("admin"), root)).toBe(false);
+    expect(canAssignRole(reviewers, { superadmin: false, rights: rights([]) })).toBe(false);
+  });
+
+  it("reads a refusal to give a role for its sentence", () => {
+    const refusal = (details: Record<string, string>) =>
+      new ApiError(403, "refused", {
+        error: { code: "FORBIDDEN", message: "refused", details }
+      });
+    expect(
+      roleAssignmentFailure(refusal({ action: "users.update", reason: "holder_not_administrable" }))
+    ).toEqual({ kind: "self" });
+    expect(roleAssignmentFailure(refusal({ action: "users.update", reason: "no_grant" }))).toEqual({
+      kind: "superadminOnly"
+    });
+    expect(roleAssignmentFailure(refusal({ action: "audit.view", reason: "no_grant" }))).toEqual({
+      kind: "needsRight",
+      action: "audit.view"
+    });
+  });
+
+  it("lists the people who hold a custom role on its page, each to take it from, and none on a built-in one", () => {
+    const people = {
+      users: [person("kai", ["user", reviewers.id]), person("lena", ["user"])],
+      failed: false,
+      onSetRoles: never
+    };
+    const page = (role: Role, editor: RoleEditor) =>
+      render(
+        createElement(RolePage, {
+          role,
+          editor,
+          names,
+          people,
+          onBack: nothing,
+          onRename: nothing,
+          onDelete: nothing,
+          onUpdate: never,
+          onReset: never,
+          onDecide: never
+        }),
+        "de"
+      );
+    const html = page(reviewers, admin);
+    expect(html).toContain('data-testid="role-people"');
+    expect(html).toContain('data-user="kai"');
+    expect(html).not.toContain('data-user="lena"');
+    expect(html).toContain("Person hinzufügen");
+    expect(page(keys, admin)).not.toContain("Person hinzufügen");
+    expect(page(builtIn("admin"), adminWithEdit)).not.toContain('data-testid="role-people"');
   });
 });

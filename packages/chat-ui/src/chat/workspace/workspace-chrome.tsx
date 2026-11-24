@@ -27,7 +27,7 @@ export function OutdatedInterfaceNotice() {
   ) : null;
 }
 
-export function OutdatedInterfaceBanner({ onReload }: { onReload(): void }) {
+function OutdatedInterfaceBanner({ onReload }: { onReload(): void }) {
   const { t } = useTranslation();
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3">

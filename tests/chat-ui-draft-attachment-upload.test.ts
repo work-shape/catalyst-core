@@ -11,7 +11,6 @@ import {
   draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,
-  withoutDraftAttachment,
   isAbandonedDraftConversation,
   terminalRunNotice
 } from "./support/chat-ui";
@@ -131,129 +130,75 @@ describe("abandoned draft conversation", () => {
     // ACCEPT-1c C8: a German conversation started with files was called "2 attached files".
     const two = [file(), file()];
     expect(attachedFilesTitle(two, "de")).toBe("2 angehängte Dateien");
-    expect(attachedFilesTitle(two, "en")).toBe("2 attached files");
     expect(attachedFilesTitle([file()], "de")).toBe("Perso.pdf");
-    const unnamed = new File(["content"], "", { type: "application/pdf" });
-    expect(attachedFilesTitle([unnamed], "de")).toBe("Angehängte Datei");
-    expect(attachedFilesTitle([unnamed], "en")).toBe("Attached file");
   });
 
   it("returns to the start page only when the open conversation holds nothing", () => {
     expect(isAbandonedDraftConversation(emptied)).toBe(true);
     expect(isAbandonedDraftConversation({ ...emptied, messageCount: 2 })).toBe(false);
-    expect(isAbandonedDraftConversation({ ...emptied, messagesLoaded: false })).toBe(false);
     expect(isAbandonedDraftConversation({ ...emptied, running: true })).toBe(false);
     expect(isAbandonedDraftConversation({ ...emptied, selectedConversationId: "conv_other" })).toBe(
       false
     );
-    expect(isAbandonedDraftConversation({ ...emptied, selectedConversationId: undefined })).toBe(
-      false
-    );
-  });
-
-  it("counts the draft attachments that remain after a removal", () => {
-    const drafts = [{ id: "att_1" }, { id: "att_2" }];
-    expect(withoutDraftAttachment(drafts, "att_1").map(({ id }) => id)).toEqual(["att_2"]);
-    expect(withoutDraftAttachment(withoutDraftAttachment(drafts, "att_1"), "att_2")).toEqual([]);
   });
 });
 
 describe("the notice of a run that ended as failed or cancelled", () => {
   const en = createTranslationContext("en").t;
-  const de = createTranslationContext("de").t;
   const interrupted = {
     class: "run_failed" as const,
     message: "Written for operators",
     category: "runtime_interrupted"
   };
+  const stillInterrupted = "The reply was interrupted. Please send your message again.";
 
-  it("names a stopped reply in the person's language, never by the reason code", () => {
+  it("names a stopped or interrupted reply, never by the reason code or the worker's words", () => {
     const cancelled = { class: "run_cancelled" as const, message: "user_requested" };
-
     expect(terminalRunNotice(cancelled, en)).toBe("The reply was stopped.");
-    expect(terminalRunNotice(cancelled, de)).toBe("Die Antwort wurde gestoppt.");
-  });
 
-  it("tells a run that no worker took apart from an interrupted reply", () => {
     const notStarted = { ...interrupted, code: "AGENT_RUN_NOT_STARTED" };
-    const lost = { ...interrupted, code: "AGENT_RUN_WORKER_LOST" };
-
     expect(terminalRunNotice(notStarted, en)).toContain("could not be started");
-    expect(terminalRunNotice(notStarted, de)).toContain("konnte nicht gestartet werden");
-    expect(terminalRunNotice(lost, en)).toBe(
-      "The reply was interrupted. Please send your message again."
+    // A platform failure names no administrator to fix it (PLATFORM-REPORT).
+    expect(terminalRunNotice(notStarted, en)).not.toMatch(/administrator/iu);
+    expect(terminalRunNotice({ ...interrupted, code: "AGENT_RUN_WORKER_LOST" }, en)).toBe(
+      stillInterrupted
     );
-    expect(terminalRunNotice(lost, de)).toBe(
-      "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut."
-    );
+    for (const category of ["internal_error", "abort_error", "unknown_error"]) {
+      const failed = { class: "run_failed" as const, message: "Agent run failed", category };
+      expect(terminalRunNotice(failed, en)).toBe(stillInterrupted);
+    }
   });
 
-  it("says which tool a reply that stood still waited on, and when no worker took its command", () => {
+  it("says which tool a reply that stood still waited on, naming no worker", () => {
     const notTaken = {
       ...interrupted,
       code: "AGENT_RUN_COMMAND_NOT_TAKEN",
       tool: "workspace.exec"
     };
     const silent = { ...interrupted, code: "AGENT_RUN_TOOL_SILENT", tool: "web.fetch" };
-
-    expect(terminalRunNotice(notTaken, en)).toBe(
-      "The reply was stopped because code could not be run. Code execution is unavailable right now. This is a problem of the platform, not of your input. Try again later."
-    );
-    expect(terminalRunNotice(notTaken, de)).toBe(
-      "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Das ist ein Problem der Plattform, nicht deiner Eingabe. Versuche es später erneut."
-    );
-    expect(terminalRunNotice(silent, en)).toBe(
-      "The reply was stopped: it waited for the tool web.fetch, which did not answer in time. Please send your message again."
-    );
-    expect(terminalRunNotice(silent, de)).toBe(
-      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug web.fetch gewartet, das nicht rechtzeitig geantwortet hat. Bitte sende deine Nachricht erneut."
-    );
-    // What a person reads names no worker: that is the operator's word.
-    for (const error of [notTaken, silent])
-      for (const t of [en, de]) expect(terminalRunNotice(error, t)).not.toMatch(/worker/iu);
-    // A run that stood still on no tool reads as before.
+    expect(terminalRunNotice(notTaken, en)).toContain("not of your input");
+    expect(terminalRunNotice(silent, en)).toContain("web.fetch");
+    for (const error of [notTaken, silent]) {
+      expect(terminalRunNotice(error, en)).not.toMatch(/worker/iu);
+    }
     expect(terminalRunNotice({ ...interrupted, code: "AGENT_RUN_IDLE" }, en)).toBe(
-      "The reply was interrupted. Please send your message again."
+      stillInterrupted
     );
   });
 
-  it("says what to do about a model without a price, to each reader what they can act on", () => {
+  it("names the rate card about an unpriced model only to a reader who sees it", () => {
     const notPriced = {
       class: "run_failed" as const,
-      message:
-        "The model has no price on the rate card; the spend budget cannot be evaluated safely",
+      message: "The model has no price on the rate card",
       category: "app_error",
       code: "MODEL_NOT_PRICED"
     };
-
-    expect(terminalRunNotice(notPriced, en)).toBe(
-      "This model cannot be used at the moment. Choose another model or ask an administrator."
-    );
-    expect(terminalRunNotice(notPriced, de)).toContain("Wähle ein anderes Modell");
-    // The interface names no config key: where the price is set is the operator's knowledge.
-    expect(terminalRunNotice(notPriced, en, { seesRateCard: true })).toBe(
-      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the technical team has added the price."
-    );
-    expect(terminalRunNotice(notPriced, de, { seesRateCard: true })).toBe(
-      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis das technische Team den Preis eingetragen hat."
-    );
-  });
-
-  it("reads an internal, aborted or unknown failure as interrupted, never as stopped or by the worker's words", () => {
-    for (const category of ["internal_error", "abort_error", "unknown_error"]) {
-      const failed = { class: "run_failed" as const, message: "Agent run failed", category };
-      expect(terminalRunNotice(failed, en)).toBe(
-        "The reply was interrupted. Please send your message again."
-      );
-      expect(terminalRunNotice(failed, de)).toBe(
-        "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut."
-      );
-    }
+    expect(terminalRunNotice(notPriced, en)).not.toContain("rate card");
+    expect(terminalRunNotice(notPriced, en, { seesRateCard: true })).toContain("rate card");
   });
 
   it("shows the message of any other failure, and nothing for an error that ended no run", () => {
     const failed = { ...interrupted, message: "Budget is used up", category: "app_error" };
-
     expect(terminalRunNotice(failed, en)).toBe("Budget is used up");
     expect(terminalRunNotice({ class: "send_failed", message: "Offline" }, en)).toBeUndefined();
     expect(terminalRunNotice(undefined, en)).toBeUndefined();

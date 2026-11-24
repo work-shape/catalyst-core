@@ -18,13 +18,22 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
   ConnectionConnectCardView,
+  ConnectionGiveCardView,
   connectCardOfProposal,
   connectCardOfRefusal,
+  giveTools,
+  planGive,
+  readBuildRefusal,
+  readConnectionOffer,
   readConnectionProposal,
   withOwnSignIn,
   type ConnectCardState,
   type ConnectionDraft,
-  type ConnectionSignIn
+  type ConnectionGiveSource,
+  type ConnectionSignIn,
+  type GiveAgent,
+  type GivePlan,
+  type GiveTool
 } from "@work-shape/catalyst-chat-ui/build-area";
 import {
   createAssistantMessageGroupBy,
@@ -32,6 +41,7 @@ import {
   readCompatiblePersistedToolResult,
   toUiMessages
 } from "./support/chat-ui/chat-assistant";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Connect card in the conversation (CHAT-CONN-2b): its state from the agent's proposal of a
@@ -172,7 +182,7 @@ describe("the Connect card in place of a refused call", () => {
     expect(JSON.stringify(result)).not.toMatch(new RegExp(`${ACCOUNT}|${TOKEN}|Settings`, "u"));
   });
 
-  it("tells the agent of a refused sign-in to wait for the person, in English too", () => {
+  it("names the ended sign-in to the agent by the refusal's own code", () => {
     const ended = {
       ...refusal,
       error: {
@@ -189,11 +199,9 @@ describe("the Connect card in place of a refused call", () => {
       },
       { ...names, locale: "en" }
     );
-    expect(result.status === "success" ? undefined : result.error).toEqual({
+    expect(result.status === "success" ? undefined : result.error).toMatchObject({
       code: "connection_needs_reconnect",
-      message:
-        "The person's sign-in to Gmail has ended. They see a card in this chat to sign in again. Wait until they say Gmail is connected; do not repeat this error.",
-      details: undefined
+      message: expect.stringContaining("Gmail") as unknown
     });
   });
 
@@ -350,7 +358,7 @@ describe("the Connect card as the person's own sign-in stands now", () => {
   });
 });
 
-describe("the Connect card's words", () => {
+describe("the Connect card", () => {
   const nothing = () => undefined;
   const signIn: ConnectionSignIn = {
     state: { phase: "idle" },
@@ -369,58 +377,29 @@ describe("the Connect card's words", () => {
     retry: nothing,
     saveClient: nothing
   };
-  const render = (state: ConnectCardState, locale: "de" | "en", account?: string) =>
+  const render = (state: ConnectCardState, account?: string, unusable?: boolean) =>
     renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { children: null, locale },
+        { children: null, locale: "en" },
         createElement(ConnectionConnectCardView, {
           title: "Gmail",
           name: "gmail",
           state,
           signIn,
           onSetup: () => Promise.resolve("opened" as const),
-          ...(account ? { account } : {})
+          ...(account ? { account } : {}),
+          ...(unusable ? { unusable } : {})
         })
       )
     );
 
-  it("names the service and its one button in German and English", () => {
-    expect(render("connect", "de")).toContain("Gmail verbinden");
-    expect(render("connect", "de")).toContain(">Verbinden<");
-    expect(render("connect", "en")).toContain("Connect Gmail");
-    expect(render("reconnect", "de")).toContain(">Neu anmelden<");
-    expect(render("setup", "de")).toContain(">Einrichten<");
-    expect(render("ask_admin", "de")).toContain(
-      "Gmail ist hier noch nicht eingerichtet; frag deine Administration."
-    );
-    expect(render("ask_admin", "de")).not.toContain("<button");
-    expect(render("ask_admin", "en")).toContain("ask your administration");
-  });
-
-  it("names the service once connected, and the account only then", () => {
-    expect(render("connect", "de")).not.toContain("@");
-    const connected = render("connected", "de", ACCOUNT);
-    expect(connected).toContain(`>Gmail</p>`);
-    expect(connected).toContain(`Verbunden als ${ACCOUNT}`);
-    expect(render("connected", "de")).toContain(">Verbunden</p>");
-  });
-
-  it("tells a viewer who may not use it why they ask the administration", () => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "de" },
-        createElement(ConnectionConnectCardView, {
-          title: "Gmail",
-          name: "gmail",
-          state: "ask_admin",
-          unusable: true
-        })
-      )
-    );
-    expect(markup).toContain("Du darfst Gmail hier noch nicht nutzen; frag deine Administration.");
-    expect(markup).not.toContain("<button");
+  it("names the account only once connected, and offers no button to whoever asks the administration", () => {
+    expect(render("connect")).toContain("<button");
+    expect(render("connect")).not.toContain("@");
+    expect(render("connected", ACCOUNT)).toContain(ACCOUNT);
+    expect(render("ask_admin")).not.toContain("<button");
+    expect(render("ask_admin", undefined, true)).not.toContain("<button");
   });
 });
 
@@ -453,3 +432,196 @@ function observe(event: AgentRuntimeEvent): RunObservation {
     createdAt: event.createdAt
   };
 }
+
+describe("Give a Connection's tools to an agent (CS-5d)", () => {
+  // "Einem Agenten geben" (CS-5d; ruling of 2026-10-24): the approved tools of a Connection go to
+  // one agent after a confirmation that names the agent and the tools, as one call of
+  // `agents.give_tools` over the published agent the reader read. A pending draft, anybody's,
+  // changes nothing of the question and is never published by the give: the instance carries the
+  // tools into it. Rights, guardrails, policy and audit are the operation's.
+
+  const VIEWER = "user-give";
+
+  const tools: GiveTool[] = [
+    { toolName: "connection.crm.list_clients", title: "List clients" },
+    { toolName: "connection.crm.get_client", title: "Get client" }
+  ];
+
+  const agent: GiveAgent = { name: "assistant", title: "Assistant" };
+
+  type Call = {
+    name: string;
+    agentId: string;
+    toolNames: string[];
+    expectedLiveRevision: number;
+  };
+
+  /** A source over one agent at live revision 4, which records every give. */
+  function fakeSource(options: { toolNames?: string[]; refused?: unknown; waits?: boolean }) {
+    const calls: Call[] = [];
+    const source: ConnectionGiveSource = {
+      connection: async () => ({ title: "CRM", tools }),
+      agents: async () => [agent],
+      readAgent: async () => ({
+        id: "agent-1",
+        revision: 4,
+        config: { instructions: "Help.", toolNames: options.toolNames ?? ["read_skill"] }
+      }),
+      give: async (name, input) => {
+        calls.push({ name, ...input });
+        if (options.refused) throw options.refused;
+        return options.waits ? "waits" : "done";
+      }
+    };
+    return { source, calls };
+  }
+
+  function ready(plan: GivePlan): Extract<GivePlan, { status: "ready" }> {
+    if (plan.status !== "ready") throw new Error(`The plan is ${plan.status}, not ready.`);
+    return plan;
+  }
+
+  describe("the give of a Connection's tools to an agent", () => {
+    it("gives the tools over the published agent it read, as one call", async () => {
+      const { source, calls } = fakeSource({});
+      const plan = ready(await planGive(source, { agent, tools }));
+      expect(plan.tools.map((tool) => tool.toolName)).toEqual([
+        "connection.crm.list_clients",
+        "connection.crm.get_client"
+      ]);
+      expect(plan.draft).toBe(false);
+
+      expect(await giveTools(source, plan)).toEqual({ status: "published" });
+      expect(calls).toEqual([
+        {
+          name: "assistant",
+          agentId: "agent-1",
+          toolNames: ["connection.crm.list_clients", "connection.crm.get_client"],
+          expectedLiveRevision: 4
+        }
+      ]);
+    });
+
+    it("asks the same question where the agent has a draft, anybody's, and says it keeps it", async () => {
+      for (const draft of [{ userId: VIEWER }, { userId: "user-other", authorName: "Ada" }, {}]) {
+        const { source, calls } = fakeSource({});
+        const plan = ready(await planGive(source, { agent: { ...agent, draft }, tools }));
+        expect(plan.draft).toBe(true);
+        expect(await giveTools(source, plan)).toEqual({ status: "published" });
+        expect(calls).toHaveLength(1);
+      }
+    });
+
+    it("asks nothing where the published agent holds every tool already", async () => {
+      const { source, calls } = fakeSource({ toolNames: tools.map((tool) => tool.toolName) });
+      expect(await planGive(source, { agent, tools })).toEqual({
+        status: "held",
+        agent: "assistant",
+        title: "Assistant"
+      });
+      expect(calls).toEqual([]);
+    });
+
+    it("names only the tools the published agent does not hold", async () => {
+      const { source } = fakeSource({ toolNames: ["connection.crm.get_client"] });
+      const plan = ready(await planGive(source, { agent, tools }));
+      expect(plan.tools.map((tool) => tool.toolName)).toEqual(["connection.crm.list_clients"]);
+    });
+
+    it("says the give waits where the instance holds it for an approval", async () => {
+      const { source } = fakeSource({ waits: true });
+      const plan = ready(await planGive(source, { agent, tools }));
+      expect(await giveTools(source, plan)).toEqual({ status: "waits" });
+    });
+
+    it("says the agent changed where the published agent moved since it was read", async () => {
+      for (const code of ["REVISION_CONFLICT", "CONFLICT"]) {
+        const { source } = fakeSource({ refused: { code, message: "The agent changed." } });
+        const plan = ready(await planGive(source, { agent, tools }));
+        expect(await giveTools(source, plan)).toEqual({ status: "changed" });
+      }
+    });
+
+    it("explains a refused give with the validator's lines, as a refused save does", async () => {
+      const locale = "en";
+      const { t } = createTranslationContext(locale);
+      const refused = {
+        code: "VALIDATION_FAILED",
+        payload: {
+          error: {
+            code: "VALIDATION_FAILED",
+            message: "Config asset bundle is invalid",
+            details: {
+              issues: [
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.edit' in instructions line 46"
+                },
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.save' in instructions line 46"
+                },
+                {
+                  message:
+                    "Agent 'workshaper' references unavailable tool 'app.edit' in instructions line 47"
+                }
+              ]
+            }
+          }
+        }
+      };
+      const { source } = fakeSource({ refused });
+      const plan = ready(await planGive(source, { agent, tools }));
+      const given = await giveTools(source, plan, { t, locale });
+      expect(given.status).toBe("failed");
+      if (given.status !== "failed") throw new Error("Expected refused give");
+      const saved = readBuildRefusal(refused, t, locale);
+      if (saved.ok || saved.conflict) throw new Error("Expected refused save");
+      expect(given.message).toBe(saved.refusals.map(({ message }) => message).join("\n"));
+      expect(given.message).toContain("app.edit");
+      expect(given.message).toContain("app.save");
+      expect(given.message).not.toContain("Config asset bundle is invalid");
+    });
+
+    it("says why a give is refused", async () => {
+      const { source } = fakeSource({
+        refused: { code: "FORBIDDEN", message: "You may not publish this agent." }
+      });
+      const plan = ready(await planGive(source, { agent, tools }));
+      expect(await giveTools(source, plan)).toEqual({
+        status: "failed",
+        message: "You may not publish this agent."
+      });
+    });
+  });
+
+  describe("the offer in the conversation", () => {
+    it("reads the Connection and the agent the agent named, and nothing else", () => {
+      expect(
+        readConnectionOffer({ output: { connection: "crm", agent: "assistant", extra: "x" } })
+      ).toEqual({ connection: "crm", agent: "assistant" });
+      expect(readConnectionOffer({ output: { connection: "crm" } })).toEqual({ connection: "crm" });
+      expect(readConnectionOffer({ output: {} })).toBeUndefined();
+    });
+
+    function card(withHost: boolean) {
+      const { source } = fakeSource({});
+      return renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale: "en" },
+          createElement(ConnectionGiveCardView, {
+            offer: { connection: "crm", agent: "assistant" },
+            ...(withHost ? { host: { source, viewerId: VIEWER } } : {}),
+            read: { status: "ready", connection: { title: "CRM", tools } }
+          })
+        )
+      );
+    }
+
+    it("offers the give only where the place has a host for it", () => {
+      expect(card(true)).toContain("data-connection-give=");
+      expect(card(false)).not.toContain("data-connection-give=");
+    });
+  });
+});

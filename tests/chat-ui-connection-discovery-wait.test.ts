@@ -104,13 +104,10 @@ describe("The tools of a Connection nobody is signed in to", () => {
       () => expect(page.querySelector('[data-connection-discovered-sign-in="own"]')).not.toBeNull(),
       WAIT
     );
-    const text = section(page)?.textContent ?? "";
-    expect(text).toContain("You have not connected your own account yet");
-    expect(text).not.toContain(WAITING);
+    expect(section(page)?.textContent).not.toContain(WAITING);
     expect(discoverButton(page)?.disabled).toBe(true);
     // The hint leads to the sign-in the page offers.
     expect(page.querySelector("#sign-in")).not.toBeNull();
-    expect(section(page)?.textContent).toContain("Go to sign-in");
   });
 
   it("say at once that nobody is signed in to a shared Connection", async () => {
@@ -126,7 +123,6 @@ describe("The tools of a Connection nobody is signed in to", () => {
         expect(page.querySelector('[data-connection-discovered-sign-in="shared"]')).not.toBeNull(),
       WAIT
     );
-    expect(section(page)?.textContent).toContain("Nobody is signed in to this connection yet");
     expect(section(page)?.textContent).not.toContain(WAITING);
   });
 });

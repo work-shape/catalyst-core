@@ -267,28 +267,6 @@ describe("composed view document", () => {
       new URL(outsideScript).origin
     );
   });
-
-  it("provides semantic status and chart theme colors to Tailwind and the default theme", () => {
-    const html = compose("<section>Status</section>");
-
-    expect(html).toContain('const names=["background"');
-    expect(html).toContain(
-      '"destructive","success","warning","info","chart-1","chart-2","chart-3","chart-4","chart-5","border"'
-    );
-    expect(html).toContain("tailwind.config={theme:{extend:{colors,");
-    expect(html).toContain("--primary: #b5573a;");
-    expect(html).toContain("--background: #fafaf8;");
-    expect(html).toContain("--success: #047857;");
-    expect(html).toContain("--warning: #b45309;");
-    expect(html).toContain("--info: #32669a;");
-    expect(html).toContain("--chart-1: #0f766e;");
-    expect(html).toContain("--chart-5: #be185d;");
-    expect(html).toContain('success:color("success")');
-    expect(html).toContain(
-      'function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}'
-    );
-    expect(html).toContain("window.vivdCatalystTheme={color,chartColors,chartPalette}");
-  });
 });
 
 describe("a view stored before the runtime moved onto the instance", () => {

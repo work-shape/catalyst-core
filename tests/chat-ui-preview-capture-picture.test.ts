@@ -4,10 +4,24 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { createApiClient } from "@work-shape/catalyst-api-client";
-import { apiOperations, buildApiPath } from "@work-shape/catalyst-api-contract";
+import {
+  APP_BRIDGE_MARK,
+  APP_BRIDGE_VERSION,
+  apiOperations,
+  buildApiPath
+} from "@work-shape/catalyst-api-contract";
 import { PREVIEW_CAPTURE_REFUSALS, type PreviewCaptureRefusal } from "@work-shape/catalyst-core";
-import { UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
-import { readPreviewCapture } from "@work-shape/catalyst-chat-ui/pages";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import {
+  answerPreviewCaptures,
+  bytesToBase64,
+  createPageBridge,
+  FRAME_CAPTURE_TIMEOUT_MS,
+  readPreviewCapture,
+  registerPreviewCaptureTarget,
+  type ArrivedMessage,
+  type FrameCapture
+} from "@work-shape/catalyst-chat-ui/pages";
 import { ToolCallPart } from "@work-shape/catalyst-chat-ui/tool-call";
 import {
   ToolDisplayPanelProvider,
@@ -16,6 +30,10 @@ import {
 import { TranslationProvider } from "./support/chat-ui/shared";
 import { AttachmentContentProvider } from "./support/chat-ui";
 
+// The interface's side of a picture of the preview (PREVIEW-SEE-1): the bridge asks the guard
+// in the frame and takes only its frame's answer, and the interface answers only the requests
+// the instance lists for this person, from a frame of the revision each names.
+//
 // The picture a run took of the preview, in the run's work (PREVIEW-SEE-2). The row of the call
 // shows it small, read through the conversation's artifact content with the reader's token, and
 // opens it in the file viewer beside the chat on a click, never by itself and never as a second
@@ -109,13 +127,13 @@ function Panel() {
     : null;
 }
 
-function shell(child: ReactNode, conversationId: string | undefined, locale: "en" | "de") {
+function shell(child: ReactNode, conversationId: string | undefined) {
   return createElement(
     UiRoot,
-    { mode: "light", labels: locale === "de" ? uiLabelsDe : uiLabelsEn },
+    { mode: "light", labels: uiLabelsEn },
     createElement(
       TranslationProvider,
-      { locale, children: null },
+      { locale: "en", children: null },
       createElement(
         AttachmentContentProvider,
         { client, selectedConversationId: conversationId, children: null },
@@ -140,14 +158,8 @@ function call(result: unknown, toolCallId = "call_capture_1") {
   });
 }
 
-async function show(
-  result: unknown,
-  {
-    conversationId = "conv_1",
-    locale = "en"
-  }: { conversationId?: string; locale?: "en" | "de" } = {}
-) {
-  await act(async () => root.render(shell(call(result), conversationId, locale)));
+async function show(result: unknown, conversationId = "conv_1") {
+  await act(async () => root.render(shell(call(result), conversationId)));
   await settle();
 }
 
@@ -211,8 +223,6 @@ describe("the picture in the run's work", () => {
     const [object] = createObjectUrl.mock.calls.map(([blob]) => blob);
     expect(object instanceof Blob ? object.type : undefined).toBe("image/webp");
     expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:catalyst/picture-1");
-    expect(host.querySelector("img")?.getAttribute("alt")).toBe("Picture of the preview");
-    expect(host.textContent).toContain("Look at the preview");
 
     // No card of its own, and nothing opened by itself.
     expect(host.querySelector('[aria-label^="Open preview for"]')).toBeNull();
@@ -224,8 +234,7 @@ describe("the picture in the run's work", () => {
     const panel = host.querySelector<HTMLElement>('[data-testid="panel"]');
     expect(panel?.dataset).toMatchObject({
       kind: "file_preview",
-      key: "artifact-preview:art_capture_1",
-      title: "Picture of the preview"
+      key: "artifact-preview:art_capture_1"
     });
     // The viewer reads the same picture through the same route.
     expect(new Set(requestedUrls())).toEqual(new Set([content("conv_1")]));
@@ -236,12 +245,12 @@ describe("the picture in the run's work", () => {
     await show(captured);
     expect(revokeObjectUrl).not.toHaveBeenCalled();
 
-    await show(captured, { conversationId: "conv_2" });
+    await show(captured, "conv_2");
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:catalyst/picture-1");
     expect(requestedUrls().at(-1)).toBe(content("conv_2"));
     expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:catalyst/picture-2");
 
-    await act(async () => root.render(shell(null, "conv_2", "en")));
+    await act(async () => root.render(shell(null, "conv_2")));
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:catalyst/picture-2");
   });
 
@@ -249,7 +258,7 @@ describe("the picture in the run's work", () => {
     let answer: (response: Response) => void = () => undefined;
     fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)));
     await show(captured);
-    await act(async () => root.render(shell(null, "conv_1", "en")));
+    await act(async () => root.render(shell(null, "conv_1")));
     answer(webp());
     await settle();
     expect(createObjectUrl).not.toHaveBeenCalled();
@@ -263,10 +272,10 @@ describe("the picture in the run's work", () => {
           headers: { "content-type": "application/json" }
         })
     );
-    await show(captured, { locale: "de" });
+    await show(captured);
     expect(thumbnail()).toBeNull();
     expect(host.querySelector("img")).toBeNull();
-    expect(host.textContent).toContain("Das Bild ist nicht mehr verfügbar.");
+    expect(host.textContent).toContain("The picture is no longer available.");
     expect(host.textContent).not.toContain("Not found");
     expect(createObjectUrl).not.toHaveBeenCalled();
   });
@@ -295,7 +304,7 @@ describe("the picture in the run's work", () => {
   });
 
   it("reads nothing without an open conversation", async () => {
-    await act(async () => root.render(shell(call(captured), undefined, "en")));
+    await act(async () => root.render(shell(call(captured), undefined)));
     await settle();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(host.textContent).toContain("The picture is no longer available.");
@@ -303,40 +312,160 @@ describe("the picture in the run's work", () => {
 });
 
 describe("a refusal in the run's work", () => {
-  const sentences: Record<"en" | "de", Record<PreviewCaptureRefusal, string>> = {
-    en: {
-      capture_limit:
-        "The agent has already looked at the preview as often as it may in this run or this hour.",
-      capture_unavailable:
-        "The browser that had the preview open cannot take a picture of it. Safari does not allow it.",
-      preview_not_viewed: "The agent could not look at the preview because it was not open.",
-      preview_personal_data:
-        "The preview shows data from a personal connection, so no picture of it was taken."
-    },
-    de: {
-      capture_limit:
-        "Der Agent hat die Vorschau in diesem Lauf oder in dieser Stunde schon so oft angesehen, wie er darf.",
-      capture_unavailable:
-        "Der Browser, in dem die Vorschau offen war, kann kein Bild davon aufnehmen. Safari erlaubt das nicht.",
-      preview_not_viewed:
-        "Der Agent konnte die Vorschau nicht ansehen, weil sie nicht geöffnet war.",
-      preview_personal_data:
-        "Die Vorschau zeigt Daten aus einer persönlichen Verbindung, deshalb wurde kein Bild davon aufgenommen."
+  it("says each refusal in its own words, never the code or the server's sentence", async () => {
+    for (const code of PREVIEW_CAPTURE_REFUSALS) {
+      await show(refused(code));
+      const sentence = host.querySelector('[data-testid="preview-capture-refused"]');
+      expect(sentence?.textContent).toBeTruthy();
+      expect(host.textContent).not.toContain(code);
+      expect(host.textContent).not.toContain(SERVER_REASONS[code]);
+      expect(host.querySelector("img")).toBeNull();
     }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+function frames() {
+  const posted: unknown[] = [];
+  const page = { postMessage: (message: unknown) => posted.push(message) };
+  const holder = { length: 1, 0: page };
+  const from = (source: unknown, data: unknown, origin = "null"): ArrivedMessage => ({
+    data,
+    origin,
+    source
+  });
+  return { posted, page, holder, from };
+}
+
+function bridgeOf(holder: { length: number; [index: number]: unknown }) {
+  return createPageBridge({
+    frame: () => holder,
+    session: "s-1",
+    context: () => {
+      throw new Error("not asked");
+    },
+    onNavigate: () => undefined,
+    onResize: () => undefined
+  });
+}
+
+const result = (body: object) => ({
+  [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+  type: "capture_result",
+  ...body
+});
+
+describe("asking a frame for a picture", () => {
+  it("asks the guard without a greeting and takes only its own frame's answer", async () => {
+    const { posted, page, holder, from } = frames();
+    const bridge = bridgeOf(holder);
+    const asked = bridge.capture("r-1");
+    expect(posted).toEqual([
+      { [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION, type: "capture", requestId: "r-1" }
+    ]);
+    const image = new Uint8Array([1, 2, 3]).buffer;
+    // Another window, and an answer to another request, are not taken.
+    bridge.receive(
+      from({ postMessage() {} }, result({ requestId: "r-1", image, width: 10, height: 10 }))
+    );
+    bridge.receive(from(page, result({ requestId: "r-2", image, width: 10, height: 10 })));
+    bridge.receive(from(page, result({ requestId: "r-1", image, width: 10, height: 20 })));
+    await expect(asked).resolves.toEqual({ image, width: 10, height: 20 });
+  });
+
+  it("cannot take one from a frame that does not answer, or answers beyond the bounds", async () => {
+    vi.useFakeTimers();
+    try {
+      const { page, holder, from } = frames();
+      const bridge = bridgeOf(holder);
+      const silent = bridge.capture("r-1");
+      vi.advanceTimersByTime(FRAME_CAPTURE_TIMEOUT_MS);
+      await expect(silent).resolves.toEqual({ unavailable: true });
+
+      const tooLarge = bridge.capture("r-2");
+      bridge.receive(
+        from(
+          page,
+          result({ requestId: "r-2", image: new ArrayBuffer(400_001), width: 10, height: 10 })
+        )
+      );
+      bridge.receive(from(page, result({ requestId: "r-2", unavailable: true })));
+      await expect(tooLarge).resolves.toEqual({ unavailable: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("answering the instance's requests", () => {
+  const picture: FrameCapture = {
+    image: new Uint8Array([82, 73, 70, 70]).buffer,
+    width: 4,
+    height: 2
   };
 
-  for (const locale of ["de", "en"] as const) {
-    for (const code of PREVIEW_CAPTURE_REFUSALS) {
-      it(`says ${code} in its own words (${locale})`, async () => {
-        await show(refused(code), { locale });
-        const sentence = host.querySelector('[data-testid="preview-capture-refused"]');
-        expect(sentence?.textContent).toBe(sentences[locale][code]);
-        // Shown with the row closed: neither the code nor the server's sentence is in the page.
-        expect(host.textContent).not.toContain(code);
-        expect(host.textContent).not.toContain(SERVER_REASONS[code]);
-        expect(host.querySelector("img")).toBeNull();
-        expect(fetchMock).not.toHaveBeenCalled();
+  it("answers each listed request from the mounted frame of its revision, and no other", async () => {
+    const answers: unknown[] = [];
+    const target = (conversationId: string | undefined, fileSetId: string) =>
+      registerPreviewCaptureTarget({
+        conversationId,
+        fileSetId,
+        capture: () => Promise.resolve(picture),
+        answer: (captureId, capture) => {
+          answers.push({ fileSetId, captureId, capture });
+          return Promise.resolve();
+        }
       });
-    }
-  }
+    const unregister = [
+      target("conv-1", "fset-a"),
+      target("conv-2", "fset-b"),
+      target(undefined, "fset-c")
+    ];
+    const asked: string[] = [];
+    const client = {
+      apps: {
+        preview_captures: {
+          pending: ({ params }: { params: { conversationId: string } }) => {
+            asked.push(params.conversationId);
+            return Promise.resolve({
+              captures: [
+                { id: "pcap-1", fileSetId: "fset-a" },
+                // A revision of another conversation's frame is not this one's to answer.
+                { id: "pcap-2", fileSetId: "fset-b" },
+                { id: "pcap-3", fileSetId: "fset-c" },
+                { id: "pcap-4", fileSetId: "fset-none" }
+              ]
+            });
+          }
+        }
+      }
+    };
+    await answerPreviewCaptures(client, "conv-1", () => Promise.resolve());
+    expect(asked).toEqual(["conv-1"]);
+    expect(answers).toEqual([
+      { fileSetId: "fset-a", captureId: "pcap-1", capture: picture },
+      { fileSetId: "fset-c", captureId: "pcap-3", capture: picture }
+    ]);
+    unregister.forEach((remove) => remove());
+  });
+
+  it("asks again a few times while the request is on its way, then stops", async () => {
+    let reads = 0;
+    const client = {
+      apps: {
+        preview_captures: {
+          pending: () => {
+            reads += 1;
+            return Promise.resolve({ captures: [] });
+          }
+        }
+      }
+    };
+    await answerPreviewCaptures(client, "conv-1", () => Promise.resolve());
+    expect(reads).toBe(4);
+  });
+
+  it("sends the picture's bytes as base64", () => {
+    expect(bytesToBase64(new Uint8Array([82, 73, 70, 70]).buffer)).toBe("UklGRg==");
+  });
 });

@@ -48,7 +48,7 @@ export function BuildUnoffered() {
 }
 
 /** Try while the instance opens its conversation, or after that failed. */
-export function TryOpening({ failed, onRetry }: { failed: boolean; onRetry(): void }) {
+function TryOpening({ failed, onRetry }: { failed: boolean; onRetry(): void }) {
   const { t } = useTranslation();
   return (
     <div className="grid h-full place-items-center px-5" data-testid="try-opening">

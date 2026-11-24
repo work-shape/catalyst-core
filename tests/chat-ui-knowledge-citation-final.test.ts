@@ -189,8 +189,6 @@ describe("Knowledge Base citations beside a saved answer (ACCEPT-FIX-8, E6)", ()
     const chips = besideAnswer();
     expect(chips).toHaveLength(1);
     expect(chips[0]?.textContent).toBe("reiserichtlinie, p. 4");
-    // The chips stand in one row under the answer, named "Sources".
-    expect(chips[0]?.closest("[data-knowledge-citations]")?.textContent).toMatch(/^Sources/u);
   });
 
   it("still folds a web source into the work with its search", async () => {

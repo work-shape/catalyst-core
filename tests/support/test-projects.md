@@ -18,9 +18,7 @@ probe `workflow-worker-kill.test.ts` runs only in `vitest.probes.config.ts`.
 
 These pure files use module mocks and therefore remain isolated:
 
-- `chat-ui-conversation-palette.test.ts`
-- `chat-ui-right-verb-words.test.ts`
-- `chat-ui-user-menu.test.ts`
+- `chat-ui-rights-words.test.ts`
 - `chat-ui-workflow-run-steps.test.ts`
 - `config-cli-skill-pull.test.ts`
 - `e2e-instance-turn.test.ts`
@@ -61,7 +59,6 @@ these calls through helpers. The current writers are:
 
 - `chat-ui-connection-draft-approval.test.ts`
 - `chat-ui-connection-draft.test.ts`
-- `chat-ui-connection-proposal.test.ts`
 - `chat-ui-connection-refusals.test.ts`
 - `chat-ui-shell-session.test.ts`
 

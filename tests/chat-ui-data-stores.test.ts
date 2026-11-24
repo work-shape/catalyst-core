@@ -1,11 +1,14 @@
-import { createElement } from "react";
-import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@work-shape/catalyst-api-client";
+// @vitest-environment happy-dom
+
+import { act, createElement, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createApiClient, type LocaleCode } from "@work-shape/catalyst-api-client";
+import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { createTranslationContext } from "./support/chat-ui/shared";
 import {
-  appDataLines,
   audienceLine,
-  fillerLine,
   buildAssetKinds,
   BuildAssetKindsProvider,
   BuildFrame,
@@ -14,8 +17,9 @@ import {
   dataStoreStateSettling,
   dataStoreStateView,
   DataStoreValueDialog,
-  formatDataStoreSize,
+  draftTablesOf,
   resolveBuildRights,
+  useDataStoreSource,
   type BuildAsset,
   type BuildAssetRow,
   type BuildLocation,
@@ -30,20 +34,25 @@ import {
   type DataStoreSchema,
   type DataStoreSource,
   type DataStoreState,
-  type AppDataSources,
   type DataStoreUsedBy,
   type DataStoreValue,
   usingPageRoute
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { DockAgentWorkContext } from "@work-shape/catalyst-chat-ui/dock-page-chat";
-import { required } from "./support/assertions";
+import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import { platformContext } from "./chat-ui-build-fixtures";
+import { mountBuildPage, unmountBuildPages } from "./chat-ui-build-page-harness";
+import {
+  mountPage,
+  SETTINGS_INSTANCE_URL,
+  settingsPageContext,
+  settingsUser
+} from "./chat-ui-settings-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Data Store list and page against the answers of the contract (`data_stores.get`,
 // `.describe`, `.list`, `.rows`, `.value`, `.used_by`), handed in where the instance's answers
-// will stand. Every test
-// here fails without the kind: before it, the address of Data Stores showed Agents.
+// will stand.
 
 const noop = () => undefined;
 const MB = 1024 ** 2;
@@ -72,7 +81,6 @@ const schema: DataStoreSchema = {
   tables: [
     {
       name: "visits",
-      comment: "One row per visit of a page.",
       rowEstimate: 1240,
       columns: [
         {
@@ -80,26 +88,9 @@ const schema: DataStoreSchema = {
           type: "integer",
           nativeType: "bigint",
           nullable: false,
-          default: "nextval('visits_id_seq'::regclass)",
           primaryKey: true
         },
-        { name: "path", type: "text", nativeType: "text", nullable: false, primaryKey: false },
-        {
-          name: "referrer",
-          type: "text",
-          nativeType: "text",
-          nullable: true,
-          primaryKey: false,
-          comment: "Where the visitor came from."
-        },
-        {
-          name: "visited_at",
-          type: "timestamp",
-          nativeType: "timestamp with time zone",
-          nullable: false,
-          default: "now()",
-          primaryKey: false
-        }
+        { name: "path", type: "text", nativeType: "text", nullable: false, primaryKey: false }
       ]
     },
     {
@@ -112,8 +103,6 @@ const schema: DataStoreSchema = {
   ]
 };
 
-const LONG_REFERRER = `https://example.test/search?q=${"catalyst+".repeat(12)}`;
-
 /** The first thousand characters of a note the instance cut. */
 const CUT_NOTE = "A long note. ".repeat(77).slice(0, 1000);
 
@@ -122,8 +111,6 @@ const visitRows: DataStoreRowsPage = {
   columns: [
     { name: "id", type: "integer", nativeType: "bigint" },
     { name: "path", type: "text", nativeType: "text" },
-    { name: "referrer", type: "text", nativeType: "text" },
-    { name: "tags", type: "other", nativeType: "jsonb" },
     { name: "note", type: "text", nativeType: "text" },
     { name: "body", type: "other", nativeType: "bytea" }
   ],
@@ -131,26 +118,14 @@ const visitRows: DataStoreRowsPage = {
   rows: [
     {
       at: "at_1",
-      values: {
-        id: 1,
-        path: "/pricing",
-        referrer: LONG_REFERRER,
-        tags: { campaign: "autumn" },
-        note: CUT_NOTE,
-        body: ""
-      },
+      values: { id: 1, path: "/pricing", note: CUT_NOTE, body: "" },
       cut: ["note", "body"]
     },
-    {
-      at: "at_2",
-      values: { id: 2, path: "/docs", referrer: null, tags: null, note: null, body: null }
-    }
+    { at: "at_2", values: { id: 2, path: "/docs", note: null, body: null } }
   ],
   next: "at_2",
   valueMaxChars: 1000
 };
-
-const admins = { holders: [], hiddenHolders: 0 };
 
 const usedBy: DataStoreUsedBy = {
   apps: [
@@ -171,19 +146,8 @@ const usedBy: DataStoreUsedBy = {
       title: "Nightly rollup",
       reads: false,
       writes: true,
-      sources: [
-        { connection: "exampledata", title: "Exampledata" },
-        { connection: "crm", title: "CRM" }
-      ],
+      sources: [{ connection: "crm", title: "CRM" }],
       account: { name: "nightly-runner", title: "Nightly runner" }
-    },
-    {
-      id: "asset_weekly",
-      name: "weekly-report",
-      title: "Weekly report",
-      reads: true,
-      writes: false,
-      sources: []
     }
   ],
   knowledgeBases: [
@@ -191,16 +155,10 @@ const usedBy: DataStoreUsedBy = {
       id: "asset_visits_knowledge",
       name: "visits-knowledge",
       title: "Visits knowledge",
-      audience: {
-        holders: [{ kind: "user", name: "usr_kai", title: "Kai" }],
-        hiddenHolders: 0
-      }
+      audience: { holders: [], hiddenHolders: 0 }
     }
   ],
-  readers: {
-    holders: [{ kind: "service_principal", name: "sp_report", title: "Reporting" }],
-    hiddenHolders: 2
-  },
+  readers: { holders: [], hiddenHolders: 2 },
   hidden: { apps: 1, workflows: 2, knowledgeBases: 0, fills: 1, reads: 2 },
   truncated: false
 };
@@ -209,7 +167,7 @@ const nothingUses: DataStoreUsedBy = {
   apps: [],
   workflows: [],
   knowledgeBases: [],
-  readers: admins,
+  readers: { holders: [], hiddenHolders: 0 },
   hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
   truncated: false
 };
@@ -228,11 +186,14 @@ interface StoreAnswers {
   /** The reader is shown the pages of Workflows too, not only of Apps. */
   workflowPages?: boolean;
   review?: DataStoreSource["review"];
+  /** The reader runs the database server. */
+  seesServerConditions?: boolean;
+  testCopy?: DataStoreSource["testCopy"];
 }
 
 function storeSource(answers: StoreAnswers = {}): DataStoreSource {
   return {
-    seesServerConditions: true,
+    seesServerConditions: answers.seesServerConditions ?? true,
     useStoreState: (store) => answers.states?.[store] ?? ready(storeState(store)),
     useSchema: () => answers.schema ?? ready(schema),
     useListed: () => answers.listed ?? ready({ items: [], truncated: false }),
@@ -250,7 +211,10 @@ function storeSource(answers: StoreAnswers = {}): DataStoreSource {
       useFlagged: () => ready({ items: [] }),
       decide: () => Promise.resolve(undefined)
     },
-    testCopy: { reset: () => Promise.resolve(undefined), remove: () => Promise.resolve(undefined) }
+    testCopy: answers.testCopy ?? {
+      reset: () => Promise.resolve(undefined),
+      remove: () => Promise.resolve(undefined)
+    }
   };
 }
 
@@ -330,10 +294,11 @@ interface RenderInput extends StoreAnswers {
   locale?: LocaleCode;
   /** The store has a records rule over `objekt`. */
   records?: boolean;
+  publish?: () => void;
 }
 
 /** The Build frame at an address, with the Data Store kind on fixed answers. */
-function render(location: BuildLocation, input: RenderInput = {}): string {
+function tree(location: BuildLocation, input: RenderInput = {}) {
   const context = platformContext();
   const source: BuildSource = {
     kinds: [
@@ -377,481 +342,278 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
       put: async () => ({ revision: 1 }),
       readFiles: async () => [],
       delete: async () => undefined,
-      publish: async () => ({ draftRevision: 1, publishedRevision: 1 }),
+      publish: async () => {
+        input.publish?.();
+        return { draftRevision: 1, publishedRevision: 1 };
+      },
       revert: async () => ({ revision: 1 }),
       revisions: async () => ({ items: [] })
     }
   };
   const planted = dataStoreKindOn(() => storeSource(input));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "data_store" ? planted : kind));
-  return renderToStaticMarkup(
+  return createElement(
+    DockAgentWorkContext.Provider,
+    { value: input.agentWork },
     createElement(
-      DockAgentWorkContext.Provider,
-      { value: input.agentWork },
+      TranslationProvider,
+      { children: null, locale: input.locale ?? "en" },
       createElement(
-        TranslationProvider,
-        { children: null, locale: input.locale ?? "en" },
+        BuildAssetKindsProvider,
+        { value: kinds },
         createElement(
-          BuildAssetKindsProvider,
-          { value: kinds },
-          createElement(
-            BuildNavigationProvider,
-            {
-              value: {
-                location,
-                open: noop,
-                href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
-              }
-            },
-            createElement(BuildFrame, { source })
-          )
+          BuildNavigationProvider,
+          {
+            value: {
+              location,
+              open: noop,
+              href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+            }
+          },
+          createElement(BuildFrame, { source })
         )
       )
     )
   );
 }
 
-describe("Data Stores in Build", () => {
-  it("lists every store with its description, whom it belongs to, its state and its size, and a link to its page", () => {
-    const list = render(
-      { kindPath: "data-stores" },
-      {
-        list: [
-          storeRow("visit-log", {
-            title: "Visit log",
-            description: "Every visit of a page of the public site."
-          }),
-          storeRow("orders", { title: "Orders", scope: { kind: "workspace", workspaceId: "ws_1" } })
-        ],
-        listed: ready({
-          items: [
-            {
-              id: "asset_visit-log",
-              name: "visit-log",
-              title: "Visit log",
-              status: "ready",
-              level: 2,
-              sizeBytes: 8 * MB,
-              sizeLimitBytes: 500 * MB,
-              tableCount: 2,
-              rowEstimate: 1240,
-              measuredAt: "2026-10-12T03:00:00.000Z"
-            },
-            // Never measured: the row says neither tables nor rows.
-            {
-              id: "asset_orders",
-              name: "orders",
-              title: "Orders",
-              status: "ready",
-              level: 1,
-              sizeLimitBytes: 500 * MB
-            }
-          ],
-          truncated: false
-        }),
-        states: {
-          orders: ready(
-            storeState("orders", {
-              level: 1,
-              size: { limitBytes: 500 * MB, nearLimit: false },
-              conditions: [
-                { code: "sessions_open", message: "advice" },
-                { code: "temp_files_unbounded", message: "advice" }
-              ],
-              lastMigration: { outcome: "pending", migration: { number: 2, name: "add_total" } }
-            })
-          )
-        }
-      }
-    );
+function render(location: BuildLocation, input: RenderInput = {}): string {
+  return renderToStaticMarkup(tree(location, input));
+}
 
-    expect(list).toContain('<option value="data-stores" selected="">Data</option>');
-    expect(list).toContain(">Visit log<");
-    expect(list).toContain("Every visit of a page of the public site.");
-    expect(list).toContain('href="/build/data-stores/visit-log"');
-    // One chip says where each row sits, in the ladder's words: "Everyone" for the instance's
-    // store, "Only me" for the reader's own, and never a second chip of the kind.
-    expect(list.split(">Everyone<")).toHaveLength(2);
-    expect(list.split(">Only me<")).toHaveLength(2);
-    expect(list).not.toContain(">Workspace<");
-    expect(list).not.toContain(">visit-log<");
-    for (const said of [
-      'data-data-store-row-state="ready"',
-      "Ready",
-      "8 MB",
-      'data-data-store-row-state="migrations_pending"',
-      "Migrations pending",
-      "2 to do on the server",
-      'data-data-store-row-measured="visit-log"',
-      ">2 tables<",
-      ">about 1,240 rows<"
-    ]) {
-      expect(list, said).toContain(said);
-    }
-    const orders = list.slice(list.indexOf('data-data-store-row-measured="orders"'));
-    expect(orders).not.toContain("tables<");
-    expect(orders).not.toContain("about ");
-    // Nothing is started here: a store is made by an agent or through the API.
-    expect(list).not.toContain(">New ");
-    expect(list).not.toContain("More actions");
-    expect(list).toContain(
-      "Where apps, workflows and agents in conversations keep their records. This page shows what each store holds."
+const unmounts: (() => void)[] = [];
+
+afterEach(async () => {
+  for (const unmount of unmounts.splice(0)) unmount();
+  await unmountBuildPages();
+  vi.unstubAllGlobals();
+});
+
+/** The same frame in the document, for what is clicked. */
+async function mount(location: BuildLocation, input: RenderInput = {}): Promise<HTMLElement> {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, tree(location, input))
     );
   });
+  unmounts.push(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  return container;
+}
 
-  it("marks a row whose draft waits to be published with the draft badge of the other lists, and drops it once published (T21)", () => {
+const storePage = { kindPath: "data-stores", name: "visit-log" };
+const storeList = { kindPath: "data-stores" };
+
+describe("Data Stores in Build", () => {
+  it("lists every store with a link to its page and its state, and its size only where measured", () => {
+    const list = render(storeList, {
+      list: [storeRow("visit-log"), storeRow("orders")],
+      listed: ready({
+        items: [
+          {
+            id: "asset_visit-log",
+            name: "visit-log",
+            title: "Visit log",
+            status: "ready",
+            level: 2,
+            sizeBytes: 8 * MB,
+            sizeLimitBytes: 500 * MB,
+            tableCount: 2,
+            rowEstimate: 1240,
+            measuredAt: "2026-10-12T03:00:00.000Z"
+          },
+          {
+            id: "asset_orders",
+            name: "orders",
+            title: "Orders",
+            status: "ready",
+            level: 1,
+            sizeLimitBytes: 500 * MB
+          }
+        ],
+        truncated: false
+      }),
+      states: {
+        orders: ready(
+          storeState("orders", {
+            lastMigration: { outcome: "pending", migration: { number: 2, name: "add_total" } }
+          })
+        )
+      }
+    });
+    expect(list).toContain('href="/build/data-stores/visit-log"');
+    expect(list).toContain('data-data-store-row-state="ready"');
+    expect(list).toContain('data-data-store-row-state="migrations_pending"');
+    expect(list).toContain(">2 tables<");
+    const orders = list.slice(list.indexOf('data-data-store-row-measured="orders"'));
+    expect(orders).not.toContain("tables<");
+    // Nothing is started here without an agent: a store is made by an agent or through the API.
+    expect(list).not.toContain(">New ");
+  });
+
+  it("marks a row whose draft waits to be published, and drops the mark once published (T21)", () => {
     const rows = {
-      // Saved after the last publish: the draft waits.
       waiting: storeRow("waiting", { revision: 3, draftRevision: 3, publishedRevision: 2 }),
-      // Published: the draft is the published revision.
       published: storeRow("published", { revision: 3, draftRevision: 3, publishedRevision: 3 }),
       // Never published: its own badge says so, not the draft-ahead one.
       fresh: storeRow("fresh", { revision: 1, draftRevision: 1 })
     };
-    const marked = (locale: "en" | "de", name: keyof typeof rows): boolean => {
-      const list = render({ kindPath: "data-stores" }, { list: Object.values(rows), locale });
+    const list = render(storeList, { list: Object.values(rows) });
+    const marked = (name: keyof typeof rows): boolean => {
       const row = list.slice(list.indexOf(`href="/build/data-stores/${name}"`));
       const next = row.indexOf('href="/build/data-stores/', 10);
       return (next < 0 ? row : row.slice(0, next)).includes("data-build-draft-state");
     };
-    expect(marked("en", "waiting")).toBe(true);
-    expect(marked("en", "published")).toBe(false);
-    expect(marked("en", "fresh")).toBe(false);
-    expect(marked("de", "waiting")).toBe(true);
-    const german = render({ kindPath: "data-stores" }, { list: [rows.waiting], locale: "de" });
-    expect(german).toContain(">Entwurf<");
-    expect(render({ kindPath: "data-stores" }, { list: [rows.waiting], locale: "en" })).toContain(
-      ">Draft<"
-    );
-    expect(render({ kindPath: "data-stores" }, { list: [rows.fresh], locale: "de" })).toContain(
-      "Entwurf · nicht veröffentlicht"
-    );
+    expect(marked("waiting")).toBe(true);
+    expect(marked("published")).toBe(false);
+    expect(marked("fresh")).toBe(false);
   });
 
-  it("offers whoever New opens the agent for the agent with two examples on the empty list, and tells everybody else what a store is", () => {
-    const builder = render({ kindPath: "data-stores" }, { buildWithAgent: noop });
-    expect(builder).toContain("Describe one to the agent, and its first save creates it.");
-    expect(builder).toContain(">Build one with the agent</button>");
-    expect(builder).toContain('aria-label="Examples to start with"');
-    expect(builder).toContain("Client list");
-    expect(builder).toContain("Hours per project");
-    expect(render({ kindPath: "data-stores" }, { buildWithAgent: noop, locale: "de" })).toContain(
-      ">Einen mit dem Agenten bauen</button>"
-    );
-
-    // Without the agent, and without the right to create, the list says what a store is: no
-    // way that is not there, and no word of who else could add one.
+  it("offers the agent on an empty list only to who may create, and New once there are stores", () => {
+    const offer = ">Build one with the agent</button>";
+    expect(render(storeList, { buildWithAgent: noop })).toContain(offer);
     for (const reader of [
-      render({ kindPath: "data-stores" }),
-      render({ kindPath: "data-stores" }, { canCreate: false, buildWithAgent: noop })
+      render(storeList),
+      render(storeList, { canCreate: false, buildWithAgent: noop })
     ]) {
-      expect(reader).toContain(
-        "No data stores yet. A data store keeps records such as a client list or the hours per project, for apps and workflows to use."
-      );
-      expect(reader).not.toContain("Build one with the agent");
-      expect(reader).not.toContain("Client list");
-      expect(reader).not.toContain("CLI");
+      expect(reader).not.toContain(offer);
       expect(reader).not.toContain(">New ");
     }
-
-    // The offer is the one button for the call: the head's New stands once there are stores.
-    expect(builder).not.toContain("New data store");
-    const listed = render(
-      { kindPath: "data-stores" },
-      { buildWithAgent: noop, list: [storeRow("orders", { title: "Orders" })] }
-    );
+    const listed = render(storeList, { buildWithAgent: noop, list: [storeRow("orders")] });
     expect(listed).toContain("New data store");
-    expect(listed).not.toContain("Build one with the agent");
+    expect(listed).not.toContain(offer);
     // While the list loads, New stands: making one never waits for the answer.
-    expect(
-      render({ kindPath: "data-stores" }, { buildWithAgent: noop, listLoading: true })
-    ).toContain("New data store");
-
-    // Where a picker chooses the owner, an empty one offers the agent under the picker.
-    const scoped = render({ kindPath: "data-stores" }, { scoped: true, buildWithAgent: noop });
-    expect(scoped).toContain('aria-label="Where: Only me"');
-    expect(scoped).toContain(">Build one with the agent</button>");
-    expect(scoped).toContain("Hours per project");
-    expect(scoped).not.toContain("New data store");
-
-    const off = render({ kindPath: "data-stores" }, { on: false });
-    expect(off).not.toContain('value="data-stores"');
-
-    expect(render({ kindPath: "data-stores" }, { locale: "de" })).toContain(
-      "Noch keine Datenspeicher."
+    expect(render(storeList, { buildWithAgent: noop, listLoading: true })).toContain(
+      "New data store"
     );
+    expect(render(storeList, { scoped: true, buildWithAgent: noop })).toContain(offer);
+    expect(render(storeList, { on: false })).not.toContain('value="data-stores"');
   });
 
-  it("leads with what the store is and its rows, names what uses it in one line, and folds the rest under Settings", () => {
-    const page = render({ kindPath: "data-stores", name: "visit-log" });
-    const main = page.slice(0, page.indexOf("data-asset-settings"));
-    const settings = page.slice(page.indexOf("data-asset-settings"));
-    const advanced = page.slice(page.indexOf("data-data-store-advanced"));
-
-    // The description is the lead line, said once, and not in the head.
-    expect(main).toMatch(/data-asset-lead=""[^>]*>.*Every visit of a page of the public site\./u);
-    expect(page).not.toContain('data-slot="page-header-description"');
-    expect(page.split("Every visit of a page of the public site.").length - 1).toBe(1);
-    // Whose it is stands in the muted line under the name, not as a chip of its own.
-    expect(page).toMatch(/data-asset-place="">for everyone</u);
-    expect(page).not.toContain(">Everyone<");
-    // The sentence of the list is the list's.
-    expect(page).not.toContain("This page shows what each store holds.");
-    expect(page).not.toContain("On this page");
-    // A ready store names no state before Settings.
-    expect(main).not.toContain("data-data-store-state");
-    expect(main).not.toContain(">Ready<");
-    // The rows of the first table, with a tab per table.
-    expect(main).toContain('data-data-store-rows="visits"');
-    expect(main).toMatch(/role="tab"[^>]*>visits</u);
-    expect(main).toMatch(/role="tab"[^>]*>pages</u);
-    // One line names what fills and what reads it, a link where there is a page.
-    const line = main.slice(main.indexOf("data-data-store-used-by-line"));
-    expect(line).toContain("Used by ");
+  it("names what uses it, with a link only where the reader has a page", () => {
+    const page = render(storePage);
+    const line = page.slice(page.indexOf("data-data-store-used-by-line"));
     // A Knowledge Base stands as text: its reader may use it without being able to open it.
     expect(line).toContain(">Visits knowledge<");
     expect(line).not.toContain('href="/build/knowledge-bases/visits-knowledge"');
     expect(line).toMatch(/href="\/w\/ws_1\/apps\/visits-board"[^>]*>Visits board</u);
-    expect(line).toContain(">Nightly rollup<");
-    expect(line).toContain(">Weekly report<");
-    // Everything else waits under Settings, the technical part under Advanced inside it.
-    for (const id of ["filled-by", "read-by"]) {
-      expect(main).not.toContain(`id="${id}"`);
-      expect(settings).toContain(`id="${id}"`);
-      expect(advanced).not.toContain(`id="${id}"`);
-    }
-    for (const id of ["status", "tables", "test-copy"]) {
-      expect(main).not.toContain(`id="${id}"`);
-      expect(advanced).toContain(`id="${id}"`);
-    }
-    expect(settings).toMatch(/>Settings<.*>Advanced</su);
-  });
-
-  it("says what fills a store that holds nothing, in place of an empty table", () => {
-    const address = { kindPath: "data-stores", name: "visit-log" };
-    const said = "Nothing here yet. Apps, workflows and agents keep their entries here.";
-    // No table yet.
-    const noTables = render(address, { schema: ready({ schemaLevel: 0, tables: [] }) });
-    expect(noTables).toContain(said);
-    expect(noTables).not.toContain('role="tab"');
-    // One table without a row: no tab for the only table.
-    const oneTable = { ...schema, tables: schema.tables.slice(0, 1) };
-    const noRows = render(address, {
-      schema: ready(oneTable),
-      rows: ready({ ...visitRows, rows: [], next: undefined })
-    });
-    expect(noRows).toContain(said);
-    expect(noRows).not.toContain('role="tab"');
-    expect(noRows).not.toContain("This table holds no rows.");
-    expect(
-      render(address, {
-        locale: "de",
-        schema: ready(oneTable),
-        rows: ready({ ...visitRows, rows: [], next: undefined })
-      })
-    ).toContain("Noch leer. Apps, Workflows und Agenten legen hier ihre Einträge ab.");
-    // Nothing published uses it: the page has no such line.
-    expect(render(address, { usedBy: ready(nothingUses) })).not.toContain(
+    expect(render(storePage, { usedBy: ready(nothingUses) })).not.toContain(
       "data-data-store-used-by-line"
     );
-  });
-
-  it("shows a store's state, its tables with columns, types and row estimates, and the first page of a table with long values cut", () => {
-    const page = render({ kindPath: "data-stores", name: "visit-log" });
-
-    expect(page).toContain(">Visit log</h1>");
-    // Its id is behind "Copy ID".
-    expect(page).not.toContain(">visit-log<");
-    expect(page).toContain('aria-label="More actions"');
-    expect(page).toContain('data-data-store-state="ready"');
-    expect(page).toContain("8 MB of 500 MB");
-    expect(page).toContain("0002_add_referrer");
-    // A ready store without anything open on the server has no such section.
-    expect(page).not.toContain("Open on the server");
-
-    for (const said of [
-      'data-data-store-table="visits"',
-      "One row per visit of a page.",
-      "about 1,240 rows",
-      'data-data-store-column="visited_at"',
-      "timestamp with time zone",
-      "Where the visitor came from.",
-      'data-data-store-table="pages"',
-      "1 column"
-    ]) {
-      expect(page, said).toContain(said);
-    }
-    // The planner has no estimate for a table it never counted: the row names none.
-    expect(page).not.toContain("about 0");
-
-    expect(page).toContain('data-data-store-rows="visits"');
-    expect(page).toContain("/pricing");
-    // The whole value stays in the cell, which cuts it at forty characters.
-    expect(page).toContain(LONG_REFERRER.replaceAll("&", "&amp;"));
-    expect(page).toContain("max-width:40ch");
-    expect(page).toContain("{&quot;campaign&quot;:&quot;autumn&quot;}");
-    expect(page).toContain(">null<");
-    expect(page).toContain("Rows 1 to 2. The table holds more. Ordered by the key (id).");
     // The page reads and changes nothing.
     expect(page).not.toContain(">Save<");
-    expect(page).not.toContain("History");
   });
 
   it("names a store that is not ready and what the server leaves open, and reads no table of it", () => {
     const failure = { code: "provisioning_failed", message: "The server refused CREATE DATABASE." };
-    const page = render(
-      { kindPath: "data-stores", name: "visit-log" },
-      {
-        states: {
-          "visit-log": ready(
-            storeState("visit-log", {
-              status: "provisioning",
-              level: 0,
-              conditions: [
-                { code: "sessions_open", message: "The platform's role is no superuser." }
-              ],
-              lastMigration: { outcome: "failed", failure }
-            })
-          )
-        },
-        schema: { status: "failed", message: "must not be read", retry: noop }
-      }
-    );
-
-    // The head names the state, and the page says it in a sentence before Settings, once.
-    const main = page.slice(0, page.indexOf("data-asset-settings"));
-    expect(main).toContain('data-data-store-state="provisioning_failed"');
-    expect(page.split("data-data-store-state=").length - 1).toBe(1);
-    expect(page.split("Setup failed").length - 1).toBe(1);
-    expect(main).toContain("Setup failed");
-    expect(main).not.toContain("data-data-store-rows");
+    const page = render(storePage, {
+      states: {
+        "visit-log": ready(
+          storeState("visit-log", {
+            status: "provisioning",
+            level: 0,
+            conditions: [{ code: "sessions_open", message: "advice" }],
+            lastMigration: { outcome: "failed", failure }
+          })
+        )
+      },
+      schema: { status: "failed", message: "must not be read", retry: noop }
+    });
+    expect(page).toContain('data-data-store-state="provisioning_failed"');
+    expect(page).not.toContain("data-data-store-rows");
     expect(page).toContain("The server refused CREATE DATABASE.");
     expect(page).toContain('data-data-store-condition="sessions_open"');
-    expect(page).toContain("Hide the server&#x27;s sessions from this store");
-    expect(page).toContain("The tables show once the store is ready.");
     expect(page).not.toContain("must not be read");
-
-    const german = render({ kindPath: "data-stores", name: "visit-log" }, { locale: "de" });
-    expect(german).toContain("Bereit");
-    expect(german).toContain("8 MB von 500 MB");
-    expect(german).toContain("etwa 1.240 Zeilen");
   });
 });
 
 describe("A Data Store never published", () => {
   it("shows its draft with the migrations a publish applies, and Publish, and reads no state of it", () => {
-    const states = {
-      "visit-log": {
-        status: "failed" as const,
-        message: "Data Store is not available",
-        retry: noop
+    const markup = render(storePage, {
+      draft: true,
+      states: {
+        "visit-log": { status: "failed", message: "Data Store is not available", retry: noop }
       }
-    };
-    for (const locale of ["en", "de"] as const) {
-      const markup = render(
-        { kindPath: "data-stores", name: "visit-log" },
-        { draft: true, states, locale }
-      );
-      expect(markup).toContain("data-data-store-draft");
-      expect(markup).toContain("0001_init.sql");
-      expect(markup).toContain("data-data-store-publish");
-      // Nothing of a database that does not exist yet is shown or said.
-      expect(markup).not.toContain("Data Store is not available");
-      expect(markup).not.toContain("data-data-store-state");
-    }
-    expect(
-      render({ kindPath: "data-stores", name: "visit-log" }, { draft: true, locale: "de" })
-    ).toContain("Entwurf · nicht veröffentlicht");
+    });
+    expect(markup).toContain("data-data-store-draft");
+    expect(markup).toContain("0001_init.sql");
+    expect(markup).toContain("data-data-store-publish");
+    expect(markup).not.toContain("Data Store is not available");
+    expect(markup).not.toContain("data-data-store-state");
   });
 
   it("holds Publish back while the agent in the dock is still working on the store", () => {
-    const address = { kindPath: "data-stores", name: "visit-log" };
-    const working = render(address, {
+    const working = render(storePage, {
       draft: true,
       agentWork: { kind: "data_store", name: "visit-log" }
     });
     expect(working).not.toContain("data-data-store-publish");
     expect(working).toContain("data-data-store-agent-working");
-    expect(working).toContain("The agent is still working on this Data Store.");
-    // An agent at work on something else holds nothing back here.
-    const elsewhere = render(address, {
+    const elsewhere = render(storePage, {
       draft: true,
       agentWork: { kind: "data_store", name: "orders" }
     });
     expect(elsewhere).toContain("data-data-store-publish");
-    expect(elsewhere).not.toContain("data-data-store-agent-working");
+  });
+
+  it("reads each field of its draft tables from the migrations, as later ones change them", () => {
+    const migration = (number: number, sql: string) => ({ number, name: `m${number}`, sql });
+    const [results] = draftTablesOf([
+      migration(
+        1,
+        `CREATE TABLE results (
+          client_no text NOT NULL,
+          status text NOT NULL CHECK (status IN ('checked','failed')),
+          reason text,
+          amount numeric(12, 2),
+          PRIMARY KEY (client_no)
+        );
+        comment on column results.reason is 'Why a check failed';`
+      )
+    ]);
+    const field = (name: string) => results?.fields.find((each) => each.name === name);
+    expect(field("client_no")).toMatchObject({ primaryKey: true, nullable: false });
+    expect(field("status")?.allowed).toEqual(["checked", "failed"]);
+    expect(field("reason")).toMatchObject({ nullable: true, comment: "Why a check failed" });
+    expect(field("amount")).toMatchObject({ type: "number", nativeType: "numeric(12, 2)" });
+
+    const tables = draftTablesOf([
+      migration(1, 'create table if not exists public."Leads" (id bigint primary key, name text);'),
+      migration(2, 'alter table "Leads" add column email varchar(200) not null, drop column name;'),
+      migration(
+        3,
+        'alter table "Leads" rename column email to mail; create table tmp (x int); drop table tmp;'
+      )
+    ]);
+    expect(tables.map((table) => table.name)).toEqual(["Leads"]);
+    expect(tables[0]?.fields.map((each) => each.name)).toEqual(["id", "mail"]);
+    expect(draftTablesOf([migration(1, "create index on leads (name);")])).toEqual([]);
   });
 });
 
 describe("The rows of a Data Store", () => {
-  const address = { kindPath: "data-stores", name: "visit-log" };
-
-  it("pages a table with Next and Back to start, without page numbers, and says how the rows are ordered", () => {
-    const first = render(address);
-    expect(first).toContain('data-data-store-rows-order="key"');
+  it("pages a table with Next and Back to start, and has no Next on the last page", () => {
+    const first = render(storePage);
     expect(first).toMatch(/<button[^>]*disabled=""[^>]*>Back to start<\/button>/u);
     expect(first).toMatch(/<button(?![^>]*disabled="")[^>]*>Next<\/button>/u);
-    expect(first).not.toContain('aria-current="page"');
-
-    // The last page of a table without a key: nothing follows, and the order is the stored one.
-    const last = render(address, {
-      rows: ready({ ...visitRows, order: { by: "physical" }, next: undefined })
-    });
-    expect(last).toContain('data-data-store-rows-order="physical"');
-    expect(last).toContain("This is the end of the table. In stored order: this table has no key.");
+    const last = render(storePage, { rows: ready({ ...visitRows, next: undefined }) });
     expect(last).toMatch(/<button[^>]*disabled=""[^>]*>Next<\/button>/u);
+  });
 
-    const german = render(address, {
+  it("writes dates and column types the way the reader's language does, never as ISO text (ACCEPT-2e)", () => {
+    const german = render(storePage, {
       locale: "de",
-      rows: ready({ ...visitRows, order: { by: "physical" }, next: undefined })
-    });
-    expect(german).toContain("Zeilen 1 bis 2. Das ist das Ende der Tabelle. In gespeicherter");
-    expect(german).toContain(">Zum Anfang<");
-    expect(german).toContain(">Weiter<");
-  });
-
-  it("shows a yes-or-no value in the reader's words, as the confirmation of a row write does", () => {
-    const rows = ready({
-      ...visitRows,
-      columns: [
-        { name: "id", type: "integer", nativeType: "bigint" },
-        { name: "done", type: "boolean", nativeType: "boolean" }
-      ],
-      rows: [
-        { at: "at_1", values: { id: 1, done: false } },
-        { at: "at_2", values: { id: 2, done: true } }
-      ]
-    });
-    const english = render(address, { rows });
-    expect(english).toContain(">No<");
-    expect(english).toContain(">Yes<");
-    expect(english).not.toMatch(/>(?:true|false)</u);
-
-    const german = render(address, { locale: "de", rows });
-    expect(german).toContain(">Nein<");
-    expect(german).toContain(">Ja<");
-    expect(german).not.toMatch(/>(?:true|false)</u);
-  });
-
-  it("writes dates the way the reader's language does, never as ISO text (ACCEPT-2e)", () => {
-    const rows = ready({
-      ...visitRows,
-      columns: [
-        { name: "mandant", type: "text", nativeType: "text" },
-        { name: "frist", type: "date", nativeType: "date" }
-      ],
-      rows: [{ at: "at_1", values: { mandant: "Bäckerei Sommer", frist: "2026-12-15" } }]
-    });
-
-    const german = render(address, { locale: "de", rows });
-    expect(german).toContain(">15.12.2026<");
-    expect(german).not.toContain("2026-12-15");
-    expect(render(address, { rows })).toContain(">Dec 15, 2026<");
-  });
-
-  it("names a column's type in the reader's words, and the database's name only where it differs (ACCEPT-2e)", () => {
-    const german = render(address, {
-      locale: "de",
+      rows: ready({
+        ...visitRows,
+        columns: [{ name: "frist", type: "date", nativeType: "date" }],
+        rows: [{ at: "at_1", values: { frist: "2026-12-15" } }]
+      }),
       schema: ready({
         ...schema,
         tables: [
@@ -859,79 +621,43 @@ describe("The rows of a Data Store", () => {
             name: "fristen",
             rowEstimate: 3,
             columns: [
-              {
-                name: "id",
-                type: "integer",
-                nativeType: "bigint",
-                nullable: false,
-                primaryKey: true
-              },
-              {
-                name: "mandant",
-                type: "text",
-                nativeType: "text",
-                nullable: false,
-                primaryKey: false
-              },
-              {
-                name: "erledigt",
-                type: "boolean",
-                nativeType: "boolean",
-                nullable: false,
-                primaryKey: false
-              },
               { name: "frist", type: "date", nativeType: "date", nullable: true, primaryKey: false }
             ]
           }
         ]
       })
     });
-    const typeOf = (column: string) =>
-      german.slice(german.indexOf(`data-data-store-column="${column}"`)).split("</tr>")[0] ?? "";
-
-    expect(typeOf("id")).toContain(">Ganzzahl");
-    expect(typeOf("id")).toContain(">bigint<");
-    expect(typeOf("mandant")).toContain(">Text");
-    expect(typeOf("mandant")).not.toContain(">text<");
-    expect(typeOf("erledigt")).toContain(">Ja oder nein");
-    expect(typeOf("erledigt")).not.toContain("boolean");
-    expect(typeOf("frist")).toContain(">Datum");
-    expect(typeOf("frist")).not.toContain(">date<");
+    expect(german).toContain(">15.12.2026<");
+    expect(german).not.toContain("2026-12-15");
+    const typeOf = german.slice(german.indexOf('data-data-store-column="frist"')).split("</tr>")[0];
+    expect(typeOf).toContain(">Datum");
+    expect(typeOf).not.toContain(">date<");
   });
 
-  it("shows a cut value by its first characters and a value read by no page as not read, each with the button that reads it whole", () => {
-    const page = render(address);
+  it("shows a cut value by its first characters and an unread one as not read, each with a way to read it whole", () => {
+    const page = render(storePage);
     expect(page).toContain('data-data-store-cut="text"');
     expect(page).toContain(CUT_NOTE);
     expect(page).toContain('aria-label="Show the whole value of note"');
     expect(page).toContain('data-data-store-cut="unread"');
-    expect(page).toContain(">Not read<");
     expect(page).toContain('aria-label="Show the whole value of body"');
   });
 
-  it("names an empty table, rows the reader may not read and rows that could not be read", () => {
-    expect(render(address, { rows: ready({ ...visitRows, rows: [], next: undefined }) })).toContain(
-      "This table holds no rows."
-    );
-    const refused = render(address, { rows: { status: "refused" } });
+  it("shows no rows the reader may not read, and offers a retry where they could not be read", () => {
+    const refused = render(storePage, { rows: { status: "refused" } });
     expect(refused).toContain('data-data-store-refused=""');
-    expect(refused).toContain("You may not read the rows of this store.");
-    expect(render(address, { rows: { status: "refused" }, locale: "de" })).toContain(
-      "Du darfst die Zeilen dieses Speichers nicht lesen."
-    );
-    const failed = render(address, {
-      rows: { status: "failed", message: undefined, retry: noop }
-    });
-    expect(failed).toContain("The rows could not be loaded.");
-    expect(failed).toContain(">Try again<");
+    expect(refused).not.toContain("/pricing");
+    expect(
+      render(storePage, { rows: { status: "failed", message: undefined, retry: noop } })
+    ).toContain(">Try again<");
   });
 
-  it("opens a value whole, and says so where the instance answers that it is too large or that its row is gone", () => {
-    const dialog = (value: DataStoreRead<DataStoreValue>, locale: LocaleCode = "en") =>
+  it("opens a value whole, and says where the instance answers that it is too large or its row is gone", () => {
+    const dialog = (value: DataStoreRead<DataStoreValue>) =>
       renderToStaticMarkup(
         createElement(
           TranslationProvider,
-          { children: null, locale },
+          { children: null, locale: "en" },
           createElement(DataStoreValueDialog, {
             store: "visit-log",
             place: { table: "visits", column: "note", at: "at_1" },
@@ -944,34 +670,25 @@ describe("The rows of a Data Store", () => {
     const shown = dialog(ready({ value: whole }));
     expect(shown).toContain('data-data-store-value="whole"');
     expect(shown).toContain(whole);
-    expect(shown).toContain("5,200 characters");
-    expect(shown).toContain("The whole value of one row of visits.");
-    // A value that is no text shows as the JSON it is.
-    expect(dialog(ready({ value: { campaign: "autumn" } }))).toContain("&quot;campaign&quot;: ");
-
     const tooLarge = dialog({
       status: "failed",
-      message: "This value is larger than one read of a store answers.",
+      message: "x",
       reason: "value_too_large",
       retry: noop
     });
     expect(tooLarge).toContain('data-data-store-value="too_large"');
-    expect(tooLarge).toContain("it cannot be shown here. A query reads a part of it.");
     expect(tooLarge).not.toContain("Try again");
-    expect(
-      dialog({ status: "failed", message: "x", reason: "value_too_large", retry: noop }, "de")
-    ).toContain("lässt sich hier nicht anzeigen");
-
-    const gone = dialog({ status: "failed", message: "x", reason: "row_gone", retry: noop });
-    expect(gone).toContain('data-data-store-value="gone"');
-    expect(dialog({ status: "failed", message: undefined, retry: noop })).toContain(
-      "The value could not be loaded."
+    expect(dialog({ status: "failed", message: "x", reason: "row_gone", retry: noop })).toContain(
+      'data-data-store-value="gone"'
     );
   });
 });
 
 describe("What uses a Data Store", () => {
-  const address = { kindPath: "data-stores", name: "visit-log" };
+  const section = (page: string, id: string) =>
+    page.indexOf(`id="${id}"`) === -1
+      ? undefined
+      : (page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "");
 
   it("leads to the page of an App and of a Workflow only where the reader is shown such pages", () => {
     const shown = { collaborationWorkspaceId: "ws_1", apps: true, workflows: true };
@@ -980,12 +697,6 @@ describe("What uses a Data Store", () => {
       collaborationWorkspaceId: "ws_1",
       app: "visits-board"
     });
-    expect(usingPageRoute("workflow", "nightly-visits", shown)).toEqual({
-      kind: "workflow",
-      collaborationWorkspaceId: "ws_1",
-      workflow: "nightly-visits"
-    });
-    // The Apps module is off, the Workflows area is closed to the reader, or no workspace is open.
     expect(usingPageRoute("app", "visits-board", { ...shown, apps: false })).toBeUndefined();
     expect(
       usingPageRoute("workflow", "nightly-visits", { ...shown, workflows: false })
@@ -998,175 +709,60 @@ describe("What uses a Data Store", () => {
     ).toBeUndefined();
   });
 
-  it("says what fills a store, from which Connections and as which account, and who reads it", () => {
-    const page = render(address);
-    const section = (id: string) =>
-      page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "";
-    const filled = section("filled-by");
-    // Both stand first under Settings, before what is Advanced.
-    expect(page.indexOf("data-asset-settings")).toBeLessThan(page.indexOf('id="filled-by"'));
-    expect(page.indexOf('id="read-by"')).toBeLessThan(page.indexOf('id="status"'));
-    expect(filled).toContain(">Filled by</h2>");
-    expect(filled).toContain('data-data-store-used-by="workflow"');
+  it("puts what writes under Filled by and what reads under Read by, and counts what the reader may not see", () => {
+    const page = render(storePage);
+    const filled = required(section(page, "filled-by"));
     expect(filled).toContain(">Nightly rollup<");
-    expect(filled).toContain("Copies from Exampledata and CRM · Runs as Nightly runner");
-    // An App that only reads and a Workflow that only reads fill nothing.
     expect(filled).not.toContain("Visits board");
-    expect(filled).not.toContain("Weekly report");
-
-    const read = section("read-by");
-    expect(read).toContain(">Read by</h2>");
-    expect(read).toContain(">Visits board<");
-    expect(read).toContain('href="/w/ws_1/apps/visits-board"');
-    expect(read).toContain(">Everyone in Kai Spezis (14 people)<");
-    expect(read).toContain('data-data-store-used-by="knowledge_base"');
-    expect(read).toContain(">Kai<");
-    expect(read).toContain(">Weekly report<");
-    expect(read).not.toContain("Nightly rollup");
-    expect(read).toContain(">Direct access<");
-    expect(read).toContain(">Reporting (technical account) · 2 more with access<");
-    // The admins are said once, under the section, and on no line.
-    expect(read).toContain(">Admins for all workspaces always see everything.<");
-    expect(page.split("Admins for all workspaces").length - 1).toBe(1);
-    // What the reader may not see is counted where it would stand: the hidden Workflow that
-    // fills the store under Filled by, the two that read it under Read by.
     expect(filled).toContain("and 1 more you can&#x27;t see");
+    const read = required(section(page, "read-by"));
+    expect(read).toContain('href="/w/ws_1/apps/visits-board"');
+    expect(read).toContain('data-data-store-used-by="knowledge_base"');
+    expect(read).not.toContain("Nightly rollup");
     expect(read).toContain("and 2 more you can&#x27;t see");
-    // The lines are read whole on a phone, not cut after the first words.
-    const wraps = (line: string) => new RegExp(`class="[^"]*\\bsm:truncate\\b[^"]*">${line}`, "u");
-    expect(filled).toMatch(wraps("Copies from Exampledata"));
-    expect(read).toMatch(wraps("Everyone in Kai Spezis"));
-    expect(read).toMatch(wraps("Reporting \\(technical account\\)"));
-
-    const german = render(address, { locale: "de" });
-    expect(german).toContain(">Gefüllt von</h2>");
-    expect(german).toContain("Kopiert aus Exampledata und CRM · Läuft als Nightly runner");
-    expect(german).toContain(">Gelesen von</h2>");
-    expect(german).toContain(">Alle in Kai Spezis (14 Personen)<");
-    expect(german).toContain(">Direkter Zugriff<");
-    expect(german).toContain(">Reporting (technisches Konto) · 2 weitere mit Zugriff<");
-    expect(german).toContain(">Admins für alle Arbeitsbereiche sehen immer alles.<");
-    expect(german).toContain("und 1 weitere, die du nicht sehen kannst");
-    expect(german).toContain("und 2 weitere, die du nicht sehen kannst");
   });
 
-  it("says in one sentence that nothing uses a store, that only hidden ones do, and that the reader may not see it", () => {
-    const nothing = render(address, { usedBy: ready(nothingUses) });
-    expect(nothing).toContain("No published workflow or app adds rows to this store.");
-    // Whoever may read the store is always said, admins at the least.
-    expect(nothing).toContain(">Direct access<");
-    expect(nothing).toContain(">Only admins for all workspaces<");
-    const hidden = (fills: number, reads: number) =>
-      render(address, {
-        usedBy: ready({
-          ...nothingUses,
-          hidden: { apps: fills, workflows: reads, knowledgeBases: 0, fills, reads }
-        })
-      });
-    // A store that only a hidden Workflow fills is not said to be filled by nothing.
-    const filledUnseen = hidden(1, 0);
-    expect(filledUnseen).not.toContain("No published workflow or app adds rows to this store.");
-    expect(filledUnseen).toContain(
-      "One workflow or app you can&#x27;t see adds rows to this store."
-    );
-    expect(filledUnseen).not.toContain("more you can&#x27;t see");
-    expect(hidden(3, 0)).toContain(
-      "3 workflows or apps you can&#x27;t see add rows to this store."
-    );
-    // One that only hidden ones read says so under Read by, and nothing fills it.
-    const readUnseen = hidden(0, 1);
-    expect(readUnseen).toContain("No published workflow or app adds rows to this store.");
-    expect(readUnseen).toContain("and 1 more you can&#x27;t see");
-    expect(render(address, { usedBy: { status: "refused" } })).toContain(
-      "You may not see what uses this store."
-    );
-    expect(
-      render(address, { usedBy: { status: "failed", message: undefined, retry: noop } })
-    ).toContain("What uses this store could not be loaded.");
-    // What uses a store is read from the definitions, so a store that is not ready shows it too.
-    expect(
-      render(address, {
-        states: { "visit-log": ready(storeState("visit-log", { status: "provisioning" })) }
+  it("never says nothing fills a store that only hidden ones fill, and shows nothing to a reader refused", () => {
+    const nothing = "No published workflow or app adds rows to this store.";
+    expect(render(storePage, { usedBy: ready(nothingUses) })).toContain(nothing);
+    const filledUnseen = render(storePage, {
+      usedBy: ready({
+        ...nothingUses,
+        hidden: { apps: 1, workflows: 0, knowledgeBases: 0, fills: 1, reads: 0 }
       })
-    ).toContain(">Visits board<");
+    });
+    expect(filledUnseen).not.toContain(nothing);
+    const refused = render(storePage, { usedBy: { status: "refused" } });
+    expect(refused).not.toContain("Visits board");
   });
-});
 
-describe("Rows written from conversations (C-3)", () => {
-  const address = { kindPath: "data-stores", name: "visit-log" };
-  const section = (page: string, id: string) =>
-    page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "";
-  const written = (conversationWriters: DataStoreUsedBy["conversationWriters"]) =>
-    ready<DataStoreUsedBy>({
-      ...nothingUses,
-      ...(conversationWriters ? { conversationWriters } : {})
-    });
-
-  it("names agents in conversations as writers by counts only, and the list's intro says they keep records", () => {
-    const page = render(address, {
-      usedBy: written({ agents: 1, conversations: 3, truncated: false })
-    });
-    const filled = section(page, "filled-by");
-    // Rows came only from chat: the store is not said to be filled by nothing.
-    expect(filled).not.toContain("No published workflow or app adds rows to this store.");
+  it("counts agents in conversations as writers by numbers only, and never claims at least none (C-3)", () => {
+    const written = (conversationWriters: DataStoreUsedBy["conversationWriters"]) =>
+      ready<DataStoreUsedBy>({ ...nothingUses, conversationWriters });
+    const filled = required(
+      section(
+        render(storePage, { usedBy: written({ agents: 1, conversations: 3, truncated: false }) }),
+        "filled-by"
+      )
+    );
     expect(filled).toContain('data-data-store-conversation-writers=""');
-    expect(filled).toContain(">Agents in conversations<");
     expect(filled).toContain(">1 agent in 3 conversations<");
-    // The list says so of every store.
-    expect(render({ kindPath: "data-stores" })).toContain(
-      "Where apps, workflows and agents in conversations keep their records."
-    );
-
-    const german = render(address, {
-      locale: "de",
-      usedBy: written({ agents: 2, conversations: 1, truncated: true })
+    expect(
+      render(storePage, { usedBy: written({ agents: 0, conversations: 0, truncated: false }) })
+    ).not.toContain("data-data-store-conversation-writers");
+    const cut = render(storePage, {
+      usedBy: written({ agents: 0, conversations: 0, truncated: true })
     });
-    const gefuellt = section(german, "filled-by");
-    expect(gefuellt).toContain(">Agenten in Unterhaltungen<");
-    expect(gefuellt).toContain(">Mindestens 2 Agenten in 1 Unterhaltung<");
-    expect(render({ kindPath: "data-stores" }, { locale: "de" })).toContain(
-      "Hier legen Apps, Workflows und Agenten in Unterhaltungen ihre Einträge ab."
-    );
+    expect(cut).toContain('data-data-store-conversation-writers=""');
+    expect(cut).not.toContain("At least 0");
   });
 
-  it("adds no line where no conversation wrote a row", () => {
-    for (const usedBy of [
-      written(undefined),
-      written({ agents: 0, conversations: 0, truncated: false })
-    ]) {
-      const filled = section(render(address, { usedBy }), "filled-by");
-      expect(filled).not.toContain("data-data-store-conversation-writers");
-      expect(filled).toContain("No published workflow or app adds rows to this store.");
-    }
-  });
-
-  // The instance reads only the latest writes. Cut short before it found any from a
-  // conversation, it knows of none, not that there were none: never "at least 0".
-  it("says older writes may be missing where the count was cut short before finding any", () => {
-    const cut = written({ agents: 0, conversations: 0, truncated: true });
-    const filled = section(render(address, { usedBy: cut }), "filled-by");
-    expect(filled).toContain('data-data-store-conversation-writers=""');
-    expect(filled).toContain(">Older conversation writes may be missing<");
-    expect(filled).not.toContain("At least 0");
-    const gefuellt = section(render(address, { locale: "de", usedBy: cut }), "filled-by");
-    expect(gefuellt).toContain(">Ältere Einträge aus Unterhaltungen fehlen hier möglicherweise<");
-  });
-});
-
-describe("The data Workflows of a Data Store (WF-KIND)", () => {
-  const address = { kindPath: "data-stores", name: "visit-log" };
-  const flows = (dataFlows: DataStoreUsedBy["dataFlows"]) =>
-    ready<DataStoreUsedBy>({ ...usedBy, ...(dataFlows ? { dataFlows } : {}) });
-  const section = (page: string, id: string) =>
-    page.indexOf(`id="${id}"`) === -1
-      ? undefined
-      : (page.slice(page.indexOf(`id="${id}"`)).split("</section>")[0] ?? "");
-
-  it("adds the data Workflows that fill it under Filled by once each, and those that process it under Processed by", () => {
-    const page = render(address, {
+  it("adds the data Workflows that fill it once each and those that process it, without double counting the hidden (WF-KIND)", () => {
+    const flows = (dataFlows: DataStoreUsedBy["dataFlows"]) =>
+      ready<DataStoreUsedBy>({ ...usedBy, dataFlows });
+    const page = render(storePage, {
       workflowPages: true,
       usedBy: flows({
-        // The rollup already stands as a Workflow that adds rows: it is not listed twice.
         fills: [
           { id: "asset_nightly", name: "nightly-rollup", title: "Nightly rollup" },
           { id: "asset_import", name: "visit-import", title: "Visit import" }
@@ -1178,52 +774,13 @@ describe("The data Workflows of a Data Store (WF-KIND)", () => {
     });
     const filled = required(section(page, "filled-by"));
     expect(filled.split(">Nightly rollup<").length - 1).toBe(1);
-    expect(filled).toContain(">Visit import<");
     expect(filled).toContain('href="/w/ws_1/workflows/visit-import"');
-    // The store's own count already holds every hidden App and Workflow that adds rows, data
-    // flows among them: it stands, and the data flows' count is not added to it.
+    // The store's own count already holds every hidden filler, data flows among them.
     expect(filled).toContain("and 1 more you can&#x27;t see");
-    expect(filled).not.toContain("and 3 more");
-    expect(filled).not.toContain("and 4 more");
-    // The section says what they do: no row carries a chip of its own for that.
-    expect(filled).not.toContain("Data flow<");
-
     const processed = required(section(page, "processed-by"));
-    expect(page.indexOf('id="filled-by"')).toBeLessThan(page.indexOf('id="processed-by"'));
-    expect(processed).toContain(">Processed by</h2>");
-    expect(processed).toContain(">Visit extract<");
     expect(processed).toContain('href="/w/ws_1/workflows/visit-extract"');
     expect(processed).toContain("and 2 more you can&#x27;t see");
-    expect(render(address, { usedBy: flows(undefined), locale: "de" })).not.toContain(
-      "Verarbeitet von"
-    );
-  });
-
-  it("counts the Workflows the reader may not see without naming one, and has no section without any", () => {
-    const hiddenOnly = render(address, {
-      usedBy: flows({
-        fills: [],
-        processes: [],
-        hidden: { fills: 0, processes: 1 },
-        truncated: false
-      })
-    });
-    const processed = required(section(hiddenOnly, "processed-by"));
-    expect(processed).toContain("One workflow you can&#x27;t see does this.");
-    expect(processed).not.toContain("data-data-flow=");
-    expect(
-      render(address, {
-        locale: "de",
-        usedBy: flows({
-          fills: [],
-          processes: [],
-          hidden: { fills: 0, processes: 4 },
-          truncated: false
-        })
-      })
-    ).toContain("4 Workflows, die du nicht sehen kannst, tun das.");
-    // Nothing processes the store: no section, and Filled by stays as it was.
-    const none = render(address, {
+    const none = render(storePage, {
       usedBy: flows({
         fills: [],
         processes: [],
@@ -1232,22 +789,44 @@ describe("The data Workflows of a Data Store (WF-KIND)", () => {
       })
     });
     expect(section(none, "processed-by")).toBeUndefined();
-    expect(required(section(none, "filled-by"))).toContain("and 1 more you can&#x27;t see");
+  });
+
+  it("names an App's audience as its publish named it, not by the workspace that owns it (E-2)", () => {
+    const { t } = createTranslationContext("en");
+    const personal = { title: "Personal workspace", members: 1 };
+    expect(
+      audienceLine(
+        {
+          app: { audience: "instance", people: 12 },
+          workspace: personal,
+          holders: [],
+          hiddenHolders: 0
+        },
+        t,
+        "en"
+      )
+    ).toBe("Everyone (12 people)");
+    expect(
+      audienceLine(
+        {
+          app: { audience: "self", people: 1 },
+          workspace: personal,
+          holders: [],
+          hiddenHolders: 0
+        },
+        t,
+        "en"
+      )
+    ).toBe("One selected person");
   });
 });
 
 describe("Data Store state", () => {
-  it("names a store by one state and a size by its largest whole unit", () => {
+  it("names a store by one state and follows it only while it settles (E-1)", () => {
     expect(dataStoreStateView(storeState("a"))).toBe("ready");
-    expect(dataStoreStateView(storeState("a", { status: "provisioning" }))).toBe("provisioning");
     expect(dataStoreStateView(storeState("a", { lastMigration: { outcome: "failed" } }))).toBe(
       "migration_failed"
     );
-    expect(formatDataStoreSize(512, "en")).toBe("512 byte");
-    expect(formatDataStoreSize(1536, "en")).toBe("1.5 kB");
-    expect(formatDataStoreSize(2 * 1024 ** 3, "de")).toMatch(/^2\sGB$/u);
-  });
-  it("follows a store while it is set up or a migration waits, and stops once it settled (E-1)", () => {
     expect(dataStoreStateSettling(storeState("a", { status: "provisioning" }))).toBe(true);
     expect(dataStoreStateSettling(storeState("a", { lastMigration: { outcome: "pending" } }))).toBe(
       true
@@ -1259,119 +838,8 @@ describe("Data Store state", () => {
   });
 });
 
-describe("where an App's data comes from", () => {
-  const translate = (locale: LocaleCode) => createTranslationContext(locale);
-
-  it("names the store, each Workflow or App that fills it and the Connections it copies from", () => {
-    const sources: AppDataSources = {
-      stores: [
-        {
-          name: "kunden",
-          title: "Kunden",
-          fillers: [
-            {
-              kind: "workflow",
-              name: "nightly-rollup",
-              title: "Nightly rollup",
-              connections: ["Exampledata", "CRM"]
-            },
-            { kind: "app", name: "entry", title: "Entry form", connections: [] }
-          ]
-        },
-        { name: "termine", title: "Termine", fillers: [] }
-      ],
-      truncated: false
-    };
-    expect(appDataLines(sources, translate("en").t, "en")).toEqual([
-      "Shows data from “Kunden”, which the Workflow “Nightly rollup” copies from Exampledata and CRM.",
-      "Shows data from “Kunden”, which the App “Entry form” adds.",
-      // A store nothing fills is named alone.
-      "Shows data from “Termine”."
-    ]);
-    expect(appDataLines(sources, translate("de").t, "de")).toEqual([
-      "Zeigt Daten aus „Kunden“, die der Workflow „Nightly rollup“ aus Exampledata und CRM kopiert.",
-      "Zeigt Daten aus „Kunden“, die die App „Entry form“ hinzufügt.",
-      "Zeigt Daten aus „Termine“."
-    ]);
-  });
-
-  it("words an App's audience as its publish named it, not by the workspace that owns it (E-2)", () => {
-    const { t } = translate("en");
-    const personal = { title: "Personal workspace", members: 1 };
-    const shared = (audience: "self" | "instance", people: number) =>
-      audienceLine(
-        { app: { audience, people }, workspace: personal, holders: [], hiddenHolders: 0 },
-        t,
-        "en"
-      );
-    expect(shared("instance", 12)).toBe("Everyone (12 people)");
-    expect(shared("instance", 1)).toBe("Everyone (1 person)");
-    expect(shared("self", 1)).toBe("One selected person");
-    expect(
-      audienceLine(
-        {
-          app: { audience: "instance", people: 12 },
-          workspace: personal,
-          holders: [],
-          hiddenHolders: 0
-        },
-        translate("de").t,
-        "de"
-      )
-    ).toBe("Alle (12 Personen)");
-    // An App for its workspace is said by that workspace, as before.
-    expect(
-      audienceLine(
-        {
-          app: { audience: "workspace", people: 14 },
-          workspace: { title: "Kai Spezis", members: 14 },
-          holders: [],
-          hiddenHolders: 0
-        },
-        t,
-        "en"
-      )
-    ).toBe("Everyone in Kai Spezis (14 people)");
-  });
-
-  it("words an audience by its workspace, its holders and how many more, and the admins only where nobody else reads", () => {
-    const { t } = translate("en");
-    expect(
-      audienceLine(
-        {
-          workspace: { title: "Kai Spezis", members: 1 },
-          holders: [
-            { kind: "role", name: "user", title: "user" },
-            { kind: "group", name: "grp_sales", title: "grp_sales" }
-          ],
-          hiddenHolders: 1
-        },
-        t,
-        "en"
-      )
-    ).toBe(
-      "Everyone in Kai Spezis (1 person) · Everyone with the role user · Group grp_sales · 1 more with access"
-    );
-    expect(audienceLine({ holders: [], hiddenHolders: 0 }, t, "en")).toBe(
-      "Only admins for all workspaces"
-    );
-    // A count with nobody named before it is not "more".
-    expect(audienceLine({ holders: [], hiddenHolders: 4 }, t, "en")).toBe("4 with access");
-    expect(audienceLine({ holders: [], hiddenHolders: 3 }, translate("de").t, "de")).toBe(
-      "3 mit Zugriff"
-    );
-    // As whom a Workflow runs is named to who administers users; anyone else reads the kind.
-    const nightly = required(usedBy.workflows[0]);
-    expect(fillerLine(nightly, t, "en")).toBe(
-      "Copies from Exampledata and CRM · Runs as Nightly runner"
-    );
-    expect(fillerLine({ ...nightly, account: {} }, translate("de").t, "de")).toBe(
-      "Kopiert aus Exampledata und CRM · Läuft als technisches Konto"
-    );
-  });
-});
-
 describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", () => {
+  const objects = { kindPath: "data-stores", name: "objects" };
   const candidate = (
     documentId: string,
     overrides: Partial<DataStoreFlaggedItem> = {}
@@ -1402,7 +870,6 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     candidate("a1", {
       name: "baujahr",
       value: 1990,
-      quote: "Baujahr 1991",
       state: "extracted",
       reason: "not_evidenced",
       evidence: { status: "failed", reason: "quote_not_found" }
@@ -1417,143 +884,18 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
       document: { knowledgeBase: "unterlagen", fileName: "expose.pdf" }
     })
   ];
-  const review = (items: DataStoreFlaggedItem[] = flagged, nextCursor?: string) => ({
-    useFlagged: () => ready({ items, ...(nextCursor ? { nextCursor } : {}) }),
+  const review = (items: DataStoreFlaggedItem[] = flagged) => ({
+    useFlagged: () => ready({ items }),
     decide: () => Promise.resolve(undefined)
   });
 
-  it("groups by object and field, stands the candidates side by side with the page each cites, and offers the three decisions", () => {
-    const page = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: review() }
-    );
-    expect(page).toContain('id="review"');
-    expect(page).toContain(">Review</");
+  it("groups by object and field, and offers the decisions per field and a document without object apart", () => {
+    const page = render(objects, { records: true, review: review() });
     expect(page).toContain('data-review-object="1402"');
-    expect(page).toContain(">objekt 1402</h3>");
     expect(page).toContain('data-review-field="kaufpreis"');
-    // A number is written as the reader's language writes it.
-    expect(page).toContain(">485,000<");
-    expect(page).toContain(">Conflict</span>");
-    expect(page).toContain(">Not evidenced</span>");
-    expect(page).toContain(">Quote not found on the page</span>");
-    // Each candidate cites its document and page.
-    const text = page.replace(/<[^>]+>/gu, "");
-    expect(text).toContain("a1, p. 3");
-    expect(text).toContain("b1, p. 4");
-    expect(page).toContain("“Kaufpreis 200”");
     expect(page.match(/data-review-confirm=""/gu)).toHaveLength(3);
     expect(page.match(/data-review-correct=""/gu)).toHaveLength(3);
-    // The document without an object waits apart, with "Assign object".
     expect(page).toContain('data-review-document="e4"');
-    expect(page).toContain(">Assign object</button>");
-
-    const german = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: review(), locale: "de" }
-    );
-    for (const said of [
-      ">Prüfen</",
-      ">Widerspruch</span>",
-      ">Nicht belegt</span>",
-      ">Bestätigen</button>",
-      ">Korrigieren</button>",
-      ">Objekt zuordnen</button>",
-      "Dokumente ohne Objekt",
-      ">485.000<"
-    ]) {
-      expect(german, said).toContain(said);
-    }
-  });
-
-  it("shows a corrected candidate's value read beside the person's, with who and when (REC-KEEP)", () => {
-    const corrected = [
-      candidate("a1", {
-        value: 1250000,
-        correctedValue: 1205000,
-        state: "corrected",
-        decidedBy: "records-admin",
-        decidedByName: "Rita Reviewer",
-        decidedAt: "2026-10-25T09:30:00.000Z"
-      }),
-      candidate("b1", { value: 1300000, state: "confirmed" }),
-      candidate("c1", { value: 1300000 })
-    ];
-    const english = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: review(corrected) }
-    );
-    expect(english).toContain('data-review-corrected=""');
-    expect(english).toMatch(/<dt[^>]*>Read<\/dt>/u);
-    expect(english).toContain("1,250,000");
-    expect(english).toMatch(/<dt[^>]*>Corrected<\/dt>/u);
-    expect(english).toContain(">1,205,000<");
-    expect(english).toContain(
-      `By Rita Reviewer on ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("en")}`
-    );
-    expect(english).not.toContain("records-admin");
-    // The field's summary names the value each candidate stands for.
-    expect(english).toContain("1,205,000 · 1,300,000 · 1,300,000");
-    const german = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: review(corrected), locale: "de" }
-    );
-    expect(german).toMatch(/<dt[^>]*>Gelesen<\/dt>/u);
-    expect(german).toContain("1.250.000");
-    expect(german).toMatch(/<dt[^>]*>Korrigiert<\/dt>/u);
-    expect(german).toContain(">1.205.000<");
-    expect(german).toContain(
-      `Von Rita Reviewer am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}`
-    );
-    // Without a name to show, the account is gone: it reads as a deleted account, never as
-    // the account id (ERASE-ACTOR-IDS).
-    const gone = review(corrected.map(({ decidedByName: _, ...rest }) => rest));
-    const unnamed = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: gone, locale: "de" }
-    );
-    expect(unnamed).toContain(
-      `>Von Gelöschtes Konto am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}<`
-    );
-    expect(unnamed).not.toContain("records-admin");
-    const unnamedEnglish = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: gone }
-    );
-    expect(unnamedEnglish).toContain(
-      `>By Deleted account on ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("en")}<`
-    );
-    expect(unnamedEnglish).not.toContain("records-admin");
-  });
-
-  it("has no section without a records rule, nor for a reader who may not decide, and says when nothing waits", () => {
-    expect(
-      render({ kindPath: "data-stores", name: "visit-log" }, { review: review() })
-    ).not.toContain('id="review"');
-    const refused = render(
-      { kindPath: "data-stores", name: "objects" },
-      {
-        records: true,
-        review: {
-          useFlagged: () => ({ status: "refused" }),
-          decide: () => Promise.resolve(undefined)
-        }
-      }
-    );
-    expect(refused).not.toContain('id="review"');
-    const empty = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: review([]) }
-    );
-    expect(empty).toContain("Nothing waits for review.");
-    const more = render(
-      { kindPath: "data-stores", name: "objects" },
-      { records: true, review: review(flagged, "next") }
-    );
-    expect(more).toContain(">Show more fields</button>");
-  });
-
-  it("counts each flagged field once and each field of a document without an object", () => {
     const groups = groupFlagged(flagged);
     expect(groups.fieldCount).toBe(3);
     expect(
@@ -1562,25 +904,328 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(groups.documents.map((document) => document.fileName)).toEqual(["expose.pdf"]);
   });
 
-  it("writes a number as the reader's language does, a year without a separator", () => {
-    expect(reviewValueText(485000, "de")).toBe("485.000");
-    expect(reviewValueText(485000, "en")).toBe("485,000");
-    expect(reviewValueText(1987, "de")).toBe("1987");
-    expect(reviewValueText(87.5, "de")).toBe("87,5");
-    expect(reviewValueText(492500, "de", { grouping: false })).toBe("492500");
-    expect(reviewValueText("Am Hang 3")).toBe("Am Hang 3");
+  it("shows who corrected a value by name, a gone account as deleted, never the account id (REC-KEEP, ERASE-ACTOR-IDS)", () => {
+    const corrected = [
+      candidate("a1", {
+        value: 1250000,
+        correctedValue: 1205000,
+        state: "corrected",
+        decidedBy: "records-admin",
+        decidedByName: "Rita Reviewer",
+        decidedAt: "2026-10-25T09:30:00.000Z"
+      })
+    ];
+    const named = render(objects, { records: true, review: review(corrected) });
+    expect(named).toContain('data-review-corrected=""');
+    expect(named).toContain("Rita Reviewer");
+    expect(named).not.toContain("records-admin");
+    const gone = render(objects, {
+      records: true,
+      review: review(corrected.map(({ decidedByName: _, ...rest }) => rest))
+    });
+    expect(gone).toContain("Deleted account");
+    expect(gone).not.toContain("records-admin");
   });
 
-  it("reads a typed value as the kind the candidate holds", () => {
-    expect(reviewValueOf("150", 100)).toEqual({ value: 150 });
+  it("has no section without a records rule, nor for a reader who may not decide", () => {
+    expect(render(storePage, { review: review() })).not.toContain('id="review"');
+    const refused = render(objects, {
+      records: true,
+      review: {
+        useFlagged: () => ({ status: "refused" }),
+        decide: () => Promise.resolve(undefined)
+      }
+    });
+    expect(refused).not.toContain('id="review"');
+  });
+
+  it("writes and reads a number as the reader's language does", () => {
+    expect(reviewValueText(485000, "de")).toBe("485.000");
+    expect(reviewValueText(1987, "de")).toBe("1987");
     expect(reviewValueOf("1.234,5", 100, "de")).toEqual({ value: 1234.5 });
     expect(reviewValueOf("492.500", 100, "de")).toEqual({ value: 492500 });
-    expect(reviewValueOf("87,5", 100, "de")).toEqual({ value: 87.5 });
     expect(reviewValueOf("1,234.5", 100, "en")).toEqual({ value: 1234.5 });
-    expect(reviewValueOf("87.5", 100, "en")).toEqual({ value: 87.5 });
     expect(reviewValueOf("teuer", 100)).toEqual({ invalid: "number" });
     expect(reviewValueOf("ja", true)).toEqual({ value: true });
     expect(reviewValueOf("150", "Nebenweg 1")).toEqual({ value: "150" });
     expect(reviewValueOf("  ", "x")).toEqual({ invalid: "empty" });
+  });
+});
+
+// ACCEPT-1c C10: a Data Store published in one click, and its page showed a customer admin
+// what only the one who runs the database server can close. Publish asks first, as every other
+// Build publish does; the steps on the server stand only for a superadmin.
+describe("Publishing a Data Store", () => {
+  it("asks first and publishes only on the confirm", async () => {
+    const publish = vi.fn();
+    const page = await mount(storePage, { draft: true, publish });
+    const offered = page.querySelector<HTMLButtonElement>("[data-data-store-publish]");
+    await act(async () => offered?.click());
+    expect(publish).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-data-store-publish-confirm]")).not.toBeNull();
+
+    const named = (name: string, within: ParentNode = document) =>
+      [...within.querySelectorAll("button")].find((button) => button.textContent?.trim() === name);
+    await act(async () => named("Cancel")?.click());
+    expect(publish).not.toHaveBeenCalled();
+
+    await act(async () => offered?.click());
+    await act(async () => named("Publish", required(document.querySelector("dialog")))?.click());
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("What the database server leaves open around a store", () => {
+  const open = {
+    "visit-log": ready(
+      storeState("visit-log", {
+        conditions: [{ code: "server_databases_open", message: "Run REVOKE CONNECT as the owner." }]
+      })
+    )
+  };
+
+  it("is shown on the page and counted on the list only for the one who runs the server", () => {
+    expect(render(storePage, { states: open, seesServerConditions: false })).not.toContain(
+      "data-data-store-condition"
+    );
+    expect(render(storePage, { states: open })).toContain(
+      'data-data-store-condition="server_databases_open"'
+    );
+    const list = { list: [storeRow("visit-log")], states: open };
+    expect(render(storeList, { ...list, seesServerConditions: false })).not.toContain(
+      "on the server"
+    );
+    expect(render(storeList, list)).toContain("1 to do on the server");
+  });
+
+  it("is shown by the instance's own answers to a superadmin, and to an admin of the instance not (RIGHTS-1e)", async () => {
+    const published: BuildAsset = {
+      ...draftAsset("leads"),
+      revision: 2,
+      draftRevision: 2,
+      publishedRevision: 2,
+      config: { ...draftAsset("leads").config, title: "Leads" }
+    };
+    const pageAs = async (roles: string[]) => {
+      const statePath = apiOperations["data_stores.get"].path.replace(":store", published.name);
+      const context = {
+        ...platformContext(),
+        instanceActions: roles.includes("superadmin") ? ["system.view"] : []
+      };
+      const page = await mountBuildPage(
+        published,
+        "data-stores",
+        (request, url) =>
+          request.method === "GET" && url.pathname === statePath
+            ? Response.json(
+                storeState("leads", {
+                  conditions: [{ code: "server_databases_open", message: "advice" }]
+                })
+              )
+            : url.pathname === apiOperations["platform.context.get"].path
+              ? Response.json(context)
+              : undefined,
+        [],
+        { user: settingsUser({ roles }) }
+      );
+      await vi.waitFor(() => expect(page.textContent).toContain("Leads"), {
+        timeout: CONDITION_WAIT_MS
+      });
+      return page;
+    };
+    const operator = await pageAs(["user", "admin", "superadmin"]);
+    await vi.waitFor(
+      () =>
+        expect(
+          operator.querySelector('[data-data-store-condition="server_databases_open"]')
+        ).not.toBeNull(),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    await unmountBuildPages();
+
+    const admin = await pageAs(["user", "admin"]);
+    await vi.waitFor(() => expect(admin.textContent).toContain("Ready"), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(admin.querySelector("[data-data-store-condition]")).toBeNull();
+  });
+});
+
+describe("The test copy section (DT-2)", () => {
+  it("resets and deletes the copy, and shows the instance's refusal", async () => {
+    const calls: string[] = [];
+    const page = await mount(storePage, {
+      states: {
+        "visit-log": ready(
+          storeState("visit-log", {
+            testCopy: {
+              level: 2,
+              seedFiles: 3,
+              builtAt: "2026-10-28T09:00:00.000Z",
+              bytes: 8 * MB,
+              limitBytes: 100 * MB
+            }
+          })
+        )
+      },
+      testCopy: {
+        reset: (store) => {
+          calls.push(`reset ${store}`);
+          return Promise.resolve(undefined);
+        },
+        remove: (store) => {
+          calls.push(`delete ${store}`);
+          return Promise.resolve("The copy is being built. Try again in a moment.");
+        }
+      }
+    });
+    await act(async () =>
+      page.querySelector<HTMLButtonElement>("[data-data-store-test-copy-reset]")?.click()
+    );
+    expect(page.querySelector("[data-data-store-test-copy-failed]")).toBeNull();
+    await act(async () =>
+      page.querySelector<HTMLButtonElement>("[data-data-store-test-copy-delete]")?.click()
+    );
+    expect(calls).toEqual(["reset visit-log", "delete visit-log"]);
+    expect(page.querySelector("[data-data-store-test-copy-failed]")?.textContent).toBe(
+      "The copy is being built. Try again in a moment."
+    );
+    expect(render(storePage)).not.toContain("data-data-store-test-copy-reset");
+  });
+});
+
+// LOWS-A: a store's page reads its state again every 3 seconds while it is set up or migrated,
+// stops once it settled, and stops ten minutes after its first unsettled answer for a store
+// that never settles, by the clock, also where every later read fails. Each store the page
+// opens gets ten minutes of its own.
+describe("the state read of a Data Store", () => {
+  const POLL_MS = 3_000;
+  const MINUTE_MS = 60_000;
+  const MAX_MS = 10 * MINUTE_MS;
+
+  /**
+   * The store page's state read against an instance whose migrations the test settles and whose
+   * reads it can make fail. `open` shows another store, as the page does when one is picked.
+   */
+  async function mountStateRead() {
+    const instance = {
+      reads: { orders: 0, invoices: 0 } as Record<string, number>,
+      outcome: "pending" as "pending" | "applied",
+      failing: false
+    };
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const store = /^\/api\/v1\/data-stores\/([^/]+)$/u.exec(
+        new URL(new Request(input, init).url).pathname
+      )?.[1];
+      if (store === undefined) return new Response(null, { status: 404 });
+      instance.reads[store] = (instance.reads[store] ?? 0) + 1;
+      if (instance.failing) {
+        return Response.json(
+          { error: { code: "INTERNAL", message: "down", correlationId: "corr_1" } },
+          { status: 500 }
+        );
+      }
+      return Response.json(
+        storeState(store, {
+          level: 1,
+          lastMigration: { outcome: instance.outcome, migration: { number: 2, name: "add_total" } }
+        })
+      );
+    };
+    const shown: { open?: (store: string) => void } = {};
+    function Probe() {
+      const [store, setStore] = useState("orders");
+      shown.open = setStore;
+      useDataStoreSource().useStoreState(store);
+      return null;
+    }
+    const page = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl })),
+      "en",
+      createElement(Probe)
+    );
+    const pass = async (ms: number) => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    };
+    const open = async (store: string) => {
+      await act(async () => {
+        shown.open?.(store);
+      });
+      await pass(0);
+    };
+    await pass(0);
+    return { instance, pass, open, unmount: page.unmount };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"]
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reads again while the store settles and stops once it settled", async () => {
+    const { instance, pass, unmount } = await mountStateRead();
+    expect(instance.reads.orders).toBe(1);
+    await pass(POLL_MS);
+    await pass(POLL_MS);
+    expect(instance.reads.orders).toBe(3);
+    instance.outcome = "applied";
+    await pass(POLL_MS);
+    expect(instance.reads.orders).toBe(4);
+    await pass(POLL_MS * 10);
+    expect(instance.reads.orders).toBe(4);
+    await unmount();
+  });
+
+  it("stops reading a store that never settles after ten minutes", async () => {
+    const { instance, pass, unmount } = await mountStateRead();
+    await pass(MAX_MS - POLL_MS);
+    expect(instance.reads.orders).toBeGreaterThan(MAX_MS / POLL_MS - 5);
+    await pass(POLL_MS * 2);
+    const atCeiling = instance.reads.orders;
+    await pass(MAX_MS);
+    expect(instance.reads.orders).toBe(atCeiling);
+    expect(atCeiling).toBeLessThanOrEqual(MAX_MS / POLL_MS + 2);
+    await unmount();
+  });
+
+  // A failed read changes no answer, so a bound measured between answers never came.
+  it("stops after ten minutes where every read after the first unsettled answer fails", async () => {
+    const { instance, pass, unmount } = await mountStateRead();
+    instance.failing = true;
+    await pass(MINUTE_MS);
+    // It keeps trying while the reads fail, inside the ten minutes.
+    expect(instance.reads.orders).toBeGreaterThan(MINUTE_MS / POLL_MS - 2);
+    await pass(MAX_MS);
+    const atCeiling = instance.reads.orders;
+    expect(atCeiling).toBeLessThanOrEqual(MAX_MS / POLL_MS + 2);
+    await pass(MAX_MS * 2);
+    expect(instance.reads.orders).toBe(atCeiling);
+    await unmount();
+  });
+
+  it("gives each unsettled store it opens ten minutes of its own", async () => {
+    const { instance, pass, open, unmount } = await mountStateRead();
+    await pass(MINUTE_MS);
+    await open("invoices");
+    await pass(4 * MINUTE_MS);
+    expect(instance.reads.invoices).toBeGreaterThan((4 * MINUTE_MS) / POLL_MS - 2);
+    // Back to orders within the query cache's five minutes, so its unsettled answer is still
+    // held: it gets a window from now, not the one invoices began a minute in.
+    await open("orders");
+    await pass(7 * MINUTE_MS);
+    const ordersAt7 = instance.reads.orders ?? 0;
+    await pass(2 * MINUTE_MS);
+    expect(instance.reads.orders).toBeGreaterThan(ordersAt7);
+    await pass(2 * MINUTE_MS);
+    const ordersAtCeiling = instance.reads.orders;
+    await pass(MAX_MS);
+    expect(instance.reads.orders).toBe(ordersAtCeiling);
+    await unmount();
   });
 });

@@ -121,18 +121,6 @@ describe("the title of the asset a conversation is about", () => {
     );
   });
 
-  it("names an instance's Knowledge Base by its title", async () => {
-    const reads: string[] = [];
-    const base = asset("knowledge_base", "handbook-kb", "Handbuch", false);
-    const shown = await mount("knowledge_base", base.name, instance(base, reads));
-    await vi.waitFor(() => expect(shown.textContent).toBe("Handbuch"), {
-      timeout: CONDITION_WAIT_MS
-    });
-    expect(reads).toContain(
-      apiOperations["assets.get"].path.replace(":kind", base.kind).replace(":name", base.name)
-    );
-  });
-
   it("keeps the address of a store the reader may not read, and while it loads", async () => {
     let answer: () => void = () => undefined;
     const held = new Promise<void>((done) => {

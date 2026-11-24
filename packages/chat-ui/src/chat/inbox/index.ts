@@ -15,7 +15,6 @@ export { InboxItemPanel, InboxItemView } from "./inbox-item-panel";
 export { inboxItemSurface } from "./inbox-item-surface";
 export { InboxList } from "./inbox-list";
 export {
-  formatInboxAge,
   inboxListOutdatesItem,
   inboxRailEntry,
   inboxTabCount,

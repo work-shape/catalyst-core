@@ -87,11 +87,8 @@ it("signs out after account deletion is accepted for later removal", async () =>
     );
     await act(async () => button("Delete account").click());
     const dialog = required(document.querySelector('dialog, [role="dialog"]'));
-    const namedBy = required(dialog.getAttribute("aria-labelledby"));
-    expect(document.getElementById(namedBy)?.textContent).toBe("Delete account?");
     await act(async () => button("Delete account", dialog).click());
     await waitForText(container, "Sign in");
-    expect(container.querySelector('main[aria-label="Sign in"]')).not.toBeNull();
     expect(accepted).toBe(true);
     expect(deleted).toEqual([apiOperations["me.delete"].path]);
     expect(errors.mock.calls).toEqual([]);

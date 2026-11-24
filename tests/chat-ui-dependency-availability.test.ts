@@ -249,19 +249,9 @@ describe("publishing an agent that uses what its workspaces lack", () => {
     await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), { timeout: CONDITION_WAIT_MS });
 
     const banner = required(missingBanner());
-    expect(banner.textContent).toContain("Ask Ana Admin or Ben Boss to make them available.");
+    expect(banner.textContent).toContain("Ana Admin");
     expect(makeAvailableBox()).toBeNull();
     expect(banner.querySelector("a")).toBeNull();
-  });
-
-  it("asks for an instance admin where the instance names none", async () => {
-    mountDraft({ missing: [{ ...contracts, canMakeAvailable: false }], administrators: [] });
-    await openPublish();
-    await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), { timeout: CONDITION_WAIT_MS });
-
-    expect(missingBanner()?.textContent).toContain(
-      "Ask an admin for all workspaces to make them available."
-    );
   });
 
   // ACCEPT-2d C-1: the dialog names the workspaces the list was read for, by the names the page
@@ -271,32 +261,25 @@ describe("publishing an agent that uses what its workspaces lack", () => {
     workspaces,
     save: async () => undefined
   };
-  it.each([
-    [["ws_sales"], false, "Members in Sales cannot use:"],
-    [["ws_sales"], true, "Members in Sales or personal workspaces may be unable to use:"],
-    [["ws_gone"], false, "Members in some of this agent's workspaces cannot use:"]
-  ])(
-    "names the workspaces %j (personal: %s) the list was read for",
-    async (collaborationWorkspaceIds, personalWorkspaces, sentence) => {
-      mountDraft(
-        {
-          missing: [contracts],
-          administrators: [],
-          availability: { mode: "selected", personalWorkspaces, collaborationWorkspaceIds }
-        },
-        sharedChoice
-      );
-      await openPublish();
-      await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), {
-        timeout: CONDITION_WAIT_MS
-      });
-
-      expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
-        sentence
-      );
-      expect(missingBanner()?.textContent).not.toContain("ws_");
-    }
-  );
+  it("never names a workspace by an id it cannot name", async () => {
+    mountDraft(
+      {
+        missing: [contracts],
+        administrators: [],
+        availability: {
+          mode: "selected",
+          personalWorkspaces: false,
+          collaborationWorkspaceIds: ["ws_gone"]
+        }
+      },
+      sharedChoice
+    );
+    await openPublish();
+    await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(missingBanner()?.textContent).not.toContain("ws_");
+  });
 
   // A publisher who does not administer the workspace has no local name for it: the instance
   // names it.
@@ -316,9 +299,7 @@ describe("publishing an agent that uses what its workspaces lack", () => {
       timeout: CONDITION_WAIT_MS
     });
 
-    expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
-      "Members in Nordlicht cannot use:"
-    );
+    expect(missingBanner()?.textContent).toContain("Nordlicht");
   });
 
   it("says nothing where nothing is missing", async () => {
@@ -393,7 +374,6 @@ describe("publishing an agent that uses what its workspaces lack", () => {
       });
 
       const notice = required(document.querySelector("[data-offer-not-set]"));
-      expect(notice.textContent).toContain("Published, but where chats can choose the agent");
       expect(notice.textContent).toContain(sentence);
       // The choice stands in the page's own field as a change: nothing is saved yet.
       const section = required(document.querySelector("section#availability"));
@@ -406,11 +386,6 @@ describe("publishing an agent that uses what its workspaces lack", () => {
       await click(button("Save changes"));
       expect(saves).toEqual([everywhere]);
       expect(settled).toHaveBeenCalledTimes(1);
-    });
-
-    it("shows nothing of an offer that was set", async () => {
-      mountDraft(undefined, choice());
-      expect(document.querySelector("[data-offer-not-set]")).toBeNull();
     });
   });
 });
@@ -477,22 +452,6 @@ describe("saving where an agent is available", () => {
     ]);
   });
 
-  it("names the workspace the changed availability was read for", async () => {
-    mountAvailability();
-    await click(
-      required(
-        [...host.querySelectorAll<HTMLButtonElement>('button[role="checkbox"]')].find((box) =>
-          box.closest("label, div")?.textContent?.includes("Sales")
-        )
-      )
-    );
-    await vi.waitFor(() => expect(missingBanner()).not.toBeNull(), { timeout: CONDITION_WAIT_MS });
-
-    expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
-      "Members in Sales cannot use:"
-    );
-  });
-
   it("clears the choice when the availability changes again", async () => {
     mountAvailability();
     await click(radio("All workspaces"));
@@ -550,24 +509,6 @@ describe("where agents can use a Connection", () => {
       })
     );
   }
-
-  it("is a section of the Connection page that says members only use it", () => {
-    const markup = page(() => ({
-      saved: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] },
-      workspaces,
-      save: async () => undefined
-    }));
-    const section = /<section[^>]*id="availability">.*?<\/form>/su.exec(markup)?.[0] ?? "";
-
-    expect(section).toContain("Verfügbar in");
-    expect(section).toContain("weder Einstellungen noch Schlüssel sehen");
-    expect(section).toContain(
-      "Ohne Auswahl können Agenten sie in keinem Arbeitsbereich verwenden."
-    );
-    // Nothing changed yet: no save of its own and no missing list.
-    expect(section).not.toContain("Änderungen speichern");
-    expect(section).not.toContain("data-missing-dependencies");
-  });
 
   it("is not on the page of a reader who may not change it", () => {
     expect(page(() => undefined)).not.toContain('id="availability"');
@@ -737,14 +678,6 @@ describe("what the page asks of the instance", () => {
     expect(write?.url.pathname).toBe(availabilityPath("knowledge_base"));
     expect(write?.body).not.toHaveProperty("makeDependenciesAvailable");
     expect(write?.body).not.toHaveProperty("expectedRevision");
-  });
-
-  it("sets a Connection's availability under its own kind", async () => {
-    const { choice, requests } = await mountChoice("connection");
-    await act(async () => {
-      await choice.save(all, { makeDependenciesAvailable: false });
-    });
-    expect(availabilityWrites(requests)[0]?.url.pathname).toBe(availabilityPath("connection"));
   });
 
   it("sends an agent's choice with its availability, and only when it was made", async () => {

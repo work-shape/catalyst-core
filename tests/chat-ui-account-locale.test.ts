@@ -68,22 +68,14 @@ function saves(
 }
 
 describe("the language the interface asks for", () => {
-  it("is the account's once a signed-in person chose one, over this browser's", () => {
+  it("is a choice being saved, else the account's, else this browser's", () => {
     expect(chosenLocale({ saving: undefined, account: "de", stored: "en" })).toBe("de");
-  });
-
-  it("is the browser's where the account chose none, or nobody is signed in", () => {
     expect(chosenLocale({ saving: undefined, account: undefined, stored: "de" })).toBe("de");
     expect(chosenLocale({ saving: undefined, account: undefined, stored: undefined })).toBe(
       undefined
     );
-  });
-
-  it("is a choice still being saved, so the page does not flip back while it saves", () => {
+    // A choice still being saved, so the page does not flip back while it saves.
     expect(chosenLocale({ saving: "en", account: "de", stored: "en" })).toBe("en");
-  });
-
-  it("is the latest of the choices still being saved, and a name save names none", () => {
     expect(latestSavingLocale([{ locale: "de" }, { displayLabel: "Mara" }, { locale: "en" }])).toBe(
       "en"
     );

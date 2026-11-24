@@ -1,6 +1,5 @@
 export {
   approvalActionFailure,
-  formatInboxAge,
   InboxAreaView,
   type InboxCounts,
   type InboxItemActions,

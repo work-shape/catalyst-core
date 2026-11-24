@@ -587,7 +587,7 @@ export const draftAttachmentPolling = {
   refetchOnWindowFocus: "always"
 } as const;
 
-export function withoutDraftAttachment<Attachment extends { id: string }>(
+function withoutDraftAttachment<Attachment extends { id: string }>(
   attachments: readonly Attachment[],
   attachmentId: string
 ): Attachment[] {

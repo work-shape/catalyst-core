@@ -9,9 +9,4 @@ export {
   mentionsName,
   withoutMentions
 } from "../../../packages/chat-ui/src/chat/share/mention-trigger";
-export {
-  listNames,
-  noMatchWords,
-  outsideWords,
-  shareRefusal
-} from "../../../packages/chat-ui/src/chat/share/share-words";
+export { noMatchWords, shareRefusal } from "../../../packages/chat-ui/src/chat/share/share-words";

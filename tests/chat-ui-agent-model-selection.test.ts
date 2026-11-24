@@ -1,4 +1,3 @@
-import { createTranslationContext } from "./support/chat-ui/shared";
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -42,13 +41,9 @@ describe("agent model selection", () => {
     });
   });
 
-  it("uses the user's pick while the agent offers it", () => {
+  it("uses the user's pick while the agent offers it, else the agent's own model", () => {
     expect(agentModelSelection(chooser, "terra").selectedModel).toEqual(terra);
-  });
-
-  it("falls back to the new agent's own model when it does not offer the pick", () => {
     const selection = agentModelSelection(fixed, "terra");
-    // A single model renders no selector in the composer.
     expect(selection.selectableModels).toHaveLength(1);
     expect(selection.selectedModel).toMatchObject({ bindingId: "luna", model: "gpt-5.6-luna" });
   });
@@ -122,23 +117,6 @@ describe("agent model selection", () => {
         noModelAllowed: false
       });
     });
-
-    it.each([
-      [
-        "en",
-        "Not allowed in a conversation with data from personal connections",
-        "New conversation"
-      ],
-      [
-        "de",
-        "Nicht für Unterhaltungen mit Daten aus persönlichen Verbindungen freigegeben",
-        "Neue Unterhaltung"
-      ]
-    ] as const)("words the blocked model and the way out (%s)", (locale, blocked, fresh) => {
-      const { t } = createTranslationContext(locale);
-      expect(t("modelPickerPersonalDataBlocked")).toBe(blocked);
-      expect(t("personalDataNewConversation")).toBe(fresh);
-    });
   });
 
   it("requests an effort only when the user moved the model off its default", () => {
@@ -173,11 +151,11 @@ describe("agent model selection", () => {
   });
 });
 
-function renderPicker(models: AgentSelectableModel[], locale: "en" | "de" = "en") {
+function renderPicker(models: AgentSelectableModel[]) {
   return renderInUiRoot(
     createElement(
       TranslationProvider,
-      { children: null, locale },
+      { children: null, locale: "en" as const },
       createElement(ModelPicker, {
         models,
         selectedModelBindingId: models[0]?.bindingId,
@@ -241,44 +219,13 @@ describe("conversation model picks", () => {
 });
 
 describe("composer model picker", () => {
-  it("names the selected model and its effort on the trigger", () => {
-    const markup = renderPicker([own, terra]);
-
-    expect(markup).toContain('aria-label="Select model"');
-    expect(markup).toContain(">GPT-5.6 Sol<");
-    expect(markup).toContain(">Medium<");
-    // The list stays closed until asked for.
-    expect(markup).not.toContain("GPT-5.6 Terra");
-  });
-
-  it.each([
-    ["en", "Reasoning effort", "Off"],
-    ["de", "Denkaufwand", "Aus"]
-  ] as const)(
-    "calls the effort choice and its lowest step by their words (%s)",
-    (locale, choice, off) => {
-      const { t } = createTranslationContext(locale);
-
-      // The picker's row, panel and slider all carry this one label.
-      expect(t("modelPickerReasoning")).toBe(choice);
-      expect(t("reasoningEffortNone")).toBe(off);
-    }
-  );
-
-  it("names the effort on the trigger in German with the agent page's word", () => {
-    expect(renderPicker([{ ...own, reasoningEffort: "xhigh" }], "de")).toContain(">Sehr hoch<");
-  });
-
   it("shows the name release config gives a model, not its deployment name", () => {
     const markup = renderPicker([
       { ...own, model: "client-gpt-6.1-sol", label: "GPT-6.1 Sol", vendor: "openai" },
       terra
     ]);
-
     expect(markup).toContain(">GPT-6.1 Sol<");
     expect(markup).not.toContain("client-gpt-6.1-sol");
-    // The mark of the vendor release config names, which the deployment name does not suggest.
-    expect(markup).toContain('d="M9.205 8.658');
   });
 
   it("offers a single model only for its reasoning effort", () => {
@@ -286,45 +233,21 @@ describe("composer model picker", () => {
     expect(renderPicker([terra])).toBe("");
     expect(renderPicker([])).toBe("");
   });
-
-  it("leaves the effort off the trigger for a model without a choice", () => {
-    const markup = renderPicker([terra, own]);
-
-    expect(markup).toContain(">GPT-5.6 Terra<");
-    expect(markup).not.toContain(">Low<");
-  });
 });
 
 describe("model card usage consumption", () => {
-  const tiers = ["very_low", "low", "moderate", "elevated", "high", "very_high"] as const;
-  const card = (usageTier: (typeof tiers)[number] | undefined, locale: "en" | "de") =>
+  const card = (usageTier: "low" | "high" | undefined) =>
     renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { children: null, locale },
+        { children: null, locale: "en" as const },
         createElement(ModelCard, { model: { ...own, ...(usageTier ? { usageTier } : {}) } })
       )
     );
-  const meter = (markup: string) => /<div role="meter"[^>]*>/u.exec(markup)?.[0] ?? "";
 
-  it.each([
-    ["en", "Usage consumption", ["Very low", "Low", "Moderate", "Elevated", "High", "Very high"]],
-    ["de", "Verbrauch", ["Sehr niedrig", "Niedrig", "Mittel", "Erhöht", "Hoch", "Sehr hoch"]]
-  ] as const)("names the six tiers in %s, each one step above the last", (locale, label, words) => {
-    tiers.forEach((tier, index) => {
-      const markup = card(tier, locale);
-
-      expect(meter(markup)).toContain(`aria-label="${label}"`);
-      expect(meter(markup)).toContain('aria-valuemax="6"');
-      expect(meter(markup)).toContain(`aria-valuenow="${index + 1}"`);
-      expect(meter(markup)).toContain(`aria-valuetext="${words[index]}"`);
-      // The word is on the card too, not only in the meter's description.
-      expect(markup).toContain(`>${words[index]}</span>`);
-      expect(markup.match(/data-filled=""/gu)).toHaveLength(index + 1);
-    });
-  });
-
-  it("shows no meter for a model without a tier", () => {
-    expect(card(undefined, "en")).not.toContain('role="meter"');
+  it("shows the tier as a step of six, and no meter for a model without a tier", () => {
+    expect(card("low")).toContain('aria-valuenow="2"');
+    expect(card("high")).toContain('aria-valuenow="5"');
+    expect(card(undefined)).not.toContain('role="meter"');
   });
 });

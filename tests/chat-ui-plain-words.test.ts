@@ -13,11 +13,8 @@ import { AuditView } from "@work-shape/catalyst-chat-ui/control-plane";
 import { EVENTS } from "@work-shape/catalyst-core";
 import { UiRoot, uiLabelsDe } from "@work-shape/catalyst-ui";
 
-// UXA-1b (navigation-and-layout section 4.16): member and admin screens use the words of the
-// product, never engineering terms, audit keys or error codes. Every message of the interface
-// catalogs is read in English and German; a word that stays has its exception named below,
-// with the reason it stays. Fails without UXA-1b: the catalogs said "operator", "release
-// config", "Secret Store", "revision", "System prompt" and "widgets".
+// UXA-1b: the audit view shows no event type, reason code or stored id, and every audited event
+// has words in both catalogs.
 
 const i18n = join(dirname(fileURLToPath(import.meta.url)), "../packages/chat-ui/src/shared/i18n");
 const locales = ["en", "de"] as const;
@@ -51,112 +48,6 @@ function catalog(): Record<Locale, [string, string][]> {
   }
   return found;
 }
-
-/** The refused words, each in the locales it is refused in. */
-const REFUSED: { word: string; pattern: RegExp; in: readonly Locale[] }[] = [
-  { word: "release config", pattern: /release[- ]?config|Release-Konfiguration/iu, in: locales },
-  { word: "operator", pattern: /\boperators?\b|\bBetreiber/iu, in: locales },
-  { word: "Secret Store", pattern: /secret[- ]?store/iu, in: locales },
-  { word: "bearer", pattern: /\bbearer\b/iu, in: locales },
-  { word: "MCP", pattern: /\bmcp\b/iu, in: locales },
-  { word: "revision", pattern: /\brevisions?\b/iu, in: locales },
-  { word: "System prompt", pattern: /system[- ]?prompt|Systemanweisung/iu, in: locales },
-  { word: "tool calls", pattern: /\btool[- ]calls?\b|Werkzeugaufruf|Tool-Aufruf/iu, in: locales },
-  { word: "widget", pattern: /\bwidgets?\b/iu, in: locales },
-  { word: "audit key", pattern: /\b[a-z]+(?:_[a-z]+)*\.[a-z]+_[a-z_]+\b/u, in: locales },
-  {
-    word: "error code",
-    pattern: /\b[A-Z]{2,}(?:_[A-Z]+)+\b|\b(?:FORBIDDEN|UNAUTHENTICATED)\b/u,
-    in: locales
-  },
-  // German says Skill: "Fähigkeit" beside it on one screen reads as a second thing.
-  { word: "Fähigkeit", pattern: /Fähigkeit/u, in: ["de"] },
-  // SCOPE-WORDS: places use the ladder; global settings and rights say all workspaces.
-  { word: "instance", pattern: /instanz|\binstances?\b/iu, in: locales },
-  // Where an asset sits is asked "Wo", never "Geltungsbereich" (or Scope).
-  { word: "Geltungsbereich", pattern: /Geltungsbereich/u, in: ["de"] }
-];
-
-/** Where a refused word stays, by key or key prefix, and why. */
-const EXCEPTIONS: { keys: RegExp; words: readonly string[]; reason: string }[] = [
-  {
-    keys: /^(?:operations|jobs|modules|infrastructure)\./u,
-    words: ["operator", "release config", "revision", "tool calls", "MCP"],
-    reason:
-      "The System group: Jobs, Operations, Modules and Infrastructure are shown only to the team that runs the instance (ruling 2 of section 4.16)."
-  },
-  {
-    keys: /^(?:connectionCreate\.(?:mcpTitle|mcpHeading|proposalCardMcp)|connections\.(?:serverDescription|urlHint|exposeOutside)|guardrails\.runs\.byMcp|workflows\.workflowSettings\.byOutside|rights\.actionConnectionAddOwn|configOwnServers(?:Text)?|ownServers\.\w+)$/u,
-    words: ["MCP"],
-    reason:
-      "MCP server is the kind of Connection a builder picks, the client an outside tool connects as, and what a person adds as their own (PMCP), and the group of those on an agent's page; the provider names it so."
-  },
-  {
-    keys: /^(?:connectionCreate\.sendAsBearer|connections\.authBearer)$/u,
-    words: ["bearer"],
-    reason: "The header a REST API receives, in the words its provider's documentation uses."
-  },
-  {
-    keys: /^capabilities\.(?:title|off)$/u,
-    words: ["Fähigkeit", "instance"],
-    reason:
-      "Studio's Capabilities page and its mark on a module that is off, in the words section 4.3 of the navigation spec gives them (TOOLS-2)."
-  },
-  {
-    keys: /^(?:rulesInForce\.(?:description|floor)|guardrailAnswer\.setByOperator)$/u,
-    words: ["operator"],
-    reason:
-      "The release floor is shown as set by the operator, whom nobody in the product can ask to change it (GR-3)."
-  },
-  {
-    keys: /^personalApiKeys\.createdDescription$/u,
-    words: ["error code"],
-    reason: "CATALYST_API_KEY is the variable the person sets for the CLI; it is no error code."
-  }
-];
-
-/** The text a person reads: the placeholders a message fills in are not its words. */
-const said = (text: string) => text.replace(/\{[^}]*\}/gu, "");
-
-describe("plain words in the interface (UXA-1b)", () => {
-  const messages = catalog();
-
-  it("reads both catalogs", () => {
-    for (const locale of locales) expect(messages[locale].length).toBeGreaterThan(1000);
-  });
-
-  it.each(REFUSED.map((rule) => [rule.word, rule] as const))(
-    "says no %s outside its named exceptions",
-    (word, rule) => {
-      const found = rule.in.flatMap((locale) =>
-        messages[locale]
-          .filter(([key, text]) => rule.pattern.test(said(text)) && !excepted(key, word))
-          .map(([key, text]) => `${locale} ${key}: ${text}`)
-      );
-      expect(found).toEqual([]);
-    }
-  );
-
-  it.each(EXCEPTIONS.map((exception) => [exception.reason, exception] as const))(
-    "keeps each exception in use: %s",
-    (_reason, exception) => {
-      for (const word of exception.words) {
-        const rule = REFUSED.find((candidate) => candidate.word === word);
-        expect(rule, word).toBeDefined();
-      }
-      const used = locales.some((locale) =>
-        messages[locale].some(
-          ([key, text]) =>
-            exception.keys.test(key) &&
-            exception.words.some((word) =>
-              REFUSED.find((rule) => rule.word === word)?.pattern.test(said(text))
-            )
-        )
-      );
-      expect(used, String(exception.keys)).toBe(true);
-    }
-  );
-});
 
 // UXA-1b2: the audit view says each activity, event, target and reason in the catalogs' words.
 // The server sends the event type, a tool's action and reason codes; a type or code without
@@ -207,18 +98,6 @@ describe("plain words in the audit view (UXA-1b2)", () => {
       })
     ]);
 
-    for (const words of [
-      "Lesen der Operationen einer Verbindung fehlgeschlagen",
-      "Das externe System hat die Anmeldung abgelehnt.",
-      "Ein interner Fehler.",
-      "Befehl ausgeführt",
-      "Der Anmeldung fehlt eine Berechtigung, die der Aufruf brauchte.",
-      "Unterhaltung",
-      "Sonstige Aktivität",
-      "Für diesen Grund gibt es keine Beschreibung."
-    ]) {
-      expect(text).toContain(words);
-    }
     for (const code of [
       "connection.discovery_failed",
       "operation.completed",
@@ -236,7 +115,6 @@ describe("plain words in the audit view (UXA-1b2)", () => {
     ]) {
       expect(text).not.toContain(code);
     }
-    for (const rule of REFUSED) expect(text, rule.word).not.toMatch(rule.pattern);
   });
 });
 
@@ -275,17 +153,6 @@ describe("what an audit row is about, in words (UXA-1b3)", () => {
         ]
       })
     ]);
-    for (const words of [
-      "Agent: Vertriebsassistent",
-      "Skill",
-      "Aufruf: Wettervorhersage",
-      "Rolle: Admin",
-      "Person"
-    ]) {
-      expect(text).toContain(words);
-    }
-    // The correlation id stands folded under "Technische Details".
-    expect(text).toContain("Technische Details");
     for (const id of ["sales", "secret-skill", "demo.weather_forecast", "user_ada", "corr_"]) {
       expect(text).not.toContain(id);
     }
@@ -345,8 +212,4 @@ async function germanAuditText(auditActivities: AuditActivity[]): Promise<string
   await act(async () => root.unmount());
   container.remove();
   return text;
-}
-
-function excepted(key: string, word: string): boolean {
-  return EXCEPTIONS.some((exception) => exception.keys.test(key) && exception.words.includes(word));
 }

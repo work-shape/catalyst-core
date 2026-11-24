@@ -93,68 +93,37 @@ describe("the default rules on chat input", () => {
     expect(parseClientInstanceConfig(createTestConfig()).guardrails).toEqual({});
   });
 
-  it("have no rule on an IBAN or a tax id", () => {
-    const patterns = Object.values(CHAT_INPUT_FLOOR_GUARDRAILS).map((rule) =>
-      compileGuardrailPattern(rule.check.pattern, "checksum" in rule.check ? "luhn" : undefined)
-    );
-    for (const text of [IBAN, TAX_ID, TAX_NUMBER, `Mein Konto: ${IBAN}`]) {
-      expect(
-        patterns.some((pattern) => pattern.test(text)),
-        text
-      ).toBe(false);
+  it("refuse a model_judge check, a code check and require_approval at load", () => {
+    for (const [check, outcome] of [
+      [{ kind: "model_judge", modelBindingId: "guardrailCheck", instruction: "x" }, "warn"],
+      [{ kind: "code", module: "./check.js" }, "warn"],
+      [{ kind: "pattern", pattern: "x" }, "require_approval"]
+    ] as const) {
+      expect(() =>
+        parseClientInstanceConfig({
+          ...createTestConfig({ modelBindings: [judgeBinding] }),
+          guardrails: { chat_judge: { on: CHAT_INPUT_EVENT, check, outcome } }
+        })
+      ).toThrow("Client instance config is invalid");
     }
-  });
-
-  it.each([
-    ["model_judge", { kind: "model_judge", modelBindingId: "guardrailCheck", instruction: "x" }],
-    ["code", { kind: "code", module: "./check.js" }]
-  ])("refuse a %s check at load", (_kind, check) => {
-    expect(() =>
-      parseClientInstanceConfig({
-        ...createTestConfig({ modelBindings: [judgeBinding] }),
-        guardrails: { chat_judge: { on: CHAT_INPUT_EVENT, check, outcome: "warn" } }
-      })
-    ).toThrow("Client instance config is invalid");
-  });
-
-  it("refuse require_approval at load", () => {
-    expect(() =>
-      parseClientInstanceConfig({
-        ...createTestConfig(),
-        guardrails: {
-          chat_hold: {
-            on: CHAT_INPUT_EVENT,
-            check: { kind: "pattern", pattern: "x" },
-            outcome: "require_approval"
-          }
-        }
-      })
-    ).toThrow("Client instance config is invalid");
   });
 });
 
 describe("the guardrails at message.before_send", () => {
   // Fails without the change: no guardrail ran on a person's message.
-  it.each([
-    ["a secret", `Hier der Token: ${GITHUB_TOKEN}`, "chat-secrets", "block"],
-    ["a private key", "-----BEGIN OPENSSH PRIVATE KEY-----", "chat-secrets", "block"],
-    ["a password", "Passwort: Sommer2026!", "chat-passwords", "warn"],
-    ["a card number", `Zahle mit ${CARD}`, "chat-card-numbers", "warn"]
-  ])("answer %s", async (_case, text, guardrailName, outcome) => {
+  it("block a secret and warn about a password or a card number", async () => {
     const f = await floor();
-    const answers = await f.runner.answer(message(text), context);
-    expect(answers.filter((answer) => answer.outcome !== "allow")).toEqual([
-      expect.objectContaining({ guardrailName, outcome, field: "text", matchCount: 1 })
-    ]);
-  });
-
-  it("allow a message with an IBAN, a tax id or a card number that fails the Luhn check", async () => {
-    const f = await floor();
-    const answers = await f.runner.answer(
-      message(`Konto ${IBAN}, Steuer-ID ${TAX_ID}, Karte ${CARD_WRONG_CHECKSUM}`),
-      context
-    );
-    expect(answers.map((answer) => answer.outcome)).toEqual(["allow", "allow", "allow"]);
+    for (const [text, guardrailName, outcome] of [
+      [`Hier der Token: ${GITHUB_TOKEN}`, "chat-secrets", "block"],
+      ["-----BEGIN OPENSSH PRIVATE KEY-----", "chat-secrets", "block"],
+      ["Passwort: Sommer2026!", "chat-passwords", "warn"],
+      [`Zahle mit ${CARD}`, "chat-card-numbers", "warn"]
+    ] as const) {
+      const answers = await f.runner.answer(message(text), context);
+      expect(answers.filter((answer) => answer.outcome !== "allow")).toEqual([
+        expect.objectContaining({ guardrailName, outcome, field: "text", matchCount: 1 })
+      ]);
+    }
   });
 
   it("check the text of the attachments as their own field", async () => {

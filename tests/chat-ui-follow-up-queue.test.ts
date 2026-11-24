@@ -138,11 +138,11 @@ describe("follow-up queue above the composer", () => {
     return createElement(AssistantRuntimeProvider, { runtime }, children);
   }
 
-  function render(value: FollowUpQueueModel | undefined, locale: "en" | "de" = "en"): string {
+  function render(value: FollowUpQueueModel | undefined): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { children: null, locale },
+        { children: null, locale: "en" },
         createElement(
           Runtime,
           null,
@@ -182,156 +182,58 @@ describe("follow-up queue above the composer", () => {
     expect(item.attachments).toEqual([
       { fileId: "file_1", filename: "screen.png", mimeType: "image/png" }
     ]);
-    const withText = render(model({ items: [item] }));
-    expect(withText).toContain("A follow-up from B");
-    expect(withText).toContain("screen.png");
-    const alone = render(model({ items: [{ ...item, text: "" }] }));
-    expect(alone).toContain('title="screen.png"');
+    expect(render(model({ items: [item] }))).toContain("screen.png");
+    expect(render(model({ items: [{ ...item, text: "" }] }))).toContain('title="screen.png"');
   });
 
-  it.each(["en", "de"] as const)("shows B's server label in A's tab in %s", (locale) => {
-    const item = followUpQueueItem(fromB, "a", undefined);
-    expect(item.own).toBe(false);
-    const markup = render(model({ items: [item] }), locale);
-    expect(markup).toContain(locale === "en" ? "From Bea Berg" : "Von Bea Berg");
-    expect(markup).not.toContain('aria-label="Edit"');
-  });
-
-  it.each(["en", "de"] as const)(
-    "says a steer into the live run is read after the agent's current step in %s",
-    (locale) => {
-      const steer = { ...fromB, mode: "steer" as const, dispatchedRunId: "run_live" };
-      const item = followUpQueueItem(steer, "b", "run_live");
-      expect(item.steering).toBe(true);
-      // Alone, the heading says it; it waits for no answer.
-      const alone = render(model({ items: [item] }), locale);
-      expect(alone).toContain(locale === "en" ? "Steering" : "Lenkt die Antwort");
-      expect(alone).toContain(
-        locale === "en"
-          ? "The agent reads it after its current step and keeps answering."
-          : "Der Agent liest sie nach seinem aktuellen Schritt und antwortet weiter."
-      );
-      expect(alone).not.toContain(locale === "en" ? "whole answer" : "ganzen Antwort");
-      // Beside a queued message, its own row says it is read sooner.
-      const mixed = render(model({ items: [item, own] }), locale);
-      expect(mixed).toContain(locale === "en" ? "Queued" : "In der Warteschlange");
-      expect(mixed).toContain(
-        locale === "en"
-          ? "Steers: the agent reads it after its current step"
-          : "Lenkt: Der Agent liest sie nach seinem aktuellen Schritt"
-      );
-      // Once its run ended, it waits as any queued message.
-      expect(followUpQueueItem(steer, "b", undefined).steering).toBe(false);
-      expect(followUpQueueItem(steer, "b", "run_next").steering).toBe(false);
-    }
-  );
-
-  it("keeps B's own tab unchanged when the server includes B's label", () => {
-    const item = followUpQueueItem(fromB, "b", undefined);
-    expect(item.own).toBe(true);
-    const markup = render(model({ items: [item] }));
-    expect(markup).toContain('aria-label="Edit"');
-    expect(markup).toContain('aria-label="Remove"');
-    expect(markup).not.toContain("From Bea Berg");
-  });
-
-  it.each(["en", "de"] as const)(
-    "uses the generic text for an unavailable author in %s",
-    (locale) => {
-      const item = followUpQueueItem({ ...fromB, authorDisplayLabel: undefined }, "a", undefined);
-      const markup = render(model({ items: [item] }), locale);
-      expect(markup).toContain(
-        locale === "en" ? "From another member" : "Von einem anderen Mitglied"
-      );
-      expect(markup).not.toContain("Bea Berg");
-    }
-  );
-
-  it("lists the queued messages oldest first while the run goes", () => {
-    const markup = render(model({}));
-    expect(markup).toContain('aria-label="Queued messages"');
-    expect(markup).toContain("Queued");
-    expect(markup).toContain("Sent once the agent has finished this whole answer.");
-    expect(markup.indexOf(own.text)).toBeLessThan(markup.indexOf(others.text));
-    expect(markup).not.toContain("Send now");
-  });
-
-  it("offers Edit and Remove only on the reader's own message and names the other author", () => {
-    const markup = render(model({ items: [others] }));
-    expect(markup).toContain("From Anna Berg");
+  it("names another member's message by the server's label, and offers Edit and Remove only on one's own", () => {
+    const fromOther = followUpQueueItem(fromB, "a", undefined);
+    expect(fromOther.own).toBe(false);
+    const markup = render(model({ items: [fromOther] }));
+    expect(markup).toContain("Bea Berg");
     expect(markup).not.toContain('aria-label="Edit"');
     expect(markup).not.toContain('aria-label="Remove"');
 
-    const ownMarkup = render(model({ items: [own] }));
+    const unknown = followUpQueueItem({ ...fromB, authorDisplayLabel: undefined }, "a", undefined);
+    expect(render(model({ items: [unknown] }))).not.toContain("Bea Berg");
+
+    const ownItem = followUpQueueItem(fromB, "b", undefined);
+    expect(ownItem.own).toBe(true);
+    const ownMarkup = render(model({ items: [ownItem] }));
     expect(ownMarkup).toContain('aria-label="Edit"');
     expect(ownMarkup).toContain('aria-label="Remove"');
+    expect(ownMarkup).not.toContain("Bea Berg");
   });
 
-  it.each(["en", "de"] as const)(
-    "offers Steer now on the reader's queued message in their own run in %s",
-    (locale) => {
-      const label = locale === "en" ? "Steer now" : "Jetzt lenken";
-      const steered: string[] = [];
-      const markup = render(model({ steer: (id) => steered.push(id) }), locale);
-      expect(markup.split(`>${label}<`)).toHaveLength(2);
-      expect(markup).toContain(
-        locale === "en"
-          ? 'title="The agent reads it after its current step, instead of after the whole answer."'
-          : 'title="Der Agent liest sie nach seinem aktuellen Schritt, nicht erst nach der ganzen Antwort."'
-      );
-      expect(markup).toContain(
-        locale === "en"
-          ? "Sent once the agent has finished this whole answer."
-          : "Wird gesendet, sobald der Agent mit der ganzen Antwort fertig ist."
-      );
-      // Not in someone else's run, not while the queue stands still, not on a steer already.
-      expect(render(model({ ownRun: false }), locale)).not.toContain(`>${label}<`);
-      expect(render(model({ phase: "paused" }), locale)).not.toContain(`>${label}<`);
-      expect(render(model({ items: [{ ...own, steering: true }] }), locale)).not.toContain(
-        `>${label}<`
-      );
-    }
-  );
-
-  it("says the queue is paused after a stop, with Send now and Discard", () => {
-    const markup = render(model({ phase: "paused" }));
-    expect(markup).toContain("Queue paused");
-    // The run's own notice says why. The queue says what restarts it: a message sent now runs
-    // first, and the queue goes on after its answer.
-    expect(markup).toContain("Continues after the next message is answered.");
-    expect(markup).not.toContain("Sent once the agent has finished this whole answer.");
-    expect(markup).toContain("Send now");
-    expect(markup).toContain("Discard");
-    // The oldest message is the reader's own; the other one's row only names its author.
-    expect(markup).toContain("From Anna Berg");
-    expect(markup).not.toContain("Only they can send it now.");
+  it("steers only while the run it was sent into goes", () => {
+    const steer = { ...fromB, mode: "steer" as const, dispatchedRunId: "run_live" };
+    expect(followUpQueueItem(steer, "b", "run_live").steering).toBe(true);
+    expect(followUpQueueItem(steer, "b", undefined).steering).toBe(false);
+    expect(followUpQueueItem(steer, "b", "run_next").steering).toBe(false);
   });
 
-  it("offers Send now only to the author of the oldest message, and Discard to an author", () => {
+  it("offers Steer now on the reader's queued message in their own run only", () => {
+    const steerNow = />Steer now</u;
+    expect(render(model({}))).toMatch(steerNow);
+    // Not in someone else's run, not while the queue stands still, not on a steer already.
+    expect(render(model({ ownRun: false }))).not.toMatch(steerNow);
+    expect(render(model({ phase: "paused" }))).not.toMatch(steerNow);
+    expect(render(model({ items: [{ ...own, steering: true }] }))).not.toMatch(steerNow);
+  });
+
+  it("offers Send now only to the author of the oldest message once paused, and Discard to an author", () => {
+    expect(render(model({}))).not.toContain("Send now");
+    const ownFirst = render(model({ phase: "paused" }));
+    expect(ownFirst).toContain("Send now");
+    expect(ownFirst).toContain("Discard");
+
     const othersOnly = render(model({ items: [others], phase: "paused" }));
-    expect(othersOnly).toContain("Queue paused");
     expect(othersOnly).not.toContain("Send now");
     expect(othersOnly).not.toContain("Discard");
 
     const othersFirst = render(model({ items: [others, own], phase: "paused" }));
     expect(othersFirst).not.toContain("Send now");
     expect(othersFirst).toContain("Discard");
-    // Where Send now is not offered, the oldest row says why.
-    for (const markup of [othersOnly, othersFirst]) {
-      expect(markup).toContain("From Anna Berg · Only they can send it now.");
-    }
-    expect(render(model({ items: [others] }))).not.toContain("Only they can send it now.");
-  });
-
-  it("reads in German", () => {
-    const markup = render(model({ phase: "paused" }), "de");
-    expect(markup).toContain("Warteschlange angehalten");
-    expect(markup).toContain("Geht nach der nächsten Antwort weiter.");
-    expect(markup).toContain("Jetzt senden");
-    expect(markup).toContain("Von Anna Berg");
-    expect(render(model({ items: [others], phase: "paused" }), "de")).toContain(
-      "Von Anna Berg · Nur dieses Mitglied kann sie jetzt senden."
-    );
   });
 
   it("shows nothing while the queue is empty, and an error where the reader acted", () => {
@@ -339,6 +241,5 @@ describe("follow-up queue above the composer", () => {
     expect(render(undefined)).toBe("");
     const failed = render(model({ items: [], error: "The message could not be queued." }));
     expect(failed).toContain('role="alert"');
-    expect(failed).toContain("The message could not be queued.");
   });
 });

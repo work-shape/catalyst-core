@@ -5,7 +5,7 @@ import type { TranslationKey } from "../../shared/i18n";
  * in English; where an operator wrote a rule of the same name, its own words stand, as its title
  * then differs from the default's.
  */
-export const CHAT_INPUT_RULE_WORDS: Readonly<
+const CHAT_INPUT_RULE_WORDS: Readonly<
   Record<string, { defaultTitle: string; title: TranslationKey; reason: TranslationKey }>
 > = {
   "chat-secrets": {

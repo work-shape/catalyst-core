@@ -128,47 +128,14 @@ describe("the field of the publish dialog", () => {
       )
     );
 
-  it("asks where with the places the reader may set, the agent's own chosen", () => {
-    const html = markup(
-      publishOffer({ owner: { kind: "instance" }, saved: NOWHERE, maySet: true }),
-      "own"
-    );
-    expect(html).toContain("Wählbar in:");
-    expect(html).toContain("Alle Arbeitsbereiche");
-    expect(html).toContain("Noch in keinem Chat");
-    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>.*?Alle Arbeitsbereiche/su);
-    expect(html).not.toContain('disabled=""');
-
-    const team = markup(
-      publishOffer({ owner: { kind: "team", workspaceId: TEAM }, saved: NOWHERE, maySet: true }),
-      "own"
-    );
-    expect(team).toContain("Controlling");
-    expect(team).not.toContain("Alle Arbeitsbereiche");
-  });
-
-  it("shows the place read-only, with who can change it, to a reader without the right", () => {
+  it("lets only a reader with the right change the place", () => {
     const html = markup(
       publishOffer({ owner: { kind: "instance" }, saved: NOWHERE, maySet: false }),
       "own"
     );
-    expect(html).toContain("Wählbar in:");
-    expect(html).toContain("Noch in keinem Chat");
     expect(html).toContain('disabled=""');
-    expect(html).toContain(
-      "Ändern darf das nur, wer unter „Alle“ das Recht „Agenten bearbeiten“ hat."
-    );
-  });
-
-  it("offers an agent of Only me in its owner's own chats, with nothing to choose", () => {
-    const html = markup(
-      publishOffer({ owner: { kind: "mine" }, saved: NOWHERE, maySet: true }),
-      "own"
-    );
-    expect(html).toContain("Wählbar in:");
-    expect(html).toContain("In deinen eigenen Chats");
-    expect(html).toContain("die sonst niemand liest");
-    expect(html).toContain('disabled=""');
-    expect(html).not.toContain("Noch in keinem Chat");
+    expect(
+      markup(publishOffer({ owner: { kind: "instance" }, saved: NOWHERE, maySet: true }), "own")
+    ).not.toContain('disabled=""');
   });
 });

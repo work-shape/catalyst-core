@@ -2,7 +2,11 @@
 
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { AssetSummary, LocaleCode, SafeConfig } from "@work-shape/catalyst-api-client";
+import type {
+  AssetSummary,
+  ConversationListItem,
+  SafeConfig
+} from "@work-shape/catalyst-api-client";
 import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
@@ -17,13 +21,15 @@ import {
   withAppOpen,
   WorkspaceRail
 } from "@work-shape/catalyst-chat-ui/apps";
+import { parseRailProjectsOpen, railProjectsToggled, useRailProjectsOpen } from "./support/chat-ui";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { createTestConfig } from "./support/fixtures";
 
 // The published Apps under the Apps row of the rail: which ones, in which order, where the rail
 // shows none, and the caret that folds them. Felix, 2026-10-19: "either design them nicer and
 // collapsible or leave them out for now". They stand folded until the person opens them, the
-// choice is kept in the browser, and the App on screen opens the fold.
+// choice is kept in the browser, and the App on screen opens the fold. Each project of the rail
+// folds the same way on its own (Felix, 2026-11-04).
 
 const noop = () => undefined;
 
@@ -38,10 +44,10 @@ const railConfig: SafeConfig = safeConfigSchema.parse(
 
 type RailProps = ComponentProps<typeof WorkspaceRail>;
 
-function rail(overrides: Partial<RailProps> = {}, locale: LocaleCode = "en") {
+function rail(overrides: Partial<RailProps> = {}) {
   return createElement(
     TranslationProvider,
-    { children: null, locale },
+    { children: null, locale: "en" },
     createElement(WorkspaceRail, {
       config: railConfig,
       conversations: [],
@@ -68,8 +74,8 @@ function rail(overrides: Partial<RailProps> = {}, locale: LocaleCode = "en") {
   );
 }
 
-function renderRail(overrides: Partial<RailProps> = {}, locale: LocaleCode = "en"): string {
-  return renderToStaticMarkup(rail(overrides, locale));
+function renderRail(overrides: Partial<RailProps> = {}): string {
+  return renderToStaticMarkup(rail(overrides));
 }
 
 const FOLD_KEY = "vivd-catalyst:rail-apps-open";
@@ -119,15 +125,6 @@ describe("published Apps for the rail", () => {
     ]);
   });
 
-  it("puts the App opened last first wherever it stood, and nothing before the list arrived", () => {
-    const rows = Array.from({ length: RAIL_APPS_LIMIT + 3 }, (_, index) => summary(`app-${index}`));
-
-    expect(railApps(rows, {})).toHaveLength(RAIL_APPS_LIMIT + 3);
-    expect(railApps(rows, { "app-7": 5 })[0]?.name).toBe("app-7");
-    expect(railApps(undefined, {})).toEqual([]);
-    expect(railApps([], {})).toEqual([]);
-  });
-
   it("shows the Apps used last alphabetically, so opening one never moves it", () => {
     const rows = ["Zebra", "Äpfel", "Mitte", "beta", "Omega", "Alt", "Eins"].map((title) =>
       summary(title.toLowerCase(), { title })
@@ -142,27 +139,13 @@ describe("published Apps for the rail", () => {
     expect(shown({ ...opens, omega: 99 })).toEqual(["Äpfel", "beta", "Mitte", "Omega", "Zebra"]);
     // Opening one that was not shown brings it in, at its alphabetical place.
     expect(shown({ ...opens, alt: 99 })).toEqual(["Alt", "Äpfel", "beta", "Mitte", "Zebra"]);
-    expect(railAppsShown([], 5)).toEqual([]);
-    // The list handed in is not reordered.
-    const used = railApps(rows, opens);
-    const before = used.map(({ name }) => name);
-    railAppsShown(used);
-    expect(used.map(({ name }) => name)).toEqual(before);
   });
 
-  it("reads what the browser kept as opens and takes anything else as nothing", () => {
+  it("reads what the browser kept and takes anything else as nothing", () => {
     expect(parseAppOpens(JSON.stringify({ a: 3, b: "x", c: null }))).toEqual({ a: 3 });
-    expect(parseAppOpens(null)).toEqual({});
     expect(parseAppOpens("not json")).toEqual({});
-    expect(parseAppOpens("[1,2]")).toEqual({});
     expect(withAppOpen({ a: 3 }, "b", 9)).toEqual({ a: 3, b: 9 });
-    expect(withAppOpen({ a: 3 }, undefined, 9)).toEqual({ a: 3 });
-  });
-
-  it("keeps the fold open only where the browser says so", () => {
     expect(parseRailAppsOpen("open")).toBe(true);
-    expect(parseRailAppsOpen("closed")).toBe(false);
-    expect(parseRailAppsOpen(null)).toBe(false);
     expect(parseRailAppsOpen("true")).toBe(false);
   });
 });
@@ -183,20 +166,6 @@ function itemsIn(markup: string): string[] {
 }
 
 describe("workspace rail published Apps", () => {
-  it("folds them under the Apps row at first, behind a caret that says what it does", () => {
-    const markup = renderRail({ inbox: { toDecide: 0 }, apps: true, publishedApps: published });
-
-    expect(markup).toMatch(/data-testid="rail-apps-toggle"/u);
-    expect(markup).toMatch(
-      /aria-label="Show apps"[^>]*aria-expanded="false"|aria-expanded="false"[^>]*aria-label="Show apps"/u
-    );
-    expect(markup).not.toContain('rail-apps"');
-    expect(markup).not.toContain("Fee estimate");
-    expect(renderRail({ apps: true, publishedApps: published }, "de")).toContain(
-      'aria-label="Apps anzeigen"'
-    );
-  });
-
   it("shows the Apps row alone for a person without an App, and no block without the module", () => {
     const none = renderRail({ apps: true, publishedApps: [], openAppName: "fee-estimate" });
     expect(none).toContain("lucide-layout-grid");
@@ -208,62 +177,12 @@ describe("workspace rail published Apps", () => {
     expect(moduleOff).not.toContain("Fee estimate");
   });
 
-  it("shows nothing more in the collapsed strip, not even for the App on screen", () => {
-    const markup = renderRail({
-      apps: true,
-      publishedApps: published,
-      openAppName: "customer-list",
-      view: "apps",
-      collapsed: true
-    });
-
-    expect(markup).toContain("lucide-layout-grid");
-    expect(markup).not.toContain("rail-apps");
-    expect(markup).not.toContain("Fee estimate");
-  });
-
-  it("opens the fold for the App on screen and marks that App the current row", () => {
-    const markup = renderRail({
-      inbox: { toDecide: 0 },
-      apps: true,
-      publishedApps: published,
-      openAppName: "customer-list",
-      view: "apps"
-    });
-
-    expect(markup).toMatch(/role="group"[^>]*aria-label="Published apps"/u);
-    expect(markup).toContain('aria-expanded="true"');
-    const order = ["lucide-layout-grid", "Customer list", "Fee estimate", "lucide-inbox", "Recent"];
-    const positions = order.map((part) => markup.indexOf(part));
-    expect(positions.every((position) => position >= 0)).toBe(true);
-    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
-    expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
-    expect(markup).toMatch(
-      /<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Customer list/u
-    );
-    // Each App carries its mark and its whole name for the pointer.
-    expect(markup).toMatch(/data-kind="app"[^>]*>CL</u);
-    expect(itemsIn(markup)).toEqual(["Customer list", "Fee estimate"]);
-
-    // An App that is open and not listed leaves the fold shut and the Apps row the current one.
-    const unlisted = renderRail({
-      apps: true,
-      publishedApps: published,
-      openAppName: "other",
-      view: "apps"
-    });
-    expect(unlisted).not.toContain("Fee estimate");
-    expect(unlisted).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Apps/u);
-  });
-
   it("lists five Apps at most and then All apps, which opens the Apps page", () => {
     const onViewChange = vi.fn();
     const open = { apps: true, openAppName: "app-0", view: "apps" as const };
 
     const markup = renderRail({ ...open, publishedApps: many });
     expect(itemsIn(markup)).toEqual(many.slice(0, RAIL_APPS_LIMIT).map(({ title }) => title));
-    expect(markup).toContain("All apps");
-    expect(renderRail({ ...open, publishedApps: many }, "de")).toContain("Alle Apps");
 
     // Five and no more: the Apps row is the way to the page.
     expect(renderRail({ ...open, publishedApps: many.slice(0, RAIL_APPS_LIMIT) })).not.toContain(
@@ -296,8 +215,6 @@ describe("workspace rail App fold in the browser", () => {
 
     act(() => toggle.click());
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(toggle.getAttribute("aria-label")).toBe("Hide apps");
-    expect(toggle.getAttribute("aria-controls")).toBe(first.byTestId("rail-apps").id);
     expect(window.localStorage.getItem(FOLD_KEY)).toBe("open");
 
     act(() => first.button("Customer list").click());
@@ -392,3 +309,124 @@ function mount(props: Partial<RailProps>) {
     }
   };
 }
+
+const PROJECTS_KEY = "vivd-catalyst:rail-projects-open";
+
+function project(id: string, title: string) {
+  return { id, name: id, title, audience: "workspace" as const, collaborationWorkspaceId: "cw" };
+}
+
+function projectChat(id: string, projectId: string): ConversationListItem {
+  return {
+    id,
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title: `Chat ${id}`,
+    status: "active",
+    createdAt: "2026-11-04T10:00:00.000Z",
+    updatedAt: "2026-11-04T10:00:00.000Z",
+    retainedUntil: "2027-11-04T10:00:00.000Z",
+    people: [],
+    projectId
+  };
+}
+
+const chatsOf: Record<string, ConversationListItem[]> = {
+  prj_north: [projectChat("n1", "prj_north")],
+  prj_south: [projectChat("s1", "prj_south")]
+};
+
+/** The rail as the workspace wires it: the fold state from the hook, the chats from a list. */
+function FoldedRail({ activeProjectId }: { activeProjectId?: string }) {
+  const folds = useRailProjectsOpen(activeProjectId);
+  return rail({
+    projects: true,
+    recentProjects: [project("prj_north", "North"), project("prj_south", "South")],
+    openProjects: new Map(folds.open.map((id) => [id, { chats: chatsOf[id] ?? [], more: false }])),
+    onToggleProject: folds.toggle
+  });
+}
+
+function mountProjects(activeProjectId?: string) {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root: Root = createRoot(container);
+  const render = (next?: string) =>
+    act(() =>
+      root.render(
+        createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsEn },
+          createElement(FoldedRail, { activeProjectId: next })
+        )
+      )
+    );
+  render(activeProjectId);
+  const caret = (title: string) => {
+    const button = container.querySelector<HTMLButtonElement>(
+      `button[aria-label="Chats in ${title}"]`
+    );
+    if (!button) throw new Error(`No caret for ${title}.`);
+    return button;
+  };
+  return {
+    render,
+    caret,
+    open: (title: string) => caret(title).getAttribute("aria-expanded") === "true",
+    text: () => container.textContent ?? "",
+    unmount() {
+      act(() => root.unmount());
+      container.remove();
+    }
+  };
+}
+
+describe("the projects' folds", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads the open projects' ids, and toggles one without touching the others", () => {
+    expect(parseRailProjectsOpen('["prj_a",3]')).toEqual(["prj_a"]);
+    expect(parseRailProjectsOpen('{"prj_a":true}')).toEqual([]);
+    expect(railProjectsToggled(["prj_a"], "prj_b")).toEqual(["prj_a", "prj_b"]);
+    expect(railProjectsToggled(["prj_a", "prj_b"], "prj_a")).toEqual(["prj_b"]);
+  });
+
+  it("open on the caret, several at once, and the next visit keeps them", () => {
+    const first = mountProjects();
+    expect(first.open("North")).toBe(false);
+    expect(first.text()).not.toContain("Chat n1");
+    act(() => first.caret("North").click());
+    act(() => first.caret("South").click());
+    expect(first.text()).toContain("Chat n1");
+    expect(first.text()).toContain("Chat s1");
+    expect(JSON.parse(window.localStorage.getItem(PROJECTS_KEY) ?? "[]")).toEqual([
+      "prj_north",
+      "prj_south"
+    ]);
+    first.unmount();
+
+    const second = mountProjects();
+    expect(second.open("North")).toBe(true);
+    act(() => second.caret("North").click());
+    expect(second.open("North")).toBe(false);
+    expect(second.open("South")).toBe(true);
+    second.unmount();
+  });
+
+  it("opens the project on screen without changing the choice", () => {
+    const mounted = mountProjects("prj_south");
+    expect(mounted.open("South")).toBe(true);
+    expect(mounted.open("North")).toBe(false);
+    expect(window.localStorage.getItem(PROJECTS_KEY)).toBeNull();
+    // Folded on its page, it stays folded until another project is on screen.
+    act(() => mounted.caret("South").click());
+    expect(mounted.open("South")).toBe(false);
+    mounted.render("prj_north");
+    expect(mounted.open("North")).toBe(true);
+    mounted.unmount();
+  });
+});

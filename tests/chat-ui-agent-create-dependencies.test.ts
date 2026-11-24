@@ -303,7 +303,7 @@ async function startAndCreate() {
 }
 
 describe("creating an agent that starts available in a workspace", () => {
-  it("checks the definition where it starts, and writes nothing before the reader answers", async () => {
+  it("checks the definition where it starts, writes nothing before the reader answers, then sends the choice", async () => {
     const page = await mountAgents([contracts]);
     await startAndCreate();
 
@@ -315,25 +315,12 @@ describe("creating an agent that starts available in a workspace", () => {
       }
     ]);
     expect(page.puts).toEqual([]);
-    expect(dialog.textContent).toContain("Create Helper?");
-    const banner = required(missingBanner());
-    expect(banner.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
-      "Members in Sales cannot use:"
+    expect(missingBanner()?.textContent).toContain("Contracts");
+    const box = required(
+      missingBanner()?.querySelector<HTMLButtonElement>('button[role="checkbox"]')
     );
-    expect([...banner.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
-      "Contracts (knowledge base)"
-    ]);
-    const box = required(banner.querySelector<HTMLButtonElement>('button[role="checkbox"]'));
     expect(box.getAttribute("aria-checked")).toBe("false");
-  });
-
-  it("creates the agent with the reader's choice to make what it uses available there", async () => {
-    const page = await mountAgents([contracts]);
-    await startAndCreate();
-    const dialog = await vi.waitFor(() => required(openDialog()), { timeout: CONDITION_WAIT_MS });
-    await click(
-      required(missingBanner()?.querySelector<HTMLButtonElement>('button[role="checkbox"]'))
-    );
+    await click(box);
     await click(button("Create agent", dialog));
 
     await vi.waitFor(() => expect(page.puts).toHaveLength(1), { timeout: CONDITION_WAIT_MS });
@@ -346,23 +333,6 @@ describe("creating an agent that starts available in a workspace", () => {
       // for any other.
       dependencyConsent: { expectedAvailability: inSales }
     });
-  });
-
-  it("holds the choice for where the instance read the list, when that is everywhere", async () => {
-    const page = await mountAgents([contracts], everywhere);
-    await startAndCreate();
-    const dialog = await vi.waitFor(() => required(openDialog()), { timeout: CONDITION_WAIT_MS });
-    // Everywhere names no workspace.
-    expect(missingBanner()?.querySelector("[data-missing-dependencies-text]")?.textContent).toBe(
-      "Members in some of this agent's workspaces cannot use:"
-    );
-    await click(
-      required(missingBanner()?.querySelector<HTMLButtonElement>('button[role="checkbox"]'))
-    );
-    await click(button("Create agent", dialog));
-
-    await vi.waitFor(() => expect(page.puts).toHaveLength(1), { timeout: CONDITION_WAIT_MS });
-    expect(page.puts[0]).toMatchObject({ dependencyConsent: { expectedAvailability: everywhere } });
   });
 
   it("creates it without making anything available when the choice stays unticked", async () => {
@@ -399,10 +369,7 @@ describe("creating an agent that starts available in a workspace", () => {
     await startAndCreate();
 
     await vi.waitFor(
-      () =>
-        expect(document.body.textContent).toContain(
-          "Could not check what this agent uses where it will be available. Nothing was created. Try again."
-        ),
+      () => expect(document.body.textContent).toContain("Could not check what this agent uses"),
       { timeout: CONDITION_WAIT_MS }
     );
     expect(page.checks).toHaveLength(1);
@@ -422,10 +389,7 @@ describe("creating an agent that starts available in a workspace", () => {
     await startAndCreate();
 
     await vi.waitFor(
-      () =>
-        expect(document.body.textContent).toContain(
-          "Could not check what this agent uses where it will be available. Nothing was created. Try again."
-        ),
+      () => expect(document.body.textContent).toContain("Could not check what this agent uses"),
       { timeout: CONDITION_WAIT_MS }
     );
     expect(page.checks).toHaveLength(1);

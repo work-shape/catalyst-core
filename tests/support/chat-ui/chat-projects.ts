@@ -1,15 +1,12 @@
 export {
   checkProjectUploads,
   expandProjectUploads,
-  formatProjectBytes,
-  isSkippedUploadPath,
   projectFilePreviewKind,
   projectMoveTargets,
   projectParentFolder,
   projectPathInFolder,
   runLimited,
   takenUploadPaths,
-  zipFolderName,
   type ProjectUpload
 } from "../../../packages/chat-ui/src/chat/projects/project-files-model";
 export {

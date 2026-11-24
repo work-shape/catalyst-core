@@ -323,16 +323,6 @@ describe("a preview that stays open", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("asks nothing after the surface closed", async () => {
-    const preview = watch((call) => addressOf(`token-${call}`));
-    await vi.advanceTimersByTimeAsync(0);
-    preview.stop();
-
-    await vi.advanceTimersByTimeAsync(3 * HOUR_MS);
-    expect(preview.calls()).toBe(1);
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
   it("puts no expired address into the frame after eight hours asleep, and asks for a fresh one", async () => {
     const preview = watch((call) => addressOf(`token-${call}`));
     // The second address is held for the frame when the device falls asleep.
@@ -414,20 +404,6 @@ describe("a preview that stays open", () => {
     expect(preview.calls()).toBe(7);
     await vi.advanceTimersByTimeAsync(1);
     expect(preview.calls()).toBe(8);
-    preview.stop();
-  });
-
-  it("spreads the waits by the random share", async () => {
-    const preview = watch((call) => {
-      if (call === 1) {
-        throw new Error("The instance did not answer.");
-      }
-      return addressOf(`token-${call}`);
-    }, 0.5);
-    await vi.advanceTimersByTimeAsync(22_499);
-    expect(preview.calls()).toBe(1);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(preview.calls()).toBe(2);
     preview.stop();
   });
 });

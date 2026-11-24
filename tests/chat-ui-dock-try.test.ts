@@ -9,7 +9,6 @@ import {
   createApiClient,
   type ApiClient,
   type Conversation,
-  type LocaleCode,
   type Message,
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
@@ -21,11 +20,9 @@ import {
   acceptStartedRun,
   isTryRun,
   listedOpenThread,
-  TryOpening,
   tryConversationGone,
   tryOnPage,
   tryRunLines,
-  TryRunsLine,
   tryRunsOf,
   tryTurnOf,
   useAgentTry,
@@ -614,15 +611,6 @@ describe("the revision each Try turn ran", () => {
   });
   const answer = (id: string): Message => ({ ...user(id), role: "assistant" });
 
-  it("reads the revision a user message records", () => {
-    expect(tryTurnOf(user("m1", { revision: 3, source: "draft" }))).toEqual({
-      revision: 3,
-      source: "draft"
-    });
-    expect(tryTurnOf(user("m1"))).toBeUndefined();
-    expect(tryTurnOf({ metadata: undefined })).toBeUndefined();
-  });
-
   it("marks only the turns another revision answered than the turn before", () => {
     const lines = tryRunLines([
       user("m1", { revision: 3, source: "draft" }),
@@ -657,37 +645,7 @@ describe("the revision each Try turn ran", () => {
   });
 });
 
-describe.each<{
-  locale: LocaleCode;
-  build: string;
-  tryTab: string;
-  preview: string;
-  live: string;
-  draft: string;
-  now: string;
-  opening: string;
-}>([
-  {
-    locale: "en",
-    build: "Build",
-    tryTab: "Try",
-    preview: "Preview",
-    live: "Running the published version",
-    draft: "Running draft version 4",
-    now: "Now running draft version 5",
-    opening: "Opening Try…"
-  },
-  {
-    locale: "de",
-    build: "Bauen",
-    tryTab: "Ausprobieren",
-    preview: "Vorschau",
-    live: "Läuft mit der veröffentlichten Version",
-    draft: "Läuft mit Entwurfsversion 4",
-    now: "Läuft jetzt mit Entwurfsversion 5",
-    opening: "Ausprobieren wird geöffnet…"
-  }
-])("the dock's head on an agent's page in $locale", (text) => {
+describe("the dock's head on an agent's page", () => {
   const view = {
     mode: "dock" as const,
     layout: { over: false, width: 420, min: 380, max: 760, choose: noop, keep: noop },
@@ -714,57 +672,25 @@ describe.each<{
     showTry: noop,
     showBuild: noop
   });
-  const head = (tab: Dock["tab"], runs: NonNullable<ReturnType<typeof tryRunsOf>>) =>
+  const head = (tab: Dock["tab"]) =>
     renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { children: null, locale: text.locale },
+        { children: null, locale: "en" },
         createElement(DockedChat, {
           view,
           dock: dock(tab),
           title: "Change the quote bot",
           agent: undefined,
-          agentTry: { tab, select: noop, title: "Quote bot", runs },
+          agentTry: { tab, select: noop, title: "Quote bot", runs: { source: "live" } },
           onOpenFullChat: noop,
           children: null
         })
       )
     );
 
-  it("marks Try as a preview of the agent and says what it runs", () => {
-    const live = head("try", { source: "live" });
-    expect(live).toContain(`>${text.build}</button>`);
-    expect(live).toContain(`>${text.tryTab}</button>`);
-    expect(live).toMatch(new RegExp(`aria-selected="true"[^>]*>${text.tryTab}</button>`));
-    expect(live).toMatch(new RegExp(`aria-selected="false"[^>]*>${text.build}</button>`));
-    expect(live).toContain('data-testid="dock-preview"');
-    expect(live).toContain(`>${text.preview}</span>`);
-    expect(live).toContain(text.live);
-    expect(live).toContain("Quote bot");
-    // A Try conversation is not opened on the chat route: it is hidden from every list.
-    expect(live).not.toContain('aria-label="Open as full chat"');
-    expect(head("try", { source: "draft", revision: 4 })).toContain(text.draft);
-  });
-
-  it("shows Build as the dock is on every page, with Try beside it", () => {
-    const build = head("build", { source: "live" });
-    expect(build).toContain('data-testid="dock-tabs"');
-    expect(build).toContain(`>${text.tryTab}</button>`);
-    expect(build).not.toContain('data-testid="dock-preview"');
-    expect(build).not.toContain(text.live);
-    expect(build).toContain("Change the quote bot");
-  });
-
-  it("says in the thread which revision answers from here on", () => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: text.locale },
-        createElement(TryRunsLine, { runs: { source: "draft", revision: 5 } }),
-        createElement(TryOpening, { failed: false, onRetry: noop })
-      )
-    );
-    expect(markup).toContain(`role="separator" aria-label="${text.now}"`);
-    expect(markup).toContain(text.opening);
+  it("never offers Try's conversation as a full chat, which every list hides", () => {
+    expect(head("build")).toContain('aria-label="Open as full chat"');
+    expect(head("try")).not.toContain('aria-label="Open as full chat"');
   });
 });

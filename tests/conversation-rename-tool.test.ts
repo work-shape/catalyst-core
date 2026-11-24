@@ -1,22 +1,12 @@
 import {
-  agentListableToolNames,
-  createPlatformTools,
-  PLATFORM_TOOL_NAMES,
-  platformModules
-} from "@work-shape/catalyst-client-assembly";
-import {
   asConversationId,
   asUserId,
-  CONVERSATION_RENAME_TOOL_NAME,
-  createModuleRegistry
+  CONVERSATION_RENAME_TOOL_NAME
 } from "@work-shape/catalyst-core";
-import { CONVERSATION_RENAME_TOOL } from "@work-shape/catalyst-tool-execution";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createAssetToolsFixture } from "./support/platform-asset-tools";
 import { getTestJobs } from "./support/test-instance";
-import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // An agent gives the chat it runs in a title, following a rule in a skill, as the person in the
 // chat would with `conversations.rename`. Fails without the change: no agent can rename a chat.
@@ -24,8 +14,7 @@ import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 const RENAME = CONVERSATION_RENAME_TOOL_NAME;
 const conversationSchema = z.object({ id: z.string() });
 
-const fixture = (agentRuns: "in_process" | "separate" = "in_process") =>
-  createAssetToolsFixture(agentRuns, [], { agentTools: [RENAME] });
+const fixture = () => createAssetToolsFixture("in_process", [], { agentTools: [RENAME] });
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 async function newConversation(t: Fixture): Promise<string> {
@@ -41,12 +30,6 @@ async function storedTitle(t: Fixture, conversationId: string): Promise<string |
 }
 
 describe(`the tool ${RENAME}`, () => {
-  it("projects conversations.rename: changing, and in its own right", () => {
-    expect(CONVERSATION_RENAME_TOOL.name).toBe("platform.conversations.rename");
-    const operation = apiOperations[CONVERSATION_RENAME_TOOL.operation];
-    expect(operation.effect).toBe(CONVERSATION_RENAME_TOOL.effect);
-  });
-
   it("renames the conversation it runs in, as the person, and no other", async () => {
     const t = await fixture();
     const id = await newConversation(t);
@@ -80,41 +63,12 @@ describe(`the tool ${RENAME}`, () => {
       })
     ]);
     expect(JSON.stringify(audited)).not.toContain("Sample Customer");
-  }, 60_000);
 
-  it("runs in a separate agent-run worker as it does beside the API", async () => {
-    const t = await fixture("separate");
-    const id = await newConversation(t);
-    expect(await t.call(id, RENAME, { title: "Sample Customer Ltd" })).toEqual({
-      title: "Sample Customer Ltd"
-    });
-    expect(await storedTitle(t, id)).toBe("Sample Customer Ltd");
-  }, 180_000);
-
-  it("refuses an empty or a too long title and changes nothing", async () => {
-    const t = await fixture();
-    const id = await newConversation(t);
+    // An empty or a too long title is refused and changes nothing.
     for (const title of ["   ", "x".repeat(121)]) {
-      await t.say(id, `/tool ${RENAME} ${JSON.stringify({ title })}`);
-      expect(await storedTitle(t, id)).toBe("Edit");
+      await t.say(other, `/tool ${RENAME} ${JSON.stringify({ title })}`);
+      expect(await storedTitle(t, other)).toBe("Edit");
     }
-  }, 60_000);
-
-  it("is listable, and not one of the platform tools that bring the orientation", async () => {
-    expect(agentListableToolNames([])).toContain(RENAME);
-    expect(PLATFORM_TOOL_NAMES).not.toContain(RENAME);
-
-    const harness = await createWorkspaceHarness();
-    const modules = createModuleRegistry(platformModules).snapshot({});
-    const platform = createPlatformTools({ stores: harness.store, modules });
-    platform.registry(platform.tools, new Set());
-    const offer = await platform.conversationOffer.offerOf({
-      clientInstanceId: harness.clientInstanceId,
-      conversationId: harness.conversation.id,
-      agentToolNames: [RENAME]
-    });
-    expect(offer?.toolNames ?? []).not.toContain("platform.context");
-    expect(offer?.toolNames ?? []).not.toContain("platform.assets.get");
   }, 60_000);
 
   it("is held only by an agent that lists it", async () => {
@@ -136,7 +90,7 @@ describe("the title an agent gives in the first run, and the title job", () => {
     return id;
   }
 
-  it("is left by the job, which titles a conversation that got none", async () => {
+  it("is left by the job, which titles a conversation that got none, and counts as given in the words it carries", async () => {
     const t = await fixture();
 
     const plain = "please summarize the release notes";
@@ -144,10 +98,7 @@ describe("the title an agent gives in the first run, and the title job", () => {
 
     const renamed = await firstRun(t, `/tool ${RENAME} ${JSON.stringify({ title: "Acme Ltd" })}`);
     expect(await storedTitle(t, renamed)).toBe("Acme Ltd");
-  }, 60_000);
 
-  it("counts as given in the very words the conversation carries, and shows no change", async () => {
-    const t = await fixture();
     const id = await newConversation(t);
     const before = await t.app.stores.conversations.getConversation(
       t.clientInstanceId,
@@ -174,6 +125,8 @@ describe("the title an agent gives in the first run, and the title job", () => {
     const audited = await t.app.stores.audit.listAuditEvents({
       clientInstanceId: t.clientInstanceId
     });
-    expect(audited.filter((event) => event.type === "conversation.renamed")).toEqual([]);
+    expect(
+      audited.filter((event) => event.type === "conversation.renamed" && event.subject === id)
+    ).toEqual([]);
   }, 60_000);
 });

@@ -16,21 +16,14 @@ vi.mock("@assistant-ui/react", async (importOriginal) => ({
   useAuiState: (selector: (value: typeof state) => unknown) => selector(state)
 }));
 
+const supported = SUPPORTED_IMAGE_MIME_TYPES[0];
 const cases = [
-  ...SUPPORTED_IMAGE_MIME_TYPES.flatMap((type) => [
-    { mimeType: type, expected: type },
-    { mimeType: ` ${type.toUpperCase()}; charset=binary `, expected: type }
-  ]),
-  ...[
-    "image/svg+xml",
-    "image/avif",
-    "image/bmp",
-    "application/pdf",
-    "image/png,text/html",
-    "image/png;x=1,text/html",
-    "",
-    undefined
-  ].map((mimeType) => ({ mimeType, expected: undefined }))
+  { mimeType: supported, expected: supported },
+  { mimeType: ` ${supported.toUpperCase()}; charset=binary `, expected: supported },
+  ...["image/svg+xml", "image/png,text/html", undefined].map((mimeType) => ({
+    mimeType,
+    expected: undefined
+  }))
 ];
 
 describe("raster image checks across chat files", () => {

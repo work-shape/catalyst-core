@@ -1,5 +1,8 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+import { connectorTypeOffers } from "@work-shape/catalyst-connections";
+import { createConnectorTypeRegistry } from "@work-shape/catalyst-core";
+import { createImapConnectorType } from "@work-shape/catalyst-imap-connector";
 import {
   ConnectionCreateFlow,
   TypedConnectionCreate,
@@ -7,11 +10,13 @@ import {
   offerText,
   typedComplete,
   typedConnectionConfig,
+  typedInitialValues,
   typedSecret,
   type ConnectCalls,
   type ConnectionSource,
   type ConnectorTypeOffer
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { required } from "./support/assertions";
 import { connectionDetail } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -187,26 +192,61 @@ describe("the dialog for a type with a form", () => {
       )
     );
 
-  it("offers the type beside an MCP server and a REST API, in English and in German", () => {
-    const en = render("en", "pick");
-    expect(en).toContain('data-connection-type="mcp"');
-    expect(en).toContain('data-connection-type="folder_store"');
-    expect(en).toContain("Syncs shared folders.");
-    const de = render("de", "pick");
-    expect(de).toContain("Ordnerablage");
-    expect(de).toContain("Synchronisiert geteilte Ordner.");
+  it("offers the type beside an MCP server and a REST API, and asks for its secret hidden", () => {
+    const pick = render("en", "pick");
+    expect(pick).toContain('data-connection-type="mcp"');
+    expect(pick).toContain('data-connection-type="folder_store"');
+    expect(render("en", "form")).toMatch(/type="password"[^>]*data-connection-field="secret"/u);
+  });
+});
+
+// MBX-1b: the IMAP type's form, for agents alone, never carrying the password.
+describe("the Mailbox (IMAP) type", () => {
+  const PASSWORD = "mailbox-app-password-never-shown-5";
+  const imap = required(
+    connectorTypeOffers(createConnectorTypeRegistry([createImapConnectorType()])).types[0]
+  );
+
+  it("is offered to agents alone", () => {
+    expect(imap).toMatchObject({ type: "imap", authScheme: "password", exposures: ["agent"] });
   });
 
-  it("asks for the fields the type declares, the secret hidden", () => {
-    const en = render("en", "form");
-    expect(en).toContain("Connect Folder store");
-    expect(en).toContain("Client ID");
-    expect(en).toContain("Enterprise ID");
-    expect(en).toContain("Defaults to the root.");
-    expect(en).toMatch(/type="password"[^>]*data-connection-field="secret"/u);
-    const de = render("de", "form");
-    expect(de).toContain("Ordnerablage verbinden");
-    expect(de).toContain("Client-Secret");
-    expect(de).toContain("Sonst die Wurzel.");
+  it("writes a port as a number and folders as a list, and never the password", () => {
+    const config = typedConnectionConfig(
+      imap,
+      { name: "feedback-mailbox", title: "Feedback mailbox", description: "" },
+      {
+        0: "imap.example.test",
+        1: "feedback@example.test",
+        2: PASSWORD,
+        3: "INBOX, Feedback\nArchive",
+        4: "",
+        5: "993"
+      }
+    );
+    expect(config).toMatchObject({
+      connectorType: "imap",
+      settings: { folders: ["INBOX", "Feedback", "Archive"], port: 993 },
+      operations: []
+    });
+    expect(JSON.stringify(config)).not.toContain(PASSWORD);
+  });
+
+  it("starts with what a proposal named, and the password empty", () => {
+    expect(typedInitialValues(imap)).toEqual({ 3: "INBOX", 5: "993" });
+    expect(
+      typedInitialValues(imap, {
+        host: "imap.example.test",
+        port: 993,
+        username: "feedback@example.test",
+        folders: ["INBOX", "Feedback"],
+        password: "never-taken"
+      })
+    ).toEqual({
+      0: "imap.example.test",
+      1: "feedback@example.test",
+      3: "INBOX, Feedback",
+      5: "993"
+    });
   });
 });

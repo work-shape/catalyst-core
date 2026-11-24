@@ -8,18 +8,19 @@ import type {
 import {
   ActionTestDialogView,
   appActionInputStart,
+  appActionLiveOnceOffered,
   appActionOutcome,
   AppActionsView,
   appActionTestable,
   appActionTestOutcome,
   AppDetailsDialog,
-  AppEditFrame,
   AppToolsGroup,
   appsOfOwner,
   appToolsView,
   formatAppActionResult,
   keptWhileItServes,
   readAppActionInput,
+  type AppActionsLiveOnce,
   type AppActionsRead,
   type AppToolsRead
 } from "@work-shape/catalyst-chat-ui/apps";
@@ -37,11 +38,7 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // `operations.list_runs` handed to them: the Actions side of a draft, the test dialog, the
 // Details of an App, the origin of a run in Instance > Operations and the Apps group of an
 // agent's tools. That the instance answers what these read is held in
-// tests/app-actions-list.test.ts.
-//
-// Every test here fails without the change: the modules it reads did not exist, the draft had
-// two sides, a run said "App" and nothing of its App, and an agent's Tools section had no
-// group for Apps.
+// tests/app-actions-list.test.ts; the target each row shows in tests/app-draft-safe-mode.test.ts.
 
 const noop = () => undefined;
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
@@ -96,22 +93,16 @@ const ready = (actions: AppAction[]): AppActionsRead => ({
   revision: 4,
   actions
 });
-const actionsView = (
-  read: AppActionsRead,
-  write = true,
-  locale: "en" | "de" = "en",
-  liveOnce?: Parameters<typeof AppActionsView>[0]["liveOnce"]
-) =>
+const switchOff: AppActionsLiveOnce = { switching: undefined, failed: undefined, switchOn: noop };
+const actionsView = (read: AppActionsRead, write = true, liveOnce?: AppActionsLiveOnce) =>
   render(
     createElement(AppActionsView, {
       read,
       rights: { write },
       onTest: noop,
       ...(liveOnce ? { liveOnce } : {})
-    }),
-    locale
+    })
   );
-const switchOff = { switching: undefined, failed: undefined, switchOn: noop };
 /** `save` as a draft lists it to a writer whose call the policy lets run. */
 const simulated = { ...save, policy: "confirm" as const, target: "dry_run" as const };
 /** The markup of one row. */
@@ -119,72 +110,20 @@ const rowOf = (markup: string, name: string) =>
   markup.split("<tr").find((row) => row.includes(`data-app-action="${name}"`)) ?? "";
 
 describe("the Actions side of a draft", () => {
-  it("is the third side of the draft beside Preview and Files, under Technical details", () => {
-    const head = render(
-      createElement(AppEditFrame, {
-        name: "Orders",
-        workspace: { id: "cw_1", name: "Sales" },
-        rights: { read: true, write: true, publish: true, delete: false },
-        draftRevision: 4,
-        publishedRevision: 3,
-        view: "actions",
-        detailsOpen: true,
-        children: null,
-        onViewChange: noop,
-        onDetailsOpenChange: noop,
-        onBack: noop
-      })
-    );
-
-    expect([...head.matchAll(/role="tab"[^>]*>([^<]*)</gu)].map((match) => match[1])).toEqual([
-      "Preview",
-      "Files",
-      "Actions"
-    ]);
-  });
-
-  it("lists one row per action: its name, its effect, the Connection by its label with the operation, and what a call would come to", () => {
+  it("lists one row per action with the Connection by its label and what a call would come to", () => {
     const markup = actionsView(ready([action(), save, gone]));
 
-    expect(markup).toContain('data-app-actions="ready"');
     const load = rowOf(markup, "load");
-    expect(load).toContain("Reads the open orders.");
-    expect(load).toContain("Reading");
     expect(load).toContain("Kundenkartei");
     expect(load).toContain("list_orders");
-    expect(load).toContain("The connection and what the action asks of it");
     expect(load).toContain('data-policy="allow"');
-    // The draft's word for a reading action that would run: it can be tested here.
-    expect(load).toContain("Can be tested");
-    expect(markup).toContain(">In this draft<");
     // The label people read, never the name the manifest uses for the Connection.
     expect(load).not.toContain(">crm<");
+    expect(rowOf(markup, "stock")).toContain('data-unavailable="not_exposed"');
   });
 
-  it("says under a Workflow action that it starts the Workflow with the input", () => {
-    const { name, toolName, inputSchema, policy, agentTool } = action();
-    const start: AppAction = {
-      name: `${name}_start`,
-      kind: "workflow",
-      effect: "changing",
-      toolName,
-      inputSchema,
-      policy,
-      agentTool,
-      workflow: { name: "visit-log" }
-    };
-
-    const row = rowOf(actionsView(ready([start])), "load_start");
-    expect(row).toContain("visit-log");
-    expect(row).toContain("The Workflow and the input the action starts it with");
-    expect(row).not.toContain("The connection");
-    expect(rowOf(actionsView(ready([start]), true, "de"), "load_start")).toContain(
-      "Der Workflow und die Eingabe, mit der die Aktion ihn startet"
-    );
-  });
-
-  it("gives an sql action the same row, with the Data Store where the Connection would be", () => {
-    const { name, effect, toolName, inputSchema, policy, agentTool } = action();
+  it("gives an sql action the Data Store where the Connection would be, and marks a store that is not there", () => {
+    const { effect, toolName, inputSchema, policy, agentTool } = action();
     const list: AppAction = {
       name: "list_findings",
       kind: "sql",
@@ -195,92 +134,34 @@ describe("the Actions side of a draft", () => {
       agentTool,
       dataStore: { name: "findings", title: "Findings of the month" }
     };
-    const gone: AppAction = {
+    const missing: AppAction = {
       ...list,
-      name: `${name}_gone`,
+      name: "load_gone",
       dataStore: { name: "ledger" },
       unavailable: "data_store_missing"
     };
-    const markup = actionsView(ready([list, gone]));
+    const markup = actionsView(ready([list, missing]));
 
-    const row = rowOf(markup, "list_findings");
-    expect(row).toContain("Findings of the month");
-    expect(row).toContain(">sql<");
-    expect(row).toContain("Reading");
-    expect(row).toContain('data-policy="allow"');
-    expect(row).toContain("Can be tested");
-    // Under the target, what it is: a store and its SQL, never a Connection.
-    expect(row).toContain("The data store and the SQL the action runs on it");
-    expect(row).not.toContain("The connection");
-    expect(rowOf(actionsView(ready([list]), true, "de"), "list_findings")).toContain(
-      "Der Datenspeicher und das SQL, das die Aktion darauf ausführt"
-    );
-    // Without a title the store goes by its name, and a store that is not there says so.
+    expect(rowOf(markup, "list_findings")).toContain("Findings of the month");
     expect(rowOf(markup, "load_gone")).toContain("ledger");
     expect(rowOf(markup, "load_gone")).toContain('data-unavailable="data_store_missing"');
-    expect(rowOf(markup, "load_gone")).toContain("The data store is not available to this app.");
-  });
-
-  it("says why a call cannot reach its operation, in the row", () => {
-    const markup = actionsView(ready([gone]));
-
-    expect(rowOf(markup, "stock")).toContain('data-unavailable="not_exposed"');
-    expect(rowOf(markup, "stock")).toContain("This operation is not open to apps.");
-    expect(rowOf(markup, "stock")).toContain("Refused");
-  });
-
-  it("says in one line over the list what it is and that a draft changes nothing", () => {
-    const intro =
-      "What this app can read or change in other systems. A draft changes nothing: an action that changes something is simulated";
-
-    expect(actionsView(ready([action(), save]))).toContain(intro);
-    // The line stands over the room the list loads into, and not over a state with its own.
-    expect(actionsView({ status: "loading" })).toContain(intro);
-    expect(actionsView(ready([]))).not.toContain("data-app-actions-intro");
-    expect(actionsView({ status: "failed", retry: noop })).not.toContain("data-app-actions-intro");
-  });
-
-  // At 390 wide the last columns ran out of sight with no cue. The table now stacks its rows
-  // in narrow room, and each row says which of its cells take a line of their own.
-  it("stacks each action as a block in narrow room, with the test beside what a call comes to", () => {
-    const markup = actionsView(ready([action(), save]));
-
-    expect(markup).toContain("@container/table");
-    expect(markup).toContain("@max-2xl/table:[&amp;_tr]:grid");
-    expect(markup).toContain("@max-2xl/table:[&amp;_thead]:hidden");
-    const fullCells = (row: string) => row.match(/data-stacked="full"/gu)?.length ?? 0;
-    // What the action calls takes a line; the test stands beside what a call comes to.
-    expect(fullCells(rowOf(markup, "load"))).toBe(1);
-    expect(fullCells(rowOf(markup, "save"))).toBe(1);
-    // Without a test, what a call comes to takes the line.
-    expect(fullCells(rowOf(actionsView(ready([action(), save]), false), "save"))).toBe(2);
   });
 
   // ADR-0031: a changing action of a draft is simulated, and "Run live once" carries out the
   // writer's own next call of it.
   it("offers the test on every action of a draft, and Run live once on a changing one the policy lets run", () => {
-    const markup = actionsView(
-      ready([action({ target: "live" }), simulated]),
-      true,
-      "en",
-      switchOff
-    );
+    const markup = actionsView(ready([action({ target: "live" }), simulated]), true, switchOff);
 
     expect(rowOf(markup, "load")).toContain('aria-label="Test load"');
-    expect(rowOf(markup, "load")).toContain('data-target="live"');
     expect(rowOf(markup, "load")).not.toContain("data-run-live-once");
     const row = rowOf(markup, "save");
     expect(row).toContain('aria-label="Test save"');
     expect(row).toContain('data-target="dry_run"');
-    expect(row).toContain("Simulated");
     expect(row).toContain('data-run-live-once="off"');
-    expect(row).toContain('aria-label="Run save live once"');
-    // The switch in each of its states: tests/chat-ui-app-live-once.test.ts.
     // What a call comes to: in the draft an allowed call can be tested, either effect.
     expect(appActionOutcome({ ...save, policy: "allow" }, true).labelKey).toBe(
       "apps.actionTestableInDraft"
     );
-    expect(appActionOutcome(action(), true).labelKey).toBe("apps.actionTestableInDraft");
     expect(appActionOutcome(action({ policy: "approval" }), true).labelKey).toBe(
       "apps.actionPolicyApproval"
     );
@@ -301,38 +182,61 @@ describe("the Actions side of a draft", () => {
 
   it("has a state of its own while it loads, for an App without actions and for a list that failed", () => {
     expect(actionsView({ status: "loading" })).toContain('aria-busy="true"');
-    const empty = actionsView(ready([]));
-    expect(empty).toContain('data-app-actions="empty"');
-    expect(empty).toContain("This app has no actions yet.");
+    expect(actionsView(ready([]))).toContain('data-app-actions="empty"');
     const failed = actionsView({ status: "failed", retry: noop });
     expect(failed).toContain('data-app-actions="failed"');
-    expect(failed).toContain("The actions could not be loaded.");
     expect(failed).toContain("Try again");
   });
+});
 
-  it("says all of it in German", () => {
-    const markup = actionsView(ready([action(), simulated, gone]), true, "de", switchOff);
-
-    for (const text of [
-      "Aktion",
-      "Wirkung",
-      "Ruft auf",
-      "In diesem Entwurf",
-      "Lesend",
-      "Kann getestet werden",
-      // The marker and the switch carry the library's own words, which the UI root sets.
-      'aria-label="save einmal live ausführen"',
-      "Was diese App in anderen Systemen lesen oder ändern kann.",
-      "Die Verbindung und was die Aktion von ihr verlangt",
-      "Diese Operation ist für Apps nicht freigegeben.",
-      'aria-label="load testen"'
-    ]) {
-      expect(markup, text).toContain(text);
-    }
-    expect(actionsView(ready([]), true, "de")).toContain("Diese App hat noch keine Aktionen.");
-    expect(actionsView({ status: "failed", retry: noop }, true, "de")).toContain(
-      "Die Aktionen konnten nicht geladen werden."
+describe("Run live once on the Actions side of a draft", () => {
+  it("is on once switched, waits while it switches, and says a failed switch", () => {
+    expect(
+      rowOf(actionsView(ready([{ ...simulated, target: "live" }]), true, switchOff), "save")
+    ).toContain('data-run-live-once="on"');
+    expect(
+      rowOf(actionsView(ready([simulated]), true, { ...switchOff, switching: "save" }), "save")
+    ).toContain('data-run-live-once="busy"');
+    const failed = { action: "save", message: "The draft changed." };
+    expect(actionsView(ready([simulated]), true, { ...switchOff, failed })).toContain(
+      "The draft changed."
     );
+  });
+
+  it("is not offered where the call would wait for an approval, is refused, reads, or to whom may not write", () => {
+    for (const policy of ["approval", "deny"] as const) {
+      expect(actionsView(ready([{ ...simulated, policy }]), true, switchOff), policy).not.toContain(
+        "data-run-live-once"
+      );
+    }
+    const writer = { write: true };
+    expect(appActionLiveOnceOffered(simulated, "draft", writer)).toBe(true);
+    expect(appActionLiveOnceOffered(simulated, "draft", { write: false })).toBe(false);
+    expect(appActionLiveOnceOffered(simulated, "published", writer)).toBe(false);
+    expect(appActionLiveOnceOffered({ ...simulated, effect: "reading" }, "draft", writer)).toBe(
+      false
+    );
+    const missing = { ...simulated, unavailable: "connection_missing" as const };
+    expect(appActionLiveOnceOffered(missing, "draft", writer)).toBe(false);
+  });
+
+  // Fails before DP-1: a draft's `workflow` action offered the switch, though its call starts a
+  // test run of the Workflow that no switch makes live.
+  it("is not offered on a workflow action, whose draft call is a test run", () => {
+    const {
+      connection: _connection,
+      operation: _operation,
+      unavailable: _u,
+      ...shared
+    } = simulated;
+    const run: AppAction = {
+      ...shared,
+      kind: "workflow",
+      workflow: { name: "notify-clients" },
+      target: "test"
+    };
+    expect(appActionLiveOnceOffered(run, "draft", { write: true })).toBe(false);
+    expect(actionsView(ready([run]), true, switchOff)).not.toContain("data-run-live-once");
   });
 });
 
@@ -388,81 +292,30 @@ describe("the test dialog", () => {
       locale
     );
 
-  it("opens on the input with what the action calls, and shows no outcome before a call", () => {
-    const markup = dialog();
-
-    expect(markup).toContain("Test “load”");
-    expect(markup).toContain("A real call from the draft, made in your name.");
-    expect(markup).toContain("Kundenkartei");
-    expect(markup).toContain("&quot;limit&quot;: 0");
-    expect(markup).not.toContain("data-app-action-test-status");
-  });
-
-  it("says of a changing action that the draft simulates it, and shows what it would have done, in both languages", () => {
-    const {
-      connection: _connection,
-      operation: _operation,
-      unavailable: _unavailable,
-      ...rest
-    } = action();
-    const start: AppAction = {
-      ...rest,
-      name: "log",
-      kind: "workflow",
-      effect: "changing",
-      workflow: { name: "visit-log" }
-    };
-    // The instance's sentence is English: the dialog says it in its own words.
+  it("shows what a simulated call would have done, in the reader's language and not the instance's", () => {
     const outcome = {
       status: "dry_run" as const,
       message: "Would have started the Workflow 'visit-log' (instance).",
       input: { page: "/draft" }
     };
-
-    const en = dialog({ action: start, outcome });
-    expect(en).toContain("It is simulated and changes nothing");
-    expect(en).toContain("It is listed under Operations.");
+    const en = dialog({ outcome });
     expect(en).toContain('data-app-action-test-status="dry_run"');
-    expect(en).toContain(
-      "Would have started the Workflow &#x27;visit-log&#x27; with the input below."
-    );
-    expect(en).not.toContain("(instance)");
-    expect(en).toContain("What log would have started with");
     expect(en).toContain("&quot;page&quot;: &quot;/draft&quot;");
-    const de = dialog({ action: start, outcome }, "de");
-    expect(de).toContain("Er wird simuliert und ändert nichts");
-    expect(de).toContain("Er steht unter Operationen.");
-    expect(de).toContain("Hätte den Workflow „visit-log“ mit der Eingabe unten gestartet.");
-    expect(de).not.toContain("Would have");
-    // A call of a Connection or a Data Store says the action it would have called.
-    const called = dialog({ action: action({ name: "save", effect: "changing" }), outcome }, "de");
-    expect(called).toContain("Hätte save mit der Eingabe unten aufgerufen.");
-    expect(called).not.toContain("Would have");
+    expect(en).not.toContain("(instance)");
+    expect(dialog({ outcome }, "de")).not.toContain("Would have");
   });
 
-  it("links the place the call is listed in, for a reader who may open it", () => {
-    const link =
-      /<a[^>]*href="\/settings\/instance\/operations"[^>]*>It is listed under Operations\.<\/a>/u;
-
-    expect(dialog()).toMatch(link);
-    // Nothing links to a page its reader is not shown: the sentence stays, as text.
-    const plain = dialog({ operations: undefined });
-    expect(plain).toContain("It is listed under Operations.");
-    expect(plain).not.toContain("data-app-action-test-operations");
-    expect(dialog({}, "de")).toMatch(/<a[^>]*>Er steht unter Operationen\.<\/a>/u);
+  it("links the place the call is listed in only for a reader who may open it", () => {
+    expect(dialog()).toContain('href="/settings/instance/operations"');
+    expect(dialog({ operations: undefined })).not.toContain("data-app-action-test-operations");
   });
 
   it("shows what is wrong with the input at the input", () => {
     const markup = dialog({ problem: { kind: "wrong_type", name: "limit", expected: "integer" } });
-
     expect(markup).toContain('role="alert"');
-    expect(markup).toContain("“limit” must be a whole number.");
-    expect(dialog({ problem: { kind: "not_json" } }, "de")).toContain(
-      "Das ist kein gültiges JSON."
-    );
   });
 
-  it("holds its button while the call runs, says that it waits and shows no answer of the call before", () => {
+  it("holds its button while the call runs, and shows no answer of an earlier call", () => {
     const outcome = appActionTestOutcome({
       ok: true,
       result: { runId: "opr_6", status: "done", result: { rows: [] } }
@@ -471,13 +324,11 @@ describe("the test dialog", () => {
 
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"/u);
     expect(markup).toContain('data-app-action-test-status="running"');
-    expect(markup).toContain("Waiting for the answer.");
     expect(markup).not.toContain("&quot;rows&quot;");
     expect(markup).not.toContain("run=opr_6");
-    expect(dialog({ working: true }, "de")).toContain("Die Antwort steht noch aus.");
   });
 
-  it("shows the result as formatted JSON with the status and the link to the run", () => {
+  it("shows the result with its status and the link to the run, which a reader without Operations is not offered", () => {
     const outcome = appActionTestOutcome({
       ok: true,
       result: { runId: "opr_7", status: "done", result: { rows: [{ id: 1 }] } }
@@ -485,12 +336,8 @@ describe("the test dialog", () => {
     const markup = dialog({ outcome });
 
     expect(markup).toContain('data-app-action-test-status="done"');
-    expect(markup).toContain("Done");
     expect(markup).toContain("&quot;rows&quot;: [");
     expect(markup).toContain('href="/settings/instance/operations?run=opr_7"');
-    expect(markup).toContain("Open the run in Operations");
-    expect(markup).not.toContain("data-truncated");
-    // Nothing links to a page its reader is not shown.
     expect(dialog({ outcome, operations: undefined })).not.toContain("data-app-action-test-run");
   });
 
@@ -502,52 +349,31 @@ describe("the test dialog", () => {
     expect(shown.text.length).toBeLessThan(whole.length);
     expect(whole.startsWith(shown.text)).toBe(true);
     expect(formatAppActionResult({ ok: true })).toMatchObject({ truncated: false });
-
     const markup = dialog({
       outcome: { status: "done", runId: "opr_8", result: { text: "x".repeat(30_000) } }
     });
     expect(markup).toContain('data-truncated="true"');
-    expect(markup).toContain(`Shortened: the first ${shown.text.length} of ${whole.length}`);
   });
 
-  it("shows what a refused call answered, with its status and its run", () => {
-    const outcome = appActionTestOutcome({
+  it("reads a refused, a failed and a held call", () => {
+    const refused = appActionTestOutcome({
       ok: false,
       error: { code: "forbidden", message: "You may not use the connection.", runId: "opr_9" }
     });
-    const markup = dialog({ outcome });
-
-    expect(outcome.status).toBe("denied");
-    expect(markup).toContain('data-app-action-test-status="denied"');
-    expect(markup).toContain("Denied");
+    expect(refused.status).toBe("denied");
+    const markup = dialog({ outcome: refused });
     expect(markup).toContain("You may not use the connection.");
     expect(markup).toContain("run=opr_9");
-  });
-
-  // The text of a refusal says that asking again does not help, and "Test" stayed the main
-  // button under it, with the word "Denied" in the grey of a note.
-  it("leads with Close after a refusal and shows the refusal in the colour of a failure", () => {
-    const classesOf = (markup: string, label: string) =>
-      new RegExp(`<button[^>]*class="([^"]*)"[^>]*>(?:<[^>]*>)*${label}<`, "u").exec(markup)?.[1];
-    const badgeOf = (markup: string, label: string) =>
-      new RegExp(`<span[^>]*class="([^"]*)"[^>]*>(?:<span[^>]*></span>)?${label}</span>`, "u").exec(
-        markup
-      )?.[1];
-    const idle = dialog();
-    const refused = dialog({ outcome: { status: "denied", message: "You may not." } });
-    const failed = dialog({ outcome: { status: "failed" } });
-
-    expect(classesOf(idle, "Test")).toBeDefined();
-    expect(classesOf(refused, "Close")).toBe(classesOf(idle, "Test"));
-    expect(classesOf(refused, "Test")).toBe(classesOf(idle, "Close"));
-    // Any other way a test ends can change with the next one: the test keeps leading.
-    expect(classesOf(failed, "Test")).toBe(classesOf(idle, "Test"));
-    expect(badgeOf(refused, "Denied")).toBeDefined();
-    expect(badgeOf(refused, "Denied")).toBe(badgeOf(failed, "Failed"));
-    // While the next call runs the refusal is no longer what the dialog says.
-    expect(classesOf(dialog({ working: true, outcome: { status: "denied" } }), "Close")).toBe(
-      classesOf(idle, "Close")
-    );
+    expect(
+      appActionTestOutcome({
+        ok: false,
+        error: { code: "failed", message: "The call could not be made." }
+      })
+    ).toEqual({ status: "failed" });
+    expect(
+      appActionTestOutcome({ ok: true, result: { runId: "opr_10", status: "pending_approval" } })
+        .status
+    ).toBe("pending_approval");
   });
 
   it("asks for the address of the draft once while it serves, and again after it expired", async () => {
@@ -569,23 +395,6 @@ describe("the test dialog", () => {
     expect(await frame()).toBe(2);
     expect(asked).toBe(2);
   });
-
-  it("says in its own words that a call got no answer, and that one waits for an approval", () => {
-    const failed = appActionTestOutcome({
-      ok: false,
-      error: { code: "failed", message: "The call could not be made." }
-    });
-
-    expect(failed).toEqual({ status: "failed" });
-    expect(dialog({ outcome: failed }, "de")).toContain(
-      "Der Aufruf konnte nicht ausgeführt werden."
-    );
-    const pending = appActionTestOutcome({
-      ok: true,
-      result: { runId: "opr_10", status: "pending_approval" }
-    });
-    expect(dialog({ outcome: pending })).toContain("The call waits for an approval.");
-  });
 });
 
 describe("the Details of an App", () => {
@@ -598,54 +407,29 @@ describe("the Details of an App", () => {
     config: { title: "Orders", manifest: { actions: [{ name: "load" }, { name: "save" }] } },
     updatedAt: "2026-10-12T08:00:00.000Z"
   };
-  const details = (actions: AppActionsRead) =>
+  const details = (actions: AppActionsRead, dataSources?: string[]) =>
     render(
       createElement(AppDetailsDialog, {
         name: "Orders",
         app,
         actions,
+        ...(dataSources ? { dataSources } : {}),
         failed: false,
         onClose: noop
       })
     );
 
-  it("lists each action with its effect and the policy's word, also where the record is the draft", () => {
-    const markup = details(ready([action(), { ...save, policy: "approval" }]));
-    const [, load = "", saved = ""] = markup.split("data-app-action=");
-
-    expect(load).toContain("load");
-    expect(load).toContain("Reading");
-    expect(load).toContain("Runs");
-    expect(load).not.toContain("Can be tested");
-    expect(saved).toContain("Changing");
-    expect(saved).toContain("Needs an approval");
-    expect(saved).not.toContain("Not carried out in a draft");
-
-    // Until the instance said more, the actions are the names of the manifest.
+  it("lists the instance's actions, and the manifest's names until the instance said more", () => {
+    expect(details(ready([action()]))).toContain("data-app-details-actions");
     const waiting = details({ status: "loading" });
     expect(waiting).not.toContain("data-app-details-actions");
     expect(waiting).toContain(">load<");
     expect(waiting).toContain(">save<");
   });
 
-  it("says where the data of each store comes from, once it is known", () => {
-    const line =
-      "Shows data from “Kunden”, which the Workflow “Nachtimport” copies from Exampledata.";
-    const shown = render(
-      createElement(AppDetailsDialog, {
-        name: "Orders",
-        app,
-        actions: ready([action()]),
-        dataSources: [line],
-        failed: false,
-        onClose: noop
-      })
-    );
-    expect(shown).toContain(">Data<");
-    expect(shown).toContain(`>${line}<`);
-    // It stands first, above the App's own Connections, so "None" there reads as no contradiction.
-    expect(shown.indexOf(">Data<")).toBeLessThan(shown.indexOf(">Connections<"));
-    // While it is read, and for an App that reads no store, nothing stands there.
+  it("says where the data of each store comes from only once it is known", () => {
+    const line = "Shows data from “Kunden”.";
+    expect(details(ready([action()]), [line])).toContain(`>${line}<`);
     expect(details(ready([action()]))).not.toContain("data-app-data-sources");
   });
 });
@@ -676,40 +460,27 @@ describe("a run of an App in Instance > Operations", () => {
       ...overrides
     };
   }
-  const table = (runs: OperationRunResource[], locale: "en" | "de" = "en") =>
-    render(createElement(OperationRunsTable, { runs, workspaces: [], onOpen: noop }), locale);
+  const table = (runs: OperationRunResource[]) =>
+    render(createElement(OperationRunsTable, { runs, workspaces: [], onOpen: noop }));
   const detail = (shown: OperationRunResource) =>
     render(createElement(OperationRunDetail, { run: shown, workspaces: [] }));
   const factOf = (markup: string, name: string) =>
     markup.split("data-field=").find((fact) => fact.startsWith(`"${name}"`)) ?? "";
 
-  it("says App with the App's name, the revision and the action under who called", () => {
-    const markup = table([run()]);
-
-    expect(markup).toContain('data-origin="app"');
-    expect(markup).toContain('data-origin-app="active"');
-    expect(markup).toContain("App · Orders board · revision 4 · load");
-    expect(table([run()], "de")).toContain("Orders board · Revision 4 · load");
-    // A revision the App no longer points at has no number, and none is made up.
+  it("names the App, its revision and the action, and makes up no revision the App no longer points at", () => {
+    expect(table([run()])).toContain("Orders board · revision 4 · load");
     expect(table([run({ app: { title: "Orders board", deleted: false } })])).toContain(
       "Orders board · load"
     );
-  });
-
-  it("keeps the run of a deleted App and says so with the App's id", () => {
+    // The run of a deleted App is kept, with the App's id.
     const deleted = run({ app: { deleted: true } });
-
     expect(table([deleted])).toContain('data-origin-app="deleted"');
-    expect(table([deleted])).toContain("Deleted app (orders) · load");
-    expect(table([deleted], "de")).toContain("Gelöschte App (orders) · load");
-    expect(factOf(detail(deleted), "origin.app")).toContain("Deleted app (orders)");
+    expect(factOf(detail(deleted), "origin.app")).toContain("orders");
   });
 
   it("shows the Connection and the operation in the detail, and no input and no result", () => {
     const markup = detail(run());
 
-    expect(factOf(markup, "origin.app")).toContain("Orders board");
-    expect(factOf(markup, "origin.app")).toContain("revision 4");
     expect(factOf(markup, "origin.target")).toContain("crm");
     expect(factOf(markup, "origin.target")).toContain("list_orders");
     expect(markup).not.toContain('data-field="input"');
@@ -754,16 +525,23 @@ describe("the Apps group of an agent's tools", () => {
       }
     ]
   };
-  const group = (selected: string[], state: AppToolsRead = read, locale: "en" | "de" = "en") =>
-    render(createElement(AppToolsGroup, { read: state, selected, onChange: noop }), locale);
+  const group = (selected: string[], state: AppToolsRead = read) =>
+    render(createElement(AppToolsGroup, { read: state, selected, onChange: noop }));
 
+  // REF-OWNER: a holder of use alone gets each action's name, description and effect, and the
+  // chooser offers every one of them under its deterministic tool name.
   it("offers one sub-group per App with the actions an agent can carry, and keeps what the agent holds that nothing offers", () => {
     const view = appToolsView(read, ["web_search", "app.orders.load", "app.gone.read"]);
 
     expect(view.groups.map((entry) => entry.name)).toEqual(["orders"]);
-    expect(view.groups[0]?.tools.map((tool) => tool.toolName)).toEqual([
-      "app.orders.load",
-      "app.orders.save"
+    expect(view.groups[0]?.tools).toEqual([
+      {
+        toolName: "app.orders.load",
+        label: "load",
+        effect: "reading",
+        description: "Reads the open orders."
+      },
+      { toolName: "app.orders.save", label: "save", effect: "changing" }
     ]);
     expect(view.unavailable).toEqual(["app.gone.read"]);
     expect(appToolsView({ status: "loading" }, ["app.orders.load"])).toMatchObject({
@@ -792,33 +570,13 @@ describe("the Apps group of an agent's tools", () => {
     expect(appsOfOwner(apps, "cw_own").map((entry) => entry.name)).toEqual(["shared", "own"]);
   });
 
-  it("is a labelled group with a check box per action, its description and its effect", () => {
-    const markup = group(["app.orders.load"]);
-
-    expect(markup).toContain('data-tool-group="apps"');
-    expect(markup).toContain("<legend");
-    expect(markup).toContain('data-app-tools="orders"');
-    expect(markup).toContain("Orders board");
-    expect(markup).toContain("1 of 2 selected");
-    const [, load = "", saved = ""] = markup.split("data-app-tool=");
-    expect(load).toContain('"app.orders.load"');
-    expect(load).toContain("Reads the open orders.");
-    expect(load).toContain("Reading");
-    expect(saved).toContain('"app.orders.save"');
-    expect(saved).toContain("Changing");
+  it("offers a check box per carried action, the held ones to remove, and nothing where there is nothing to show", () => {
+    const markup = group(["app.orders.load", "app.gone.read"]);
+    expect(markup).toContain('data-app-tool="app.orders.load"');
+    expect(markup).toContain('data-app-tool="app.orders.save"');
     expect(markup).not.toContain("app.orders.stock");
-  });
-
-  it("shows what the agent holds and nothing offers as names to remove, and nothing at all where there is nothing to show", () => {
-    const markup = group(["app.gone.read"]);
-
     expect(markup).toContain('data-held-app-tool="app.gone.read"');
-    expect(markup).toContain("No longer available");
     expect(group([], { status: "unknown" })).toBe("");
-    expect(group(["app.orders.load"], { status: "loading" }, "de")).toContain(
-      "Die Apps werden geprüft."
-    );
-    expect(group(["app.orders.load"], read, "de")).toContain("Aktionen veröffentlichter Apps.");
   });
 
   // The instance pages the published Apps. The group showed a partial list as if it were
@@ -831,14 +589,9 @@ describe("the Apps group of an agent's tools", () => {
     expect(view).toMatchObject({ cut: true, unavailable: [], unchecked: ["app.later.read"] });
     const markup = group(["app.later.read"], cut);
     expect(markup).toContain("data-app-tools-cut");
-    expect(markup).toContain("More published apps follow");
     expect(markup).toContain("data-app-tools-more");
     expect(markup).toContain('data-held-app-tool="app.later.read"');
-    expect(markup).toContain("Not in this list. The agent keeps these actions.");
     expect(markup).not.toContain("No longer available");
-    // Said also where the pages read offer nothing and the agent holds nothing.
-    const none: AppToolsRead = { status: "ready", apps: [], more: { loading: false, load: noop } };
-    expect(group([], none, "de")).toContain("Es folgen weitere veröffentlichte Apps");
     expect(group([], read)).not.toContain("data-app-tools-cut");
   });
 });

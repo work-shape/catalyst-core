@@ -7,11 +7,9 @@ import {
   agentFormToConfig,
   agentMissingTranslations,
   agentModelRows,
-  ASSET_LANGUAGES,
   countChangedFields,
   editedAgentConfig,
   emptyAgentForm,
-  emptySkillForm,
   localizedToPair,
   pairToLocalized,
   selectAgentModelBinding,
@@ -22,6 +20,10 @@ import {
   startedAgentForm,
   startedSkillForm
 } from "@work-shape/catalyst-chat-ui/build-area";
+import {
+  assetPreviewSurfaceAfterRunCalls,
+  previewedDraftOfCall
+} from "@work-shape/catalyst-chat-ui/pages";
 
 describe("asset form model", () => {
   it("round-trips a full agent config through the form state", () => {
@@ -294,26 +296,6 @@ describe("asset form model", () => {
     });
   });
 
-  it("round-trips the models users may choose and omits an empty list", () => {
-    const config = {
-      name: "assistant",
-      displayName: "Assistant",
-      instructions: "Help the user.",
-      modelBindingId: "sol",
-      userSelectableModelBindingIds: ["terra", "luna"],
-      toolNames: [],
-      skillNames: [],
-      initialPrompts: []
-    };
-    const form = agentConfigToForm(config);
-
-    expect(form.userSelectableModelBindingIds).toEqual(["terra", "luna"]);
-    expect(agentFormToConfig(form)).toEqual(config);
-    expect(agentFormToConfig({ ...form, userSelectableModelBindingIds: [] })).not.toHaveProperty(
-      "userSelectableModelBindingIds"
-    );
-  });
-
   it("keeps the stored value of every field the form left untouched", () => {
     // Shapes the form would normalise: equal locales, surrounding whitespace, an empty prompt.
     const stored = {
@@ -408,16 +390,9 @@ describe("agent availability model", () => {
       count: 3,
       personalWorkspaces: false
     });
-    expect(agentAvailabilitySummary(selected(true, ["a"]))).toEqual({
-      kind: "workspaces",
-      count: 1,
-      personalWorkspaces: true
-    });
     expect(agentAvailabilitySummary(selected(true, []))).toEqual({ kind: "personal" });
     expect(agentAvailabilitySummary(selected(false, []))).toEqual({ kind: "hidden" });
-  });
-
-  it("treats an agent without stored availability as hidden", () => {
+    // An agent without stored availability is hidden.
     expect(agentAvailabilitySummary(undefined)).toEqual({ kind: "hidden" });
     expect(agentAvailabilityToForm(undefined)).toEqual(selected(false, []));
   });
@@ -438,10 +413,6 @@ describe("agent availability model", () => {
 });
 
 describe("texts per language", () => {
-  it("writes a localized text in English and German, in that order", () => {
-    expect(ASSET_LANGUAGES).toEqual(["en", "de"]);
-  });
-
   it("counts per language the texts that are written in the other one only", () => {
     const form = agentConfigToForm({
       name: "assistant",
@@ -460,7 +431,7 @@ describe("texts per language", () => {
     expect(agentMissingTranslations(form)).toEqual({ en: 1, de: 2 });
   });
 
-  it("does not count a text that is empty in both languages, or only blank in one", () => {
+  it("does not count a text that is empty in both, only blank in one, or the same in both", () => {
     const form = emptyAgentForm();
 
     expect(agentMissingTranslations(form)).toEqual({ en: 0, de: 0 });
@@ -472,12 +443,9 @@ describe("texts per language", () => {
         initialPrompts: [{ title: { en: "", de: "" }, prompt: { en: "", de: "Frage" } }]
       })
     ).toEqual({ en: 1, de: 1 });
-  });
-
-  it("counts nothing for a text that reads the same in both languages", () => {
-    const form = agentConfigToForm({ name: "assistant", displayName: "Assistant" });
-
-    expect(agentMissingTranslations(form)).toEqual({ en: 0, de: 0 });
+    expect(
+      agentMissingTranslations(agentConfigToForm({ name: "assistant", displayName: "Assistant" }))
+    ).toEqual({ en: 0, de: 0 });
   });
 });
 
@@ -491,9 +459,13 @@ describe("changed fields", () => {
     initialPrompts: [{ title: "Weather", prompt: "Check the weather." }]
   });
 
-  it("counts no change on a form as loaded, also on a copy of it", () => {
+  it("counts no change on a form as loaded, on a copy of it, or after a change back", () => {
     expect(countChangedFields(loaded, loaded)).toBe(0);
     expect(countChangedFields(agentConfigToForm(agentFormToConfig(loaded)), loaded)).toBe(0);
+    const edited = { ...loaded, toolNames: [...loaded.toolNames, "show_view"] };
+    const back = { ...edited, toolNames: edited.toolNames.filter((name) => name !== "show_view") };
+    expect(countChangedFields(edited, loaded)).toBe(1);
+    expect(countChangedFields(back, loaded)).toBe(0);
   });
 
   it("counts each field that differs once, however much of it changed", () => {
@@ -514,14 +486,6 @@ describe("changed fields", () => {
       )
     ).toBe(2);
     expect(countChangedFields({ ...loaded, fastMode: true }, loaded)).toBe(1);
-  });
-
-  it("counts a field that was changed back as unchanged", () => {
-    const edited = { ...loaded, toolNames: [...loaded.toolNames, "show_view"] };
-    const back = { ...edited, toolNames: edited.toolNames.filter((name) => name !== "show_view") };
-
-    expect(countChangedFields(edited, loaded)).toBe(1);
-    expect(countChangedFields(back, loaded)).toBe(0);
   });
 
   it("counts the fields of a skill the same way", () => {
@@ -553,9 +517,6 @@ describe("a started asset", () => {
     expect(startedAgentForm(start, "en").displayName).toEqual({ en: "Steuer-Assistent", de: "" });
     // The other language is one text short until somebody writes it.
     expect(agentMissingTranslations(startedAgentForm(start, "de"))).toEqual({ en: 1, de: 0 });
-  });
-
-  it("saves a started agent under its id with the one name it has", () => {
     expect(agentFormToConfig(startedAgentForm(start, "de"))).toMatchObject({
       name: "tax-assistant",
       displayName: { de: "Steuer-Assistent" }
@@ -563,13 +524,74 @@ describe("a started asset", () => {
   });
 
   it("starts a skill with its id and its title", () => {
-    expect(startedSkillForm({ name: "tax-review", title: "Tax review" })).toEqual({
-      ...emptySkillForm(),
-      name: "tax-review",
-      title: "Tax review"
-    });
     expect(
       skillFormToConfig(startedSkillForm({ name: "tax-review", title: "Tax review" }))
     ).toEqual({ name: "tax-review", title: "Tax review", description: "", content: "" });
+  });
+});
+
+// The draft of an asset whose kind brings a preview, such as a form page, opens beside the
+// chat when the agent saves it (EW-9c2): the answer of `platform.assets.put` says `preview`,
+// and the run's newest such save opens the surface once.
+describe("a save with a preview", () => {
+  const created = {
+    output: {
+      saved: true,
+      revision: 1,
+      created: true,
+      kind: "form_page",
+      name: "firm-look",
+      title: "Our forms",
+      preview: true
+    }
+  };
+  const savedAgain = {
+    output: { saved: true, revision: 2, kind: "form_page", name: "firm-look", preview: true }
+  };
+
+  it("is read from the answer of platform.assets.put that says preview, and from no other", () => {
+    expect(previewedDraftOfCall({ toolName: "platform.assets.put", result: created })).toEqual({
+      kind: "form_page",
+      name: "firm-look",
+      title: "Our forms",
+      revision: 1
+    });
+    // Without a title the card names the asset.
+    expect(
+      previewedDraftOfCall({ toolName: "platform.assets.put", result: savedAgain })?.title
+    ).toBe("firm-look");
+    const without = { output: { ...created.output, preview: undefined } };
+    expect(previewedDraftOfCall({ toolName: "platform.assets.put", result: without })).toBe(
+      undefined
+    );
+    expect(previewedDraftOfCall({ toolName: "workspace.open", result: created })).toBe(undefined);
+    expect(
+      previewedDraftOfCall({ toolName: "platform.assets.put", result: created, isError: true })
+    ).toBe(undefined);
+  });
+
+  it("opens the newest save of a run beside the chat, once per call", () => {
+    const call = (toolCallId: string, output: unknown, state = "output_available") => ({
+      type: "tool_call",
+      toolCallId,
+      toolName: "platform.assets.put",
+      state,
+      output
+    });
+    const handled = new Set<string>();
+    const ask = (parts: ReturnType<typeof call>[]) =>
+      assetPreviewSurfaceAfterRunCalls({ conversationId: "conv-1", parts, handled });
+
+    expect(ask([call("c-1", created, "input_available")])).toBeUndefined();
+    expect(ask([call("c-1", created), call("c-2", savedAgain)])).toEqual({
+      kind: "asset_preview",
+      key: "asset-preview:form_page:firm-look:2",
+      title: "firm-look",
+      conversationId: "conv-1",
+      assetKind: "form_page",
+      name: "firm-look",
+      revision: 2
+    });
+    expect(ask([call("c-1", created), call("c-2", savedAgain)])).toBeUndefined();
   });
 });

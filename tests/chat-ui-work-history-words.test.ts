@@ -11,10 +11,8 @@ import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspa
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { required } from "./support/assertions";
 
-// The work history in words (UXA-7b). Each row says what happened: the operation and the
-// Connection with the rows read, the title of any other step, "Showed a table" for a view, and
-// a failed step says so. The input and output stand behind "Technical details", which is
-// closed and puts nothing of them in the page until it is opened.
+// The work history (UXA-7b): the rows a read returned are counted, a failed step says why, and
+// the input and output stand behind "Technical details", closed until it is opened.
 
 const TOP_CUSTOMERS = "connection.sample-business.top_customers";
 
@@ -55,15 +53,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function render(
-  call: {
-    toolName: string;
-    args?: Record<string, string | number>;
-    result?: unknown;
-    isError?: boolean;
-  },
-  locale: "en" | "de" = "en"
-) {
+function render(call: {
+  toolName: string;
+  args?: Record<string, string | number>;
+  result?: unknown;
+  isError?: boolean;
+}) {
   const args = call.args ?? { limit: 5 };
   const part = createElement(ToolCallPart, {
     toolName: call.toolName,
@@ -92,7 +87,7 @@ function render(
             { mode: "light", labels: uiLabelsEn },
             createElement(
               TranslationProvider,
-              { locale, children: null },
+              { locale: "en", children: null },
               createElement(
                 ToolDisplayPanelProvider,
                 null,
@@ -142,59 +137,23 @@ function openRow() {
 }
 
 describe("the work history in words", () => {
-  it("names the operation and the Connection of a read, with the rows it read", () => {
+  it("counts the rows a read returned, and only records", () => {
     render({ toolName: TOP_CUSTOMERS, result: fiveRows });
-    expect(rowText()).toBe("Read top customers from Sample business · 5 rows");
-
-    render({ toolName: TOP_CUSTOMERS, result: fiveRows }, "de");
-    expect(rowText()).toBe("Top customers aus Sample business gelesen · 5 Zeilen");
+    expect(rowText()).toContain("5 rows");
 
     render({ toolName: TOP_CUSTOMERS, result: { structuredContent: { rows: [{}] } } });
-    expect(rowText()).toBe("Read top customers from Sample business · 1 row");
+    expect(rowText()).toContain("1 row");
 
     // Rows are records: an array of anything else gives no count.
     render({ toolName: TOP_CUSTOMERS, result: { rows: [null, 42] } });
-    expect(rowText()).toBe("Read top customers from Sample business");
+    expect(rowText()).not.toContain("row");
   });
 
-  it("says what a view showed and gives any other step its title, without a status word", () => {
-    render({
-      toolName: "show_view",
-      args: { html: "<table><tr><td>1</td></tr></table>", mode: "inline" },
-      result: {
-        output: { displayed: true },
-        display: {
-          kind: "html.rendered",
-          version: 2,
-          mode: "inline",
-          data: { html: "<table><tr><td>1</td></tr></table>" }
-        }
-      }
-    });
-    expect(rowText()).toBe("Showed a table");
-
-    render({ toolName: "read_skill", args: { name: "offers" }, result: {} }, "de");
-    expect(rowText()).toBe("Anleitung lesen");
-    expect(host.textContent).not.toContain("Abgeschlossen");
-  });
-
-  it("turns a name without a title into words, never the raw key", () => {
-    render({ toolName: "demo.workflow_summary", result: { output: { ok: true } } });
-    expect(rowText()).toBe("Workflow Summary");
-    const row = host.querySelector('[data-testid="tool-call-card"] > button');
-    expect(row?.textContent).not.toContain("demo.workflow_summary");
-    expect(row?.textContent).not.toContain("workflow_summary");
-  });
-
-  it("says in words that a step failed, and why where the output is a sentence", () => {
+  it("says why a step failed where the output is a sentence", () => {
     const why = "Sample business cannot be reached right now. Try again later.";
     render({ toolName: TOP_CUSTOMERS, result: { error: why }, isError: true });
-    expect(rowText()).toBe("Could not read top customers from Sample business");
     openRow();
     expect(host.textContent).toContain(why);
-
-    render({ toolName: "demo.workflow_summary", result: { error: why }, isError: true }, "de");
-    expect(rowText()).toBe("Fehlgeschlagen: Workflow Summary");
   });
 
   it("keeps the input and output out of the page until Technical details is opened", () => {

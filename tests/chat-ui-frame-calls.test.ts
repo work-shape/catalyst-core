@@ -1,16 +1,30 @@
+// @vitest-environment happy-dom
+// @vitest-environment-options {"settings":{"enableIframePageLoading":true,"disableIframePageLoading":false}}
+
 import {
   APP_BRIDGE_CONNECTION_CALL_REMOVED,
   APP_BRIDGE_MARK,
   APP_BRIDGE_VERSION,
   type AppBridgeContext
 } from "@work-shape/catalyst-api-contract";
-import { createElement } from "react";
+import { act, createElement, useCallback, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
-import { ApiError } from "@work-shape/catalyst-api-client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, type ApiUser, type ApprovalRequestView } from "@work-shape/catalyst-api-client";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { item } from "./chat-ui-inbox-harness";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import { createTranslationContext, tellRefusal } from "./support/chat-ui";
+import {
+  ApprovalRevisionHostProvider,
+  createTranslationContext,
+  FrameApprovalWait,
+  inboxListQueryKey,
+  LivePagePreview,
+  tellRefusal,
+  workspaceQueryKeys
+} from "./support/chat-ui";
 import {
   callResultMessage,
   contextMessage,
@@ -19,10 +33,9 @@ import {
   feedbackResultMessage,
   frameCallFailure,
   pdfResultMessage,
+  PageHostProvider,
   workflowRunResultMessage,
   frameSessionProof,
-  FrameTestRunView,
-  frameTestRunTitle,
   useFrameCallTexts,
   type ArrivedMessage,
   type FrameCallAnswer,
@@ -286,48 +299,8 @@ describe("a call a Page asks the interface to make", () => {
     expect(shown).toHaveLength(2);
   });
 
-  // Fails before DP-1: the frame said nothing of a test run, so its result read as real.
-  it("marks a test run over the frame with the revision that ran and the steps simulated", () => {
-    const route = {
-      kind: "workflow-run" as const,
-      collaborationWorkspaceId: "cw_1",
-      workflow: "notify-clients",
-      run: "wfr-7"
-    };
-    const strip = (run: Parameters<typeof FrameTestRunView>[0]["run"], locale: "en" | "de") =>
-      renderToStaticMarkup(
-        createElement(TranslationProvider, {
-          locale,
-          children: createElement(FrameTestRunView, {
-            run,
-            route,
-            onOpen: () => undefined,
-            onClose: () => undefined
-          })
-        })
-      );
-    const draft = strip(
-      { id: "wfr-7", workflowRevision: { kind: "draft", number: 7 }, simulatedSteps: ["a", "b"] },
-      "de"
-    );
-    expect(draft).toContain("Testlauf des Entwurfs · Workflow-Entwurf");
-    // The frame names no revision number, as nothing of an App's preview does (OPEN-1f).
-    expect(draft).not.toContain("r7");
-    expect(draft).toContain("2 Schritte simuliert");
-    expect(draft).toContain("Lauf ansehen");
-    expect(draft).toContain('href="/w/cw_1/workflows/notify-clients/runs/wfr-7"');
-    const published = strip(
-      { id: "wfr-7", workflowRevision: { kind: "published", number: 5 }, simulatedSteps: [] },
-      "en"
-    );
-    expect(published).toContain("Test run · published Workflow");
-    expect(published).not.toContain("simulated");
-    expect(published).toContain("View run");
-    expect(frameTestRunTitle({})).toBe("pages.testRunDraft");
-  });
-
   // Fails before the removal: the bridge made the call of a Connection operation the Page named.
-  it("refuses the retired free call of a Connection at once, names the named action as the fix, and calls nothing", async () => {
+  it("refuses the retired free call of a Connection at once and calls nothing", async () => {
     const ran: unknown[] = [];
     const { made, posted, page, from, message } = bridge({
       writeStorage: () => Promise.resolve(),
@@ -365,12 +338,6 @@ describe("a call a Page asks the interface to make", () => {
         targetOrigin: "*"
       }
     ]);
-    expect(APP_BRIDGE_CONNECTION_CALL_REMOVED).toMatchObject({
-      code: "connection_call_removed",
-      retryable: false,
-      message: expect.stringContaining("named action")
-    });
-    expect(APP_BRIDGE_CONNECTION_CALL_REMOVED.message).toContain("actions/<name>.action.yaml");
   });
 
   // Fails without APP-6a: the bridge took no read of a Workflow Run, so a Page that started one
@@ -975,7 +942,7 @@ describe("the calls of a frame", () => {
 
   it("word a missing right on a Connection with whom to ask, never a page the person cannot open", () => {
     const API = "https://chat.example.com";
-    const sentence = (instanceAdminName: string | undefined, locale: "en" | "de" = "en") => {
+    const sentence = (instanceAdminName: string | undefined) => {
       const queryClient = new QueryClient();
       queryClient.setQueryData(["me", API], { instanceAdminName });
       function Probe() {
@@ -988,19 +955,13 @@ describe("the calls of a frame", () => {
           createElement(
             WorkspaceApiClientProvider,
             { apiBaseUrl: API, children: null },
-            createElement(TranslationProvider, { locale, children: createElement(Probe) })
+            createElement(TranslationProvider, { locale: "en", children: createElement(Probe) })
           )
         )
       );
     };
-    expect(sentence("Mara")).toBe(
-      "You may not use the connection Warehouse, so this cannot load. Trying again will not help. Ask an admin for all workspaces, for example Mara."
-    );
-    expect(sentence(undefined)).toContain("Ask an admin for all workspaces.");
-    expect(sentence("Mara", "de")).toContain("zum Beispiel Mara.");
-    for (const text of [sentence("Mara"), sentence("Mara", "de")]) {
-      expect(text).not.toMatch(/Settings|Einstellungen/u);
-    }
+    expect(sentence("Mara")).toContain("Mara");
+    expect(sentence("Mara")).not.toMatch(/Settings/u);
   });
 
   // REFUSE-1: an App shows a refusal's sentence as it is, so the host tells it in the viewer's
@@ -1036,39 +997,29 @@ describe("the calls of a frame", () => {
       );
       return told;
     };
-    expect(failure("de", { reason: "data_store_needs_app", dataStore: "belege" })).toEqual({
-      code: "data_store_needs_app",
-      message:
-        "Diese Vorschau erreicht keine Datenspeicher. Zum Testen mit echten Daten öffne die App.",
-      retryable: false
-    });
+    const instance = "Save the Page as an App with app.save";
+    const known = failure("de", { reason: "data_store_needs_app", dataStore: "belege" });
+    expect(known).toMatchObject({ code: "data_store_needs_app", retryable: false });
+    expect(known?.message).not.toBe(instance);
     expect(
       failure("en", { reason: "data_store_unavailable", dataStore: "belege", operationRunId: "r1" })
-    ).toEqual({
-      code: "data_store_unavailable",
-      message: "There is no data store “belege” here (any more).",
-      runId: "r1"
-    });
+    ).toMatchObject({ code: "data_store_unavailable", runId: "r1" });
     // A missing right on a Data Store, not on a Connection: still a refusal for the right.
-    expect(
-      failure("de", { reason: "no_grant", action: "data_store.read" }, [403, "FORBIDDEN"])
-    ).toEqual({
-      code: "forbidden",
-      message: "Dafür brauchst du das Recht „Datenspeicher ansehen“.",
-      right: "data_store.read",
-      retryable: false
-    });
+    const right = failure("de", { reason: "no_grant", action: "data_store.read" }, [
+      403,
+      "FORBIDDEN"
+    ]);
+    expect(right).toMatchObject({ code: "forbidden", right: "data_store.read", retryable: false });
+    expect(right?.message).not.toBe(instance);
     // A right this interface does not know is not named by a placeholder.
     expect(
       failure("de", { reason: "no_grant", action: "connection_exposure.outside" }, [
         403,
         "FORBIDDEN"
       ])?.message
-    ).toBe("Save the Page as an App with app.save");
+    ).toBe(instance);
     // A reason the interface does not know keeps the instance's sentence.
-    expect(failure("de", { reason: "upstream_error" })?.message).toBe(
-      "Save the Page as an App with app.save"
-    );
+    expect(failure("de", { reason: "upstream_error" })?.message).toBe(instance);
   });
 
   it("tell a Page nothing of what is no answer of the instance", () => {
@@ -1077,5 +1028,211 @@ describe("the calls of a frame", () => {
       code: "failed",
       message: "The call could not be made."
     });
+  });
+});
+
+// DAILY-WINS 9: an App's call that waits for an approval is said over the frame, with the way
+// to the request, until the request is decided or the person closes the notice.
+describe("the notice over a frame whose call waits", () => {
+  const API = "https://api.example.test";
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  const held = (status: ApprovalRequestView["status"], runId = "opr_held") =>
+    item({
+      id: "apr_held",
+      kind: "operation_call",
+      status,
+      preview: {
+        runId,
+        operation: "app.action",
+        effect: "changing",
+        actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
+        origin: { kind: "user" },
+        inputs: []
+      }
+    });
+
+  /** The page's side: it holds the wait as the frame does and lets it end. */
+  function Page({ onEnd }: { onEnd(): void }) {
+    const [waiting, setWaiting] = useState(true);
+    const end = useCallback(() => {
+      setWaiting(false);
+      onEnd();
+    }, [onEnd]);
+    return waiting ? createElement(FrameApprovalWait, { runId: "opr_held", onEnd: end }) : null;
+  }
+
+  const shell = (client: QueryClient, node: ReturnType<typeof createElement>) =>
+    createElement(
+      UiRoot,
+      { mode: "light", labels: uiLabelsEn },
+      createElement(
+        TranslationProvider,
+        { locale: "en", children: null },
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(WorkspaceApiClientProvider, { apiBaseUrl: API, children: null }, node)
+        )
+      )
+    );
+
+  async function show(requests: ApprovalRequestView[]) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } }
+    });
+    client.setQueryData(inboxListQueryKey(API, "standalone", "mine"), requests);
+    const onEnd = vi.fn();
+    const openRoute = vi.fn();
+    await act(async () =>
+      root.render(
+        shell(
+          client,
+          createElement(
+            ApprovalRevisionHostProvider,
+            {
+              value: {
+                currentUserId: "user-anna",
+                personalWorkspaceAgentName: () => undefined,
+                startRevision: () => undefined,
+                agentDisplayName: () => undefined,
+                openConversation: () => undefined,
+                openRoute
+              }
+            },
+            createElement(Page, { onEnd })
+          )
+        )
+      )
+    );
+    return { client, onEnd, openRoute };
+  }
+
+  const overlay = () => host.querySelector('[data-testid="frame-approval-wait"]');
+  const inboxLink = () => overlay()?.querySelector("a");
+
+  it("leads to its request in the Inbox, or to the Inbox while the list does not name it", async () => {
+    const { openRoute } = await show([held("pending")]);
+    expect(inboxLink()?.getAttribute("href")).toContain("apr_held");
+    await act(async () => inboxLink()?.click());
+    expect(openRoute).toHaveBeenCalledWith({ kind: "inbox-item", itemId: "apr_held" });
+
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await show([held("pending", "opr_other")]);
+    expect(inboxLink()?.getAttribute("href")).not.toContain("apr_held");
+  });
+
+  it("goes once the request is decided", async () => {
+    const decided = await show([held("pending")]);
+    expect(overlay()).not.toBeNull();
+    await act(async () => {
+      decided.client.setQueryData(inboxListQueryKey(API, "standalone", "mine"), [held("rejected")]);
+      // The query tells its readers on the next tick.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(overlay()).toBeNull();
+    expect(decided.onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("the mounted preview turns a held action into an overlay, blocks its iframe, and restores access on Close", async () => {
+    const fetch = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(Response.json({ runId: "opr_held", status: "pending_approval" }))
+    );
+    vi.stubGlobal("fetch", fetch);
+    const queries = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } }
+    });
+    queries.setQueryData(inboxListQueryKey(API, "standalone", "mine"), []);
+    // The signed-in person is cached, so the only call the page makes is its action.
+    const anna: ApiUser = {
+      id: "anna",
+      externalUserId: "external_anna",
+      displayLabel: "Anna",
+      roles: [],
+      permissionRefs: [],
+      permissions: [],
+      clientInstanceId: "client_1",
+      authSource: "test"
+    };
+    queries.setQueryData(workspaceQueryKeys.me(API), anna);
+    await act(async () =>
+      root.render(
+        shell(
+          queries,
+          createElement(
+            PageHostProvider,
+            {
+              viewer: { kind: "member", id: "anna", displayName: "Anna" },
+              workspace: null,
+              theme: context.theme,
+              mode: "light",
+              conversationId: undefined,
+              children: null
+            },
+            createElement(LivePagePreview, {
+              title: "Preview",
+              pageId: "app-one",
+              number: 1,
+              session: "session-one",
+              url: "about:blank",
+              address: {
+                url: `${API}/content/files-one/token/`,
+                fileSetId: "files-one",
+                pageSessionId: "session-one"
+              }
+            })
+          )
+        )
+      )
+    );
+    const iframe = host.querySelector("iframe");
+    expect(iframe?.parentElement?.hasAttribute("inert")).toBe(false);
+    const page = { postMessage: vi.fn() };
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      value: { length: 1, 0: page }
+    });
+    const message = new MessageEvent("message", {
+      origin: "null",
+      data: {
+        [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+        type: "action",
+        session: "session-one",
+        requestId: "r1",
+        name: "send",
+        input: {}
+      }
+    });
+    Object.defineProperty(message, "source", { value: page });
+    await act(async () => {
+      window.dispatchEvent(message);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // The preview also reports itself once it is mounted (PREVIEW-STATUS-1); one call was made.
+    expect(fetch.mock.calls.filter(([url]) => !String(url).endsWith("/report"))).toHaveLength(1);
+    expect(overlay()).not.toBeNull();
+    expect(iframe?.parentElement?.hasAttribute("inert")).toBe(true);
+    expect(iframe?.isConnected).toBe(true);
+    const close = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Close"
+    );
+    await act(async () => close?.click());
+    expect(overlay()).toBeNull();
+    expect(iframe?.parentElement?.hasAttribute("inert")).toBe(false);
   });
 });

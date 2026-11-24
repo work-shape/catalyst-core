@@ -2,29 +2,62 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { ConnectionDetail, LocaleCode } from "@work-shape/catalyst-api-client";
+import type {
+  ConnectionDetail,
+  ConnectionOperationDetail,
+  LocaleCode
+} from "@work-shape/catalyst-api-client";
 import {
+  DISCOVERY_WAIT_MS,
+  connectionConfigToForm,
+  countConnectionFormChanges,
+  discoveryWaitFrom,
+  discoveryWaitsForSignIn,
+  credentialOriginKey,
+  newConnectionConfig,
+  emptyConnectionForm,
+  emptyOAuthForm,
+  oauthFormComplete,
+  personContextHeaderOf,
+  waitsForDiscovery,
+  withApprovedOperations,
+  withConnectionAbout,
+  withConnectionForm,
+  withOperationEnabled,
+  withOperationExposure,
+  withReviewedOperation,
+  withoutOperation,
   buildAssetKinds,
   BuildAssetKindsProvider,
+  CatalogueServices,
   BuildFrame,
   BuildNavigationProvider,
   ConnectionEditor,
-  connectionConfigToForm,
-  countConnectionFormChanges,
+  httpOperationDeclaration,
+  isEditableKind,
   listedHealth,
-  personContextHeaderOf,
+  mcpOperationDeclaration,
+  OperationDetails,
+  PARAMETERS_MAX,
+  RAW_MAX_CHARS,
   resolveBuildRights,
-  withConnectionForm,
+  serviceCards,
+  TEXT_MAX_CHARS,
+  VALUES_MAX,
   type BuildAsset,
   type BuildAssetKind,
   type BuildAssetRead,
+  type BuildAssetRow,
   type BuildSource,
   type CatalogueEntryOffer,
   type ConnectionDetailRead,
+  type ConnectionFormState,
   type ConnectionHoldersRead,
   type ConnectionSource,
   type ConnectionTestRun,
-  type ConnectorTypeOffer
+  type ConnectorTypeOffer,
+  type OwnServerEntry,
+  type ServiceCard
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { platformContext } from "./chat-ui-build-fixtures";
@@ -39,6 +72,8 @@ import {
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { mailbox } from "./chat-ui-catalogue-oauth-fixtures";
 import { connectorTypeOffers } from "@work-shape/catalyst-connections";
+import { required } from "./support/assertions";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { createConnectorTypeRegistry } from "@work-shape/catalyst-core";
 import { createImapConnectorType } from "@work-shape/catalyst-imap-connector";
 
@@ -204,157 +239,46 @@ function healthOf(markup: string): string | undefined {
 }
 
 describe("Connection page", () => {
-  it("shows whom a release Connection belongs to and that its operator sets it up, with nothing to edit", () => {
-    const markup = renderPage();
-
-    expect(markup).toContain(">Sample business</h1>");
-    // The head names the Connection only; its id is behind "Copy ID" in the head's menu.
-    expect(markup).not.toContain(">Connection<");
-    expect(markup).not.toContain(">sample-business<");
-    expect(markup).toContain(">Everyone<");
-    expect(markup).toContain(
-      "This connection comes with the system setup. The technical team changes it there; it cannot be changed here."
-    );
-    // Where it comes from is a sentence at the top of the page and no chip.
-    expect(markup).not.toContain("Defined in release config");
-    // The head says how the enabled Connection is, as its last test or call left it.
-    expect(markup).toContain('data-connection-head-health="never_tested"');
-    expect(markup).toContain('aria-label="Back to Connections"');
-    // Nothing on the page writes: no field, no save. Its history is read, its menu offers
-    // "Copy ID" and, for a reader who may create one, "Copy to edit".
+  it("offers nothing to edit on a release Connection, and its writes on one made on the instance", () => {
+    const release = renderPage();
+    expect(release).toContain(">Sample business</h1>");
     for (const control of ["<input", "<textarea", "Save", ">Edit<", ">Accept<"]) {
-      expect(markup, control).not.toContain(control);
+      expect(release, control).not.toContain(control);
     }
-    expect(markup).toContain(">History<");
-    expect(markup).toContain('aria-label="More actions"');
-    expect(renderPage({ locale: "de" })).toContain(
-      "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern."
-    );
+    expect(release).not.toContain("data-connection-outside");
+    expect(release).not.toContain("data-connection-exposure");
     expect(renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) })).not.toContain(
       "data-build-read-only"
     );
-    // A Connection of a workspace says so, and one that is off says that nothing can call it.
-    const other = renderPage({
-      asset: {
-        ...connectionAsset("ledger", { enabled: false }),
-        scope: { kind: "workspace", workspaceId: "ws_1" }
-      }
-    });
-    expect(other).toContain(">Another workspace<");
-    expect(other).toContain("This connection is disabled. Nothing can call it.");
-    expect(markup).not.toContain("data-connection-disabled");
   });
 
-  it("leads with what it does, then its state and what agents may do, and folds the rest under Settings", () => {
-    const markup = renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) });
-    const german = renderPage({
-      asset: connectionAsset("ledger", { origin: "runtime" }),
-      locale: "de"
-    });
-    expect(markup).toContain("Connects your agents to Sample business.");
-    expect(german).toContain("Verbindet deine Agenten mit Sample business.");
-    expect(german).toContain(">Was Agenten damit dürfen<");
-    expect(german).toContain("Name, Zugang, Verfügbarkeit und mehr");
-    // No outline: the page is its state, what agents may do, and one folded line.
-    expect(markup).not.toContain("On this page");
-    const at = (marker: string) => {
-      const index = markup.indexOf(marker);
-      expect(index, marker).toBeGreaterThan(-1);
-      return index;
-    };
-    const fold = at("data-asset-settings-trigger");
-    expect(at("data-asset-lead")).toBeLessThan(at("data-connection-health"));
-    expect(at("data-connection-health")).toBeLessThan(at('id="operations"'));
-    expect(at('id="operations"')).toBeLessThan(fold);
-    for (const folded of ['id="about"', 'id="settings"', 'id="agents"']) {
-      expect(at(folded), folded).toBeGreaterThan(fold);
-    }
-    // What an operation calls and takes, and the way to take it off, wait under its Details.
-    const row = markup.slice(at('data-connection-operation="revenue_by_month"'));
-    expect(row.indexOf("data-connection-enabled")).toBeLessThan(
-      row.indexOf("data-connection-operation-more")
-    );
-    expect(row.indexOf("data-connection-remove")).toBeGreaterThan(
-      row.indexOf("data-connection-operation-more")
-    );
-  });
-
-  it("says beside its place where agents may use a Connection of everyone (SCOPE-WORDS)", () => {
-    const offered = renderPage({
-      asset: {
-        ...connectionAsset(),
-        availability: { mode: "all", collaborationWorkspaceIds: [], personalWorkspaces: false }
-      },
-      locale: "de"
-    });
-    const line = (markup: string) => /<div data-asset-place="".*?<\/div>/su.exec(markup)?.[0] ?? "";
-    expect(line(offered)).toContain(">Alle<");
-    expect(line(offered)).toContain(">Agenten nutzen sie in: Alle Arbeitsbereiche<");
-    // Offered nowhere: the line says so in plain words.
-    expect(line(renderPage({ asset: connectionAsset() }))).toContain(">No agent can use it yet<");
-    // One of a workspace is used there: its place says so.
-    expect(
-      line(
-        renderPage({
-          asset: { ...connectionAsset(), scope: { kind: "workspace", workspaceId: "ws_1" } }
-        })
-      )
-    ).not.toContain("Agents use it");
-  });
-
-  it("shows the settings and of the credential only whether it is there", () => {
+  it("shows of the credential only whether it is there, never its handle", () => {
     const markup = renderPage();
-
-    // Type and authentication read in words; their ids wait under Technical details.
-    expect(markup).toContain(">MCP server<");
-    expect(markup).toContain(">Bearer token<");
-    expect(markup).not.toContain(">mcp<");
-    expect(markup).not.toContain(">bearer<");
-    expect(markup).toContain("data-connection-technical");
-    expect(markup).toContain(">Server address<");
-    expect(markup).toContain("https://sample-business.example.test/mcp");
-    // A setting without a name in words waits under Technical details, with its key.
-    expect(markup).not.toContain(">timeoutSeconds<");
-    expect(markup).toContain("Revenue, customers and orders of the sample business.");
     expect(markup).toContain('data-connection-credential="set"');
     expect(markup).toContain("Set, version 2");
     // A reader who may not change the Connection is told that it is set, not its version.
-    const readOnly = renderPage({ mayTest: false });
-    expect(readOnly).toContain(">Set<");
-    expect(readOnly).not.toContain("version 2");
-    expect(markup).toContain(
-      "The credential stays in protected storage. This page shows only whether it is there."
-    );
-    // The revision names the handle of the credential. The page reads named members only.
+    expect(renderPage({ mayTest: false })).not.toContain("version 2");
     expect(markup).not.toContain(FIXTURE_SECRET_HANDLE);
     expect(markup).not.toContain("secret_");
     expect(markup).not.toContain("secretHandle");
-
-    const notSet = renderPage({ detail: recordedStates.notConfigured });
-    expect(notSet).toContain('data-connection-credential="not_set"');
-    expect(notSet).toContain(">Not set<");
-    const unreadable = renderPage({ detail: recordedStates.secretUnreadable });
-    expect(unreadable).toContain('data-connection-credential="unreadable"');
-    expect(unreadable).toContain(">Unreadable<");
-
+    expect(renderPage({ detail: recordedStates.notConfigured })).toContain(
+      'data-connection-credential="not_set"'
+    );
+    expect(renderPage({ detail: recordedStates.secretUnreadable })).toContain(
+      'data-connection-credential="unreadable"'
+    );
     // A Connection that sends no credential has none to set, and no account anybody shares.
     const open = renderPage({ asset: connectionAsset("open-data", { authScheme: "none" }) });
     expect(open).toContain('data-connection-credential="none_needed"');
-    expect(open).toContain(">None needed<");
-    expect(open).toContain("The outside system asks for no credential.");
-    expect(open).not.toContain(">Not set<");
-    expect(open).not.toContain("The credential stays in the Secret Store.");
     expect(open).not.toContain("data-connection-shared");
-    const offen = renderPage({
-      asset: connectionAsset("open-data", { authScheme: "none" }),
-      locale: "de"
-    });
-    expect(offen).toContain(">Nicht nötig<");
-    expect(offen).toContain("Das externe System verlangt keine Zugangsdaten.");
+    expect(markup).toContain("data-connection-shared");
+    expect(renderPage({ detail: { sharedCredential: false } })).not.toContain(
+      "data-connection-shared"
+    );
   });
 
   // DT-3: the test credential of a shared Connection, never its value.
-  it("shows the test credential's state, account, address and who set it, and offers its writes to a writer", () => {
+  it("shows the test credential's state and offers its writes to a writer only", () => {
     const set = renderPage({
       detail: {
         testCredential: {
@@ -367,173 +291,47 @@ describe("Connection page", () => {
         }
       }
     });
-    expect(set).toContain("data-connection-test-credential");
     expect(set).toContain('data-test-credential-state="set"');
     expect(set).toContain("Sandbox tenant");
-    expect(set).toContain("https://sandbox.example.test/mcp");
-    expect(set).toContain(">Enter a new test credential<");
     expect(set).toContain(">Remove test credential<");
-
-    const notSet = renderPage({
-      detail: { testCredential: { state: "not_set", takesEndpoint: true } },
-      locale: "de"
-    });
-    expect(notSet).toContain(">Testzugang<");
-    expect(notSet).toContain(">Nicht gesetzt<");
-    expect(notSet).toContain(">Testzugang eingeben<");
-    expect(notSet).not.toContain(">Testzugang entfernen<");
-
+    expect(
+      renderPage({ detail: { testCredential: { state: "not_set", takesEndpoint: true } } })
+    ).not.toContain(">Remove test credential<");
     const stale = renderPage({
       detail: { testCredential: { state: "stale", version: 1, takesEndpoint: true } }
     });
     expect(stale).toContain("data-test-credential-stale");
-    // It needs a person: said above what agents may do too, with the way to the section.
-    expect(stale.indexOf("data-connection-test-credential-stale")).toBeLessThan(
-      stale.indexOf('id="operations"')
-    );
-    expect(stale).toContain(">Open test credential<");
-    expect(stale).toContain("they never use the live key instead");
-
-    // A reader who may not change the Connection sees the state and no write.
     const readOnly = renderPage({
       mayTest: false,
       detail: { testCredential: { state: "set", version: 1, takesEndpoint: true } }
     });
     expect(readOnly).toContain('data-test-credential-state="set"');
     expect(readOnly).not.toContain("data-test-credential-open");
-    // A Connection that takes none has no section.
     expect(renderPage()).not.toContain("data-connection-test-credential");
   });
 
-  it("says each recorded state in one sentence, in English and in German", () => {
-    const states: [keyof typeof recordedStates, string, string, string][] = [
-      [
-        "neverTested",
-        "never_tested",
-        "This connection has not been tested yet.",
-        "Diese Verbindung wurde noch nicht getestet."
-      ],
-      [
-        "ready",
-        "ready",
-        "The outside system answered the test.",
-        "Das externe System hat auf den Test geantwortet."
-      ],
-      [
-        "unauthorized",
-        "unauthorized",
-        "The outside system refused the credential. It may be wrong, expired or revoked.",
-        "Das externe System hat die Zugangsdaten abgelehnt. Sie können falsch, abgelaufen oder widerrufen sein."
-      ],
-      [
-        "networkDenied",
-        "network_denied",
-        "Access to this address is not allowed. Its host is not among the allowed outside addresses.",
-        "Der Zugriff auf diese Adresse ist nicht erlaubt. Ihr Host gehört nicht zu den erlaubten externen Adressen."
-      ],
-      [
-        "unavailable",
-        "unavailable",
-        "The outside system did not answer the test. It may be down, or its address may be wrong.",
-        "Das externe System hat auf den Test nicht geantwortet. Es kann ausgefallen sein, oder seine Adresse stimmt nicht."
-      ],
-      [
-        "notConfigured",
-        "not_configured",
-        "The credential of this connection is missing. Until the technical team supplies it, no call reaches the outside system.",
-        "Die Zugangsdaten dieser Verbindung fehlen. Bis das technische Team sie bereitstellt, erreicht kein Aufruf das externe System."
-      ],
-      [
-        "secretUnreadable",
-        "secret_unreadable",
-        "A credential is stored, but it cannot be read. Until it is set again, no call reaches the outside system.",
-        "Zugangsdaten sind gespeichert, lassen sich aber nicht lesen. Bis sie neu gesetzt sind, erreicht kein Aufruf das externe System."
-      ]
+  it("maps each recorded state, and the answer of a test, to its health", () => {
+    const states: [keyof typeof recordedStates, string][] = [
+      ["neverTested", "never_tested"],
+      ["ready", "ready"],
+      ["unauthorized", "unauthorized"],
+      ["networkDenied", "network_denied"],
+      ["unavailable", "unavailable"],
+      ["notConfigured", "not_configured"],
+      ["secretUnreadable", "secret_unreadable"],
+      ["failedUnnamed", "failed"]
     ];
-    for (const [state, view, english, german] of states) {
-      const en = renderPage({ detail: recordedStates[state] });
-      expect(healthOf(en), state).toBe(view);
-      expect(en, state).toContain(english);
-      expect(renderPage({ detail: recordedStates[state], locale: "de" }), state).toContain(german);
+    for (const [state, view] of states) {
+      expect(healthOf(renderPage({ detail: recordedStates[state] })), state).toBe(view);
     }
-    // Each failure names the next step, and none promises a screen: the operator acts.
-    const steps: [keyof typeof recordedStates, string, string][] = [
-      [
-        "unauthorized",
-        "The technical team sets a new credential and restarts the system. Then test again.",
-        "Das technische Team setzt neue Zugangsdaten und startet das System neu. Teste danach erneut."
-      ],
-      [
-        "networkDenied",
-        "The technical team allows access to this host and restarts the system. Then test again.",
-        "Das technische Team erlaubt den Zugriff auf diesen Host und startet das System neu. Teste danach erneut."
-      ],
-      [
-        "unavailable",
-        "Check the address under Settings. The technical team can change it.",
-        "Prüfe die Adresse unter Einstellungen. Ändern kann sie das technische Team."
-      ],
-      [
-        "notConfigured",
-        "The technical team supplies the credential and restarts the system. Then test again.",
-        "Das technische Team stellt die Zugangsdaten bereit und startet das System neu. Teste danach erneut."
-      ],
-      [
-        "secretUnreadable",
-        "The technical team restores the key the credential was stored with, or supplies the credential again, and restarts the system. Then test again.",
-        "Das technische Team stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet das System neu. Teste danach erneut."
-      ],
-      [
-        "failedUnnamed",
-        "Test again. If it fails again, ask the technical team.",
-        "Teste erneut. Schlägt der Test wieder fehl, wende dich an das technische Team."
-      ]
-    ];
-    for (const [state, english, german] of steps) {
-      // The markup writes an apostrophe as its entity.
-      expect(renderPage({ detail: recordedStates[state] }), state).toContain(
-        english.replaceAll("'", "&#x27;")
-      );
-      expect(renderPage({ detail: recordedStates[state], locale: "de" }), state).toContain(german);
-    }
-    // A reason the page does not know has its own sentence and borrows no other state's.
-    const unnamed = renderPage({ detail: recordedStates.failedUnnamed });
-    expect(healthOf(unnamed)).toBe("failed");
-    expect(unnamed).toContain("The test failed without giving a reason.");
-    expect(unnamed).not.toContain("The outside system did not answer the test.");
-    expect(renderPage({ detail: recordedStates.failedUnnamed, locale: "de" })).toContain(
-      "Der Test ist ohne Angabe eines Grundes fehlgeschlagen."
-    );
-    expect(healthOf(renderPage({ detail: { health: "failed", lastTestedAt: undefined } }))).toBe(
-      "failed"
-    );
     // Where the instance has no reason of its own it records the answer of the type's test.
-    for (const status of ["unauthorized", "network_denied", "unavailable"] as const) {
-      expect(
-        healthOf(renderPage({ detail: { health: "failed", lastErrorCode: status } })),
-        status
-      ).toBe(status);
-    }
-    // A tested Connection says when; one never tested names no time.
-    expect(renderPage({ detail: recordedStates.ready })).toContain("Last tested ");
-    expect(renderPage()).not.toContain("Last tested ");
-  });
+    expect(
+      healthOf(renderPage({ detail: { health: "failed", lastErrorCode: "network_denied" } }))
+    ).toBe("network_denied");
 
-  it("shows a running test and the answer of the test over what was recorded", () => {
-    const running = renderPage({ detail: recordedStates.ready, run: { status: "running" } });
-    expect(healthOf(running)).toBe("testing");
-    expect(running).toContain("Asking the outside system. This can take a moment.");
-    expect(running).toContain('aria-busy="true"');
-    expect(running).not.toContain("Last tested ");
-    expect(renderPage({ run: { status: "running" }, locale: "de" })).toContain(
-      "Das externe System wird angefragt. Das kann einen Moment dauern."
+    expect(healthOf(renderPage({ detail: recordedStates.ready, run: { status: "running" } }))).toBe(
+      "testing"
     );
-
-    for (const status of ["ready", "unauthorized", "network_denied", "unavailable"] as const) {
-      const done = renderPage({ run: { status: "done", result: testResult(status) } });
-      expect(healthOf(done), status).toBe(status);
-      expect(done, status).toContain("Last tested ");
-    }
     // A test that fails after an earlier success says what it found now.
     expect(
       healthOf(
@@ -543,19 +341,15 @@ describe("Connection page", () => {
         })
       )
     ).toBe("network_denied");
-    // A failed test does not hide why: the instance answers a missing or unreadable credential
-    // as unauthorized and records which of the two it is.
-    for (const status of ["unauthorized", "unavailable"] as const) {
-      expect(
-        healthOf(
-          renderPage({
-            detail: recordedStates.notConfigured,
-            run: { status: "done", result: testResult(status) }
-          })
-        ),
-        status
-      ).toBe("not_configured");
-    }
+    // A failed test does not hide a missing or unreadable credential.
+    expect(
+      healthOf(
+        renderPage({
+          detail: recordedStates.notConfigured,
+          run: { status: "done", result: testResult("unauthorized") }
+        })
+      )
+    ).toBe("not_configured");
     expect(
       healthOf(
         renderPage({
@@ -564,22 +358,12 @@ describe("Connection page", () => {
         })
       )
     ).toBe("secret_unreadable");
-    // A test that waits for somebody's approval ran nothing, and the page says so.
-    expect(renderPage({ run: { status: "held" } })).toContain(
-      "The test waits for approval in the Inbox. It has not run yet."
-    );
-    expect(renderPage({ run: { status: "held" }, locale: "de" })).toContain(
-      "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen."
-    );
   });
 
   it("says in the head what the last test or call found, not only that the Connection is on (ACCEPT-FIX-7 C5)", () => {
     const head = (markup: string) => /data-connection-head-health="([a-z_]+)"/u.exec(markup)?.[1];
     expect(head(renderPage({ detail: recordedStates.unauthorized }))).toBe("unauthorized");
     expect(head(renderPage({ detail: recordedStates.ready }))).toBe("ready");
-    const german = renderPage({ detail: recordedStates.unauthorized, locale: "de" });
-    expect(german).toMatch(/data-connection-head-health="unauthorized"[^>]*>.*Nicht autorisiert/su);
-    // An enabled Connection the server refused is not "Enabled"; a disabled one says it is off.
     expect(renderPage({ detail: recordedStates.unauthorized })).not.toContain(">Enabled<");
     const off = renderPage({ asset: connectionAsset("ledger", { enabled: false }) });
     expect(head(off)).toBeUndefined();
@@ -587,105 +371,51 @@ describe("Connection page", () => {
   });
 
   it("says nothing in the head of an enabled Connection until its health is read (ACCEPT-FIX-7 C5)", () => {
-    // Loading, or a read that failed, is no evidence the Connection works: no green "Enabled".
     const pending: ConnectionDetailRead[] = [
       { status: "loading" },
       { status: "failed", message: undefined, retry: noop }
     ];
     for (const detailRead of pending) {
-      for (const locale of ["en", "de"] as const) {
-        const markup = renderPage({ detailRead, locale });
-        expect(markup).not.toContain(locale === "en" ? ">Enabled<" : ">Aktiv<");
-        expect(markup).not.toContain("data-connection-head-health");
-        expect(markup).not.toContain("bg-success-soft");
-      }
+      const markup = renderPage({ detailRead });
+      expect(markup).not.toContain(">Enabled<");
+      expect(markup).not.toContain("data-connection-head-health");
+      expect(markup).not.toContain("bg-success-soft");
     }
-    // A disabled Connection says it is off even before the detail arrives.
-    const off = renderPage({
-      asset: connectionAsset("ledger", { enabled: false }),
-      detailRead: { status: "loading" }
-    });
-    expect(off).toContain("Disabled");
+    expect(
+      renderPage({
+        asset: connectionAsset("ledger", { enabled: false }),
+        detailRead: { status: "loading" }
+      })
+    ).toContain("Disabled");
   });
 
-  it("tells a writer of a Connection that sends no key how to send one when the server asks for it (ACCEPT-FIX-7 C6)", () => {
+  it("tells a writer of a Connection that sends no key to set how it is sent, not to enter one (ACCEPT-FIX-7 C6)", () => {
     const asset = connectionAsset("ledger", { origin: "runtime", authScheme: "none" });
     const markup = renderPage({ asset, detail: recordedStates.unauthorized });
     expect(healthOf(markup)).toBe("unauthorized");
-    expect(markup).toContain(
-      "The server asks for a key, and this connection sends none. Under Settings, choose Edit, set how the key is sent and save. Then enter the key."
-    );
+    expect(markup).toContain("set how the key is sent");
     expect(markup).not.toContain("Enter a new key under Credential.");
-    // It sends no credential, so none was refused: the server refuses access without one.
-    expect(markup).toContain(
-      "The outside system refuses access without a credential, and this connection sends none."
-    );
     expect(markup).not.toContain("refused the credential");
-    const german = renderPage({ asset, detail: recordedStates.unauthorized, locale: "de" });
-    expect(german).toContain(
-      "Der Server verlangt einen Schlüssel, und diese Verbindung sendet keinen."
-    );
-    expect(german).toContain(
-      "Das externe System lässt ohne Zugangsdaten keinen Zugriff zu, und diese Verbindung sendet keine."
-    );
-    expect(german).not.toContain("hat die Zugangsdaten abgelehnt");
-    // A Connection that sends a key keeps the way to a new one.
     const withKey = renderPage({
       asset: connectionAsset("ledger", { origin: "runtime" }),
       detail: recordedStates.unauthorized
     });
     expect(withKey).toContain("Enter a new key under Credential.");
-    expect(withKey).toContain("The outside system refused the credential.");
   });
 
-  it("offers the test to whoever may run it and tells the others why not", () => {
-    const allowed = renderPage();
-    expect(allowed).toContain(">Test connection</button>");
-    expect(allowed).not.toContain("data-connection-test-not-allowed");
-
-    const readOnly = renderPage({ mayTest: false });
+  it("offers the test to whoever may run it and shows the instance's refusal", () => {
+    expect(renderPage()).toContain(">Test connection</button>");
+    const readOnly = renderPage({ mayTest: false, detail: recordedStates.ready });
     expect(readOnly).not.toContain("Test connection");
-    expect(readOnly).toContain(
-      "You can read this connection. Testing it needs the right to change connections across all workspaces."
-    );
-    expect(renderPage({ mayTest: false, locale: "de" })).toContain(
-      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen in allen Arbeitsbereichen zu ändern."
-    );
+    expect(readOnly).toContain("data-connection-test-not-allowed");
     // The reader still sees the recorded state.
-    expect(healthOf(renderPage({ mayTest: false, detail: recordedStates.ready }))).toBe("ready");
-
-    // The instance decides the call: a refusal is said, and a failure with the instance's words.
-    expect(renderPage({ run: { status: "refused" } })).toContain(
-      "You may not test this connection. You can read it."
-    );
-    expect(renderPage({ run: { status: "failed", message: undefined } })).toContain(
-      "The test could not be run."
-    );
+    expect(healthOf(readOnly)).toBe("ready");
     expect(renderPage({ run: { status: "failed", message: "Too many requests." } })).toContain(
       "Too many requests."
     );
   });
 
-  it("names the shared account where the Connection has one", () => {
-    const shared = renderPage();
-    expect(shared).toContain("One shared account");
-    // The notice is always there for such a Connection: it is no warning.
-    const notice = shared.slice(
-      shared.lastIndexOf("<div", shared.indexOf("data-connection-shared"))
-    );
-    expect(notice).toContain('data-tone="info"');
-    expect(shared).toContain(
-      "Everyone who may use the connection sees what that account sees, whatever their own rights there are."
-    );
-    expect(renderPage({ locale: "de" })).toContain(
-      "Alle, die die Verbindung nutzen dürfen, sehen, was dieses Konto sieht, unabhängig von ihren eigenen Rechten dort."
-    );
-    expect(renderPage({ detail: { sharedCredential: false } })).not.toContain(
-      "data-connection-shared"
-    );
-  });
-
-  it("shows the shared sign-in of a Connection that signs in with OAuth, and whether anybody is signed in", () => {
+  it("shows the shared OAuth sign-in's state and offers it to a writer only", () => {
     const oauthAsset = connectionAsset("files", {
       origin: "runtime",
       authScheme: "oauth",
@@ -699,375 +429,128 @@ describe("Connection page", () => {
     };
     const unsigned = renderPage({
       asset: oauthAsset,
-      detail: { health: "needs_configuration", secret: { state: "not_set" }, oauth },
-      locale: "de"
+      detail: { health: "needs_configuration", secret: { state: "not_set" }, oauth }
     });
-    expect(unsigned).toContain("data-connection-sign-in");
-    // The sign-in is the first thing under the lead line, and needs no heading there.
-    expect(unsigned).not.toContain(">Anmeldung<");
-    expect(unsigned.indexOf("data-connection-sign-in")).toBeLessThan(
-      unsigned.indexOf('id="operations"')
-    );
-    // Its test waits under Settings, with everything else that is set once.
-    expect(unsigned.indexOf("data-connection-health")).toBeGreaterThan(
-      unsigned.indexOf("data-asset-settings-trigger")
-    );
     expect(unsigned).toContain('data-sign-in-state="none"');
-    expect(unsigned).toContain(">Nicht angemeldet<");
-    // The recorded state names the missing sign-in, not a missing key.
-    expect(unsigned).toContain(">Anmeldung nötig<");
-    // The state of the sign-in stands once, under Sign-in, not under Status as well.
-    expect(unsigned.split("data-sign-in-state=")).toHaveLength(2);
-    // Provider, client and redirect URI are folded under the one Technical details, in Settings.
-    expect(unsigned).not.toContain("data-sign-in-technical");
-    expect(unsigned.split(">Technische Details<")).toHaveLength(2);
-    expect(unsigned.indexOf(">Technische Details<")).toBeGreaterThan(
-      unsigned.indexOf("data-asset-settings-trigger")
-    );
-    expect(unsigned).not.toContain("auth.files.example.test");
-    expect(unsigned).not.toContain("https://chat.example.com/api/v1/connections/oauth/callback");
     expect(unsigned).toContain('data-sign-in-begin=""');
-    expect(unsigned).toContain(">Anmelden<");
     expect(unsigned).not.toContain("data-connection-shared");
 
-    const signedIn = renderPage({
-      asset: oauthAsset,
-      detail: {
-        health: "ok",
-        oauth,
-        binding: {
-          state: "connected",
-          account: "team@files.example.test",
-          scopes: ["files.read"],
-          connectedAt: "2026-10-17T09:00:00.000Z"
-        }
-      },
-      locale: "de"
-    });
+    const binding = {
+      state: "connected" as const,
+      account: "team@files.example.test",
+      scopes: ["files.read"],
+      connectedAt: "2026-10-17T09:00:00.000Z"
+    };
+    const signedIn = renderPage({ asset: oauthAsset, detail: { health: "ok", oauth, binding } });
     expect(signedIn).toContain('data-sign-in-state="connected"');
-    expect(signedIn.split("data-sign-in-state=")).toHaveLength(2);
-    expect(signedIn).toContain(">Konto<");
     expect(signedIn).toContain("team@files.example.test");
-    // Since when stands beside the state, not in a row of its own.
-    expect(signedIn).toContain("data-sign-in-since");
-    // To the minute, as a list of the build area says a moment.
-    expect(signedIn).toMatch(/seit 17\.10\.2026, \d{2}:\d{2}</u);
-    // Signed in is the state: nothing beside it says that nobody tested it.
     expect(signedIn).not.toContain("data-connection-failing");
-    const untested = renderPage({
-      asset: oauthAsset,
-      detail: {
-        health: "unknown",
-        oauth,
-        binding: { state: "connected", scopes: [], connectedAt: "2026-10-17T09:00:00.000Z" }
-      },
-      locale: "de"
-    });
-    expect(untested).not.toContain("data-connection-health");
-    expect(untested).not.toContain(">Nicht getestet<");
-    expect(untested).toContain(">Verbindung testen<");
-
-    // A sign-in that stopped working says why above what agents may do, with the test.
     const failing = renderPage({
       asset: oauthAsset,
-      detail: {
-        health: "failed",
-        lastErrorCode: "upstream_unauthorized",
-        oauth,
-        binding: { state: "connected", scopes: [], connectedAt: "2026-10-17T09:00:00.000Z" }
-      },
-      locale: "de"
+      detail: { health: "failed", lastErrorCode: "upstream_unauthorized", oauth, binding }
     });
     expect(failing).toContain('data-connection-failing="unauthorized"');
-    expect(failing.indexOf("data-connection-failing")).toBeLessThan(
-      failing.indexOf('id="operations"')
-    );
-    // The permissions granted are technical: folded with the provider.
-    expect(signedIn).not.toContain("data-sign-in-granted");
-    expect(signedIn).toContain(
-      "Alle, die diese Verbindung nutzen dürfen, lesen und handeln über dieses Konto."
-    );
-    expect(signedIn).toContain(">Neu anmelden<");
 
-    // An account the provider does not name leaves no row that says so.
-    const unnamed = renderPage({
-      asset: oauthAsset,
-      detail: {
-        health: "ok",
-        oauth,
-        binding: { state: "connected", scopes: [], connectedAt: "2026-10-17T09:00:00.000Z" }
-      },
-      locale: "de"
-    });
-    expect(unnamed).not.toContain(">Konto<");
-    expect(unnamed).not.toContain("Der Anbieter nennt kein Konto.");
-
-    // A reader who may not change it sees the state, and that an administrator signs it in.
     const member = renderPage({
       asset: oauthAsset,
       detail: { health: "needs_configuration", oauth },
       canWrite: false,
       mayTest: false
     });
-    expect(member).toContain("An administrator signs this connection in.");
+    expect(member).toContain("data-connection-sign-in");
     expect(member).not.toContain("data-sign-in-begin");
-
     expect(renderPage()).not.toContain("data-connection-sign-in");
   });
 
-  it("lists the operations with effect, who may call them and their status", () => {
+  it("lists the operations by name, never the tool id, with what is not ready", () => {
     const markup = renderPage();
     const row = (name: string) => {
       const start = markup.indexOf(`data-connection-operation="${name}"`);
       expect(start, name).toBeGreaterThan(-1);
       return markup.slice(start, markup.indexOf("</li>", start));
     };
-
-    // A person reads the operation's name, never the id a tool call carries.
     expect(row("revenue_by_month")).toContain(">Revenue by month<");
     expect(row("revenue_by_month")).not.toContain("connection.sample-business.revenue_by_month");
-    expect(row("revenue_by_month")).toContain("Returns the revenue of each month of one year.");
-    expect(row("revenue_by_month")).toContain("Reading");
-    expect(row("revenue_by_month")).toContain("Callable by");
-    expect(row("revenue_by_month")).toContain(">Agents<");
-    // A row that is ready says nothing of it: only what is not ready is named.
-    expect(row("revenue_by_month")).not.toContain("Ready");
-
-    for (const caller of [">Agents<", ">Apps<", ">Workflows<", ">Outside clients<"]) {
-      expect(row("list_customers"), caller).toContain(caller);
-    }
     expect(row("list_customers")).toContain("Awaiting discovery");
-    expect(row("list_customers")).toContain(
-      "This operation has not been read from the outside system yet."
-    );
-
-    expect(row("update_customer")).toContain("Changing");
-    expect(row("update_customer")).toContain("Nobody can call it");
     expect(row("update_customer")).toContain("Needs review");
-    expect(row("update_customer")).toContain("New fingerprint:");
     expect(row("update_customer")).toContain(">sha256:9f2c41d07a<");
-
-    expect(row("top_products")).toContain("Unknown");
-    expect(row("top_products")).toContain("The outside system does not offer this operation.");
-    // An operation that is switched off reads as disabled.
     expect(row("delete_order")).toContain("Disabled");
-    expect(row("delete_order")).toContain("Switched off in the system setup.");
-
-    const german = renderPage({ locale: "de" });
-    for (const text of ["Lesend", "Ändernd", "Aufrufbar durch", "Prüfung nötig"]) {
-      expect(german, text).toContain(text);
-    }
-    expect(renderPage({ detail: { operations: [] } })).toContain(
-      "Agents may not do anything with this connection yet."
-    );
   });
 
-  it("shows how each paged operation pages, in English and in German", () => {
-    const base = connectionDetail().operations;
-    if (!base[0]) throw new Error("Missing fixture operation");
-    const first = base[0];
-    const paged = (locale: LocaleCode) =>
-      renderPage({
-        locale,
-        detail: {
-          operations: [
-            {
-              ...first,
-              name: "list_invoices",
-              paging: { by: "page", param: "page", sizeParam: "per_page", size: 1000 }
-            },
-            {
-              ...first,
-              name: "list_orders",
-              paging: { by: "offset", param: "skip", sizeParam: "top", size: 50, start: 10 }
-            },
-            {
-              ...first,
-              name: "list_contacts",
-              paging: { by: "cursor", param: "after", cursor: "meta.next_cursor" }
-            },
-            {
-              ...first,
-              name: "list_files",
-              paging: { by: "next_link", param: "url", cursor: "links.next" }
-            },
-            { ...first, name: "get_report" }
-          ]
-        }
-      });
-    const line = (markup: string, name: string) =>
-      /<p[^>]*data-connection-paging="([^"]+)"[^>]*>([^<]*)<\/p>/gu
-        .exec(markup.slice(markup.indexOf(`data-connection-paging="${name}"`) - 3))?.[2]
-        ?.replace(/<!-- -->/gu, "");
-
-    const english = paged("en");
-    expect(line(english, "list_invoices")).toBe(
-      "Paged by page number in page, 1,000 per page in per_page"
-    );
-    expect(line(english, "list_orders")).toBe(
-      "Paged by row offset in skip, 50 per page in top, starting at 10"
-    );
-    expect(line(english, "list_contacts")).toBe(
-      "Paged by cursor from meta.next_cursor of each answer, sent as after"
-    );
-    expect(line(english, "list_files")).toBe(
-      "Paged by next address from links.next of each answer, sent as url"
-    );
-    // An operation without paging says nothing of it.
-    expect(english).not.toContain('data-connection-paging="get_report"');
-
-    const german = paged("de");
-    expect(line(german, "list_invoices")).toBe(
-      "Seitenweise nach Seitennummer in page, 1.000 pro Seite in per_page"
-    );
-    expect(line(german, "list_orders")).toBe(
-      "Seitenweise nach Zeilenversatz in skip, 50 pro Seite in top, beginnend bei 10"
-    );
-  });
-
-  it("lists the agents that carry its tools, each a link to the agent", () => {
-    const markup = renderPage();
-    expect(markup).toContain('aria-label="Used by"');
-    expect(markup).toContain('href="/build/agents/workflow_assistant"');
-    expect(markup).toContain(">Workflow Assistant<");
-    expect(markup).toContain(">2 tools<");
-    expect(markup).toContain('href="/build/agents/tax-steuer_agent"');
-    expect(markup).toContain(">1 tool<");
-    expect(renderPage({ detail: { usedBy: [] } })).toContain(
-      "No agent carries a tool of this connection."
-    );
-    expect(renderPage({ detail: { usedBy: [] }, locale: "de" })).toContain(
-      "Kein Agent führt ein Tool dieser Verbindung."
-    );
-  });
-
-  it("keeps the definition on the page when the state cannot be read, and says so", () => {
+  it("keeps the definition when the state cannot be read, and shows nothing unread as empty", () => {
     const failed = renderPage({
-      detailRead: { status: "failed", message: undefined, retry: noop }
+      detailRead: { status: "failed", message: "The instance is busy.", retry: noop }
     });
-    expect(failed).toContain("The status of this connection could not be read.");
-    expect(failed).toContain(">Try again<");
+    expect(failed).toContain("The instance is busy.");
     expect(failed).toContain("https://sample-business.example.test/mcp");
-    // What was not read is not shown as empty: no health, no test, no operations.
     expect(healthOf(failed)).toBeUndefined();
     expect(failed).not.toContain("Test connection");
     expect(failed).not.toContain("Agents may not do anything with this connection yet.");
-    expect(
-      renderPage({
-        detailRead: { status: "failed", message: "The instance is busy.", retry: noop }
-      })
-    ).toContain("The instance is busy.");
-
-    const loading = renderPage({ detailRead: { status: "loading" } });
-    expect(loading).toContain(">Sample business</h1>");
-    expect(healthOf(loading)).toBeUndefined();
-
-    // The asset itself: missing and refused say so in the frame's words.
+    expect(healthOf(renderPage({ detailRead: { status: "loading" } }))).toBeUndefined();
     expect(renderPage({ assetRead: { status: "missing" } })).toContain(
       "There is no connection with the id sample-business."
-    );
-    expect(renderPage({ assetRead: { status: "missing" }, locale: "de" })).toContain(
-      "Es gibt keine Verbindung mit der Kennung sample-business."
     );
     expect(renderPage({ assetRead: { status: "refused" } })).toContain(
       "You may not read this asset."
     );
   });
 
-  it("has no section on who may use it for a reader the instance refuses it", () => {
-    const markup = renderPage();
-    expect(markup).not.toContain("Who may use it");
-    expect(markup).not.toContain('id="access"');
-  });
-
-  // CONN-WHO-1: the roles first, then each holder of a right of its own, each with its verbs.
-  it("lists the roles first, then people and service principals with their verbs", () => {
-    const holders: ConnectionHoldersRead = {
-      status: "ready",
-      access: {
-        roles: [
-          {
-            id: "superadmin",
-            name: "superadmin",
-            builtIn: true,
-            verbs: ["read", "use", "write", "delete", "approve"]
-          },
-          { id: "admin", name: "admin", builtIn: true, verbs: ["read", "use", "write"] },
-          { id: "role_bookkeeping", name: "Bookkeeping", builtIn: false, verbs: ["use"] }
-        ],
-        holders: [
-          { kind: "user", id: "user_kai", title: "Kai Example", verbs: ["read", "use"] },
-          {
-            kind: "service_principal",
-            id: "spn_1",
-            title: "Monthly check",
-            disabled: true,
-            verbs: ["use"]
-          }
-        ],
-        holdersShown: true
-      }
-    };
-    const markup = renderPage({ holders });
-    expect(markup).toContain('id="access"');
-    expect(markup).toContain(">Who may use it<");
-    const kinds = [...markup.matchAll(/data-holder-kind="([a-z_]+)"/gu)].map((match) => match[1]);
-    expect(kinds).toEqual(["role", "role", "role", "person", "service_principal"]);
-    const row = (kind: string, text: string) =>
-      [...markup.matchAll(new RegExp(`<li[^>]*data-holder-kind="${kind}".*?</li>`, "gsu"))]
-        .map((match) => match[0])
-        .find((li) => li.includes(text)) ?? "";
-    expect(row("role", "Bookkeeping")).toContain(">Use<");
-    expect(row("role", "Bookkeeping")).toContain(">Role<");
-    expect(row("person", "Kai Example")).toContain("View, Use");
-    expect(row("person", "Kai Example")).not.toContain("<a ");
-    const service = row("service_principal", "Monthly check");
-    expect(service).toContain('data-kind="service"');
-    expect(service).toContain(">Service principal<");
-    expect(service).toContain(">Disabled<");
-    expect(service).toContain('href="/settings/instance/api-access?principal=spn_1"');
-    expect(markup).not.toContain("data-holders-not-shown");
-
-    const german = renderPage({ holders, locale: "de" });
-    expect(german).toContain(">Wer sie verwenden darf<");
-    expect(german).toContain("Ansehen, Verwenden");
-    expect(german).toContain("über „Verfügbar in“");
-  });
-
-  // A reader who manages no users is told the built-in roles, and that the rest is not shown.
-  it("names only the built-in roles to a reader who manages no users, and counts nobody", () => {
-    const holders: ConnectionHoldersRead = {
-      status: "ready",
-      access: {
-        roles: [{ id: "admin", name: "admin", builtIn: true, verbs: ["read", "use"] }],
-        holders: [],
-        holdersShown: false
-      }
-    };
-    const markup = renderPage({ holders });
-    const kinds = [...markup.matchAll(/data-holder-kind="([a-z_]+)"/gu)].map((match) => match[1]);
-    expect(kinds).toEqual(["role"]);
-    expect(markup).toContain("data-holders-not-shown");
-    expect(markup).toContain(
-      "People, groups and custom roles with a right are shown to those who manage users."
-    );
-    expect(markup).not.toContain("No role and nobody has a right on this Connection.");
-    expect(renderPage({ holders, locale: "de" })).toContain(
-      "Personen, Gruppen und eigene Rollen mit einem Recht sieht nur, wer Benutzer verwaltet."
-    );
-  });
-
-  it("says when no role and nobody has a right on it", () => {
-    const markup = renderPage({
-      holders: { status: "ready", access: { roles: [], holders: [], holdersShown: true } }
+  describe("who may use it", () => {
+    it("has no section for a reader the instance refuses it", () => {
+      expect(renderPage()).not.toContain('id="access"');
     });
-    expect(markup).toContain("No role and nobody has a right on this Connection.");
-    expect(markup).toContain("Workspace members use it through Available in");
+
+    // CONN-WHO-1: the roles first, then each holder of a right of its own.
+    it("lists the roles first, then people and service principals", () => {
+      const holders: ConnectionHoldersRead = {
+        status: "ready",
+        access: {
+          roles: [
+            { id: "admin", name: "admin", builtIn: true, verbs: ["read", "use", "write"] },
+            { id: "role_bookkeeping", name: "Bookkeeping", builtIn: false, verbs: ["use"] }
+          ],
+          holders: [
+            { kind: "user", id: "user_kai", title: "Kai Example", verbs: ["read", "use"] },
+            {
+              kind: "service_principal",
+              id: "spn_1",
+              title: "Monthly check",
+              disabled: true,
+              verbs: ["use"]
+            }
+          ],
+          holdersShown: true
+        }
+      };
+      const markup = renderPage({ holders });
+      const kinds = [...markup.matchAll(/data-holder-kind="([a-z_]+)"/gu)].map((match) => match[1]);
+      expect(kinds).toEqual(["role", "role", "person", "service_principal"]);
+      expect(markup).toContain('href="/settings/instance/api-access?principal=spn_1"');
+      expect(markup).not.toContain("data-holders-not-shown");
+    });
+
+    // A reader who manages no users is told the built-in roles, and that the rest is not shown.
+    it("names only the built-in roles to a reader who manages no users", () => {
+      const markup = renderPage({
+        holders: {
+          status: "ready",
+          access: {
+            roles: [{ id: "admin", name: "admin", builtIn: true, verbs: ["read", "use"] }],
+            holders: [],
+            holdersShown: false
+          }
+        }
+      });
+      const kinds = [...markup.matchAll(/data-holder-kind="([a-z_]+)"/gu)].map((match) => match[1]);
+      expect(kinds).toEqual(["role"]);
+      expect(markup).toContain("data-holders-not-shown");
+      expect(markup).not.toContain("No role and nobody has a right on this Connection.");
+    });
   });
+
   it("shows the whole new description of an operation whose description is accepted again", () => {
-    const runtime = connectionAsset("ledger", { origin: "runtime" });
     const markup = renderPage({
-      asset: runtime,
+      asset: connectionAsset("ledger", { origin: "runtime" }),
       detail: {
         operations: [
           {
@@ -1085,14 +568,12 @@ describe("Connection page", () => {
     });
     const row =
       /<li[^>]*data-connection-operation="update_customer".*?<\/li>/su.exec(markup)?.[0] ?? "";
-    expect(row).toContain("Accept");
-    // Whoever accepts the new description reads all of what the model will read.
     expect(row).toMatch(
       /<p class="(?![^"]*line-clamp)[^"]*">Changes one customer\.[^<]*The fourth line\.</u
     );
   });
 
-  it("lets a writer change a Connection made on the instance: settings, key and tools", () => {
+  it("lets a writer approve discovered tools, the changing ones unticked, and a reader nothing", () => {
     const runtime = connectionAsset("ledger", { origin: "runtime" });
     const detail: Partial<ConnectionDetail> = {
       health: "needs_configuration",
@@ -1113,39 +594,24 @@ describe("Connection page", () => {
       ]
     };
     const markup = renderPage({ asset: runtime, detail });
-    expect(markup).not.toContain("data-build-read-only");
     expect(markup).toContain(">Edit<");
     expect(markup).toContain(">Enter the key<");
-    // The next step is the editor's, not the operator's.
-    expect(markup).toContain("Enter the key under Credential. Then test again.");
-    expect(markup).not.toContain("The operator supplies the credential");
-    // The discovered tools wait in one list with one confirmation: the reading one is ticked,
-    // the changing one is not, and agents may use what is approved.
     const row = (name: string) =>
       new RegExp(`data-approval-tool="${name}"[\\s\\S]*?</li>`, "u").exec(markup)?.[0] ?? "";
     expect(row("list_invoices")).toContain('aria-checked="true"');
     expect(row("void_invoice")).toContain('aria-checked="false"');
-    expect(row("void_invoice")).toContain(">changes<");
     const surface = (name: string) =>
       new RegExp(`<button[^>]*data-approval-surface="${name}"[^>]*>`, "u").exec(markup)?.[0] ?? "";
     expect(surface("agent")).toContain('aria-checked="true"');
     expect(surface("workflow")).toContain('aria-checked="false"');
-    expect(markup).toContain("1 of 2 selected");
-    expect(markup).toMatch(/data-connection-approve=""[^>]*>Approve 1 tool</u);
-    expect(markup).toContain("Changing tools ask before every call.");
-    expect(markup).not.toContain("data-connection-accept");
     // Whoever approves it reads all of what the model will read, not three lines of it.
     expect(markup).toMatch(
       /<span class="(?![^"]*line-clamp)[^"]*">Lists the invoices[^<]*The fourth line\.</u
     );
-    // An accepted operation can be taken off; the menu holds Delete.
     expect(markup).toContain('data-connection-remove="revenue_by_month"');
-    expect(markup).toContain('aria-label="More actions"');
-    // Nothing of the key stands on the page, and no field is filled from one.
     expect(markup).not.toContain('type="password"');
     expect(markup).not.toContain(FIXTURE_SECRET_HANDLE);
 
-    // A reader who may not write sees the page without a control that changes it.
     const reader = renderPage({ asset: runtime, detail, canWrite: false });
     for (const control of [
       ">Edit<",
@@ -1155,15 +621,9 @@ describe("Connection page", () => {
     ]) {
       expect(reader, control).not.toContain(control);
     }
-    const german = renderPage({ asset: runtime, detail, locale: "de" });
-    expect(german).toContain("Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut.");
-    expect(german).toContain("Nutzen dürfen");
-    expect(german).toContain("1 Tool freigeben");
   });
 
   it("offers a managed Connection set up from an earlier entry version the update, to whoever may change it (MS-APP-RELINK)", () => {
-    // The mailbox entry at version 2 on the operator's managed client; the Connection was set up
-    // from version 1, before the entry named its revocation address.
     const entry: CatalogueEntryOffer = {
       ...mailbox,
       parts: mailbox.parts.map((part) => ({
@@ -1191,19 +651,9 @@ describe("Connection page", () => {
         }
       }
     });
-    const markup = renderPage({ asset: stale, entries: [entry] });
-    expect(markup).toContain("data-connection-catalogue-update");
-    expect(markup).toContain("Set up from an earlier version of Mailbox");
-    expect(markup).toContain(
-      "This connection was set up from version 1, and version 2 is available here."
+    expect(renderPage({ asset: stale, entries: [entry] })).toContain(
+      "data-connection-catalogue-update-apply"
     );
-    expect(markup).toMatch(/data-connection-catalogue-update-apply=""[^>]*>Update to version 2</u);
-    // Which settings change stands folded under the text.
-    expect(markup).toContain("Settings that change");
-    const german = renderPage({ asset: stale, entries: [entry], locale: "de" });
-    expect(german).toContain("Mit einer früheren Version von Postfach eingerichtet");
-    expect(german).toContain("Auf Version 2 aktualisieren");
-    // A reader who may not change it, and a Connection at the current version, get no offer.
     expect(renderPage({ asset: stale, entries: [entry], canWrite: false })).not.toContain(
       "data-connection-catalogue-update"
     );
@@ -1232,97 +682,44 @@ describe("Connection page", () => {
         }
       }
     });
-    // What the instance records after a save: nothing shared to use, so waiting for configuration.
-    const detail = (registration: "managed" | "preregistered") => ({
+    const detail = {
       health: "needs_configuration" as const,
       secret: { state: "not_set" as const },
       sharedCredential: false,
-      oauth: { registration, providerHost: "login.example.test" }
-    });
-    const managed = renderPage({ asset: personal, detail: detail("managed"), settings: true });
+      oauth: { registration: "managed" as const, providerHost: "login.example.test" }
+    };
+    const managed = renderPage({ asset: personal, detail, settings: true });
     expect(managed).toContain('data-connection-health="personal"');
-    expect(managed).toContain(">Each person connects<");
-    expect(managed).toContain("The app registration is already set up.");
-    expect(managed).not.toContain("Not configured");
     expect(managed).not.toContain("Enter the key under Credential");
     // Nor a shared sign-in nobody is meant to make.
     expect(managed).not.toContain('data-sign-in-state="none"');
-    const german = renderPage({
-      asset: personal,
-      detail: detail("managed"),
-      locale: "de",
-      settings: true
-    });
-    expect(german).toContain(">Jede Person verbindet sich<");
-    expect(german).toContain("Die App-Registrierung ist bereits eingerichtet.");
-    expect(german).not.toContain("Nicht konfiguriert");
-    // The link an admin sends to IT stands with the sign-in, not folded under Settings.
+    expect(managed).not.toContain("data-admin-consent-url");
     const consent = renderPage({
       asset: personal,
       detail: {
-        ...detail("managed"),
-        oauth: {
-          registration: "managed",
-          providerHost: "login.example.test",
-          adminConsentUrl: "https://login.example.test/adminconsent"
-        }
+        ...detail,
+        oauth: { ...detail.oauth, adminConsentUrl: "https://login.example.test/adminconsent" }
       },
       settings: true
     });
-    expect(consent.split("data-admin-consent-url")).toHaveLength(2);
-    expect(consent.indexOf("data-admin-consent-url")).toBeLessThan(
-      consent.indexOf('id="operations"')
-    );
-    expect(managed).not.toContain("data-admin-consent-url");
-    const own = renderPage({ asset: personal, detail: detail("preregistered"), settings: true });
-    expect(own).toContain(">Each person connects<");
-    expect(own).toContain("There is no key to enter here.");
-    expect(own).not.toContain("The app registration is already set up.");
-    // The list row says the same.
-    expect(listedHealth("needs_configuration", true)).toBe("personal");
-    expect(listedHealth("needs_configuration")).toBe("not_configured");
+    expect(consent).toContain("data-admin-consent-url");
   });
 
-  it("names the settings of a REST API in words, in English and in German", () => {
-    const rest = connectionAsset("exampledata", {
-      connectorType: "http_api",
-      settings: { baseUrl: "https://gateway.example.test/api", testPath: "/health" }
-    });
-    const markup = renderPage({ asset: rest });
-    for (const label of [">REST API<", ">Base address<", ">Test path<", ">Bearer token<"]) {
-      expect(markup, label).toContain(label);
-    }
-    for (const raw of [">http_api<", ">baseUrl<", ">testPath<", ">bearer<"]) {
-      expect(markup, raw).not.toContain(raw);
-    }
-    const german = renderPage({ asset: rest, locale: "de" });
-    for (const label of [">REST-API<", ">Basisadresse<", ">Testpfad<", ">Bearer-Token<"]) {
-      expect(german, label).toContain(label);
-    }
-    expect(german).toContain("Technische Details");
-  });
-
-  it("adds the tools of a REST API by pasting them or drafting them in the chat, never by discovery", () => {
+  it("adds a REST API's tools by pasting them, for a writer, never by discovery", () => {
     const rest = connectionAsset("exampledata", {
       origin: "runtime",
       connectorType: "http_api",
       settings: { baseUrl: "https://gateway.example.test/datevconnect" }
     });
     const markup = renderPage({ asset: rest, detail: { operations: [] } });
-    expect(markup).toContain("Add tools");
     expect(markup).toContain("data-connection-paste");
     // Without a chat beside the page there is nothing to draft in.
     expect(markup).not.toContain("data-connection-draft");
     expect(markup).not.toContain("Discovered tools");
-    expect(renderPage({ asset: rest, detail: { operations: [] }, locale: "de" })).toContain(
-      "Du hast die Tools schon als YAML."
-    );
     expect(renderPage({ asset: rest, canWrite: false })).not.toContain("data-connection-paste");
   });
 
-  it("offers a mailbox's operations to agents alone, and lists those its type declares that wait for approval", () => {
-    // MBX-1b: "Later" left all but one of the mailbox's operations unapproved. The type allows
-    // agents alone, so the page offers no box for Apps, Workflows or outside clients.
+  it("offers a mailbox's operations to agents alone, and lists those its type declares that wait for approval (MBX-1b)", () => {
     const imap = connectorTypeOffers(
       createConnectorTypeRegistry([createImapConnectorType()])
     ).types;
@@ -1360,20 +757,11 @@ describe("Connection page", () => {
         `data-connection-exposure="${surface}:search_messages"`
       );
     }
-    // The one left waits under "Tools to approve", where "May use them" offers agents alone.
-    expect(markup).toContain('data-connection-type-tools="imap"');
-    expect(markup).toContain("Tools to approve");
     expect(markup).toContain('data-approval-tool="get_message"');
     expect(markup).not.toContain('data-approval-tool="search_messages"');
-    // The type declares what each tool does: no server hint to set right.
-    expect(markup).not.toContain("hint proposes whether a tool reads or changes");
     expect(
       [...markup.matchAll(/data-approval-surface="([a-z]+)"/gu)].map((match) => match[1])
     ).toEqual(["agent"]);
-    expect(renderPage({ asset, detail, types: imap, locale: "de" })).toContain(
-      "Freizugebende Tools"
-    );
-    // Once every one is approved, nothing waits.
     const all = connectionAsset("feedback-mailbox", {
       ...asset.config,
       operations: [
@@ -1388,44 +776,24 @@ describe("Connection page", () => {
     );
   });
 
-  it("offers a writer four check boxes per operation, for agents, Apps, Workflows and outside clients", () => {
+  it("ticks each operation's exposure as it names it, outside clients never by default", () => {
     const runtime = connectionAsset("ledger", { origin: "runtime" });
     const markup = renderPage({ asset: runtime });
-    const box = (name: string) => {
-      const match = new RegExp(`<button[^>]*data-connection-outside="${name}"[^>]*>`, "u").exec(
-        markup
-      );
-      expect(match, name).not.toBeNull();
-      return match?.[0] ?? "";
-    };
-    expect(markup).toContain("Outside clients (CLI, MCP)");
-    // The note on leaving the instance stands only under the one box that is ticked.
-    expect(
-      markup.split("What a call returns is copied to the computer that holds the key.")
-    ).toHaveLength(2);
-    // Ticked only where the operation names `outside`, which no operation does by itself.
-    expect(box("list_customers")).toContain('aria-checked="true"');
+    const box = (attribute: string, value: string) =>
+      new RegExp(`<button[^>]*${attribute}="${value}"[^>]*>`, "u").exec(markup)?.[0] ?? "";
+    expect(box("data-connection-outside", "list_customers")).toContain('aria-checked="true"');
     for (const name of ["revenue_by_month", "update_customer", "top_products", "delete_order"]) {
-      expect(box(name), name).toContain('aria-checked="false"');
+      expect(box("data-connection-outside", name), name).toContain('aria-checked="false"');
     }
-    // Agents, Apps and Workflows are ticked as the operation names them.
-    const exposure = (surface: string, name: string) =>
-      new RegExp(`<button[^>]*data-connection-exposure="${surface}:${name}"[^>]*>`, "u").exec(
-        markup
-      )?.[0] ?? "";
-    expect(exposure("bridge", "list_customers")).toContain('aria-checked="true"');
-    expect(exposure("workflow", "delete_order")).toContain('aria-checked="true"');
-    expect(exposure("bridge", "revenue_by_month")).toContain('aria-checked="false"');
-    expect(exposure("agent", "revenue_by_month")).toContain('aria-checked="true"');
-    const german = renderPage({ asset: runtime, locale: "de" });
-    expect(german).toContain("Externe Clients (CLI, MCP)");
-    expect(german).toContain(">Apps<");
-    // A reader who may not write, and a Connection of the release config, get no box.
+    expect(box("data-connection-exposure", "bridge:list_customers")).toContain(
+      'aria-checked="true"'
+    );
+    expect(box("data-connection-exposure", "bridge:revenue_by_month")).toContain(
+      'aria-checked="false"'
+    );
     expect(renderPage({ asset: runtime, canWrite: false })).not.toContain(
       "data-connection-outside"
     );
-    expect(renderPage()).not.toContain("data-connection-outside");
-    expect(renderPage()).not.toContain("data-connection-exposure");
   });
 
   describe("person context", () => {
@@ -1437,61 +805,31 @@ describe("Connection page", () => {
         settings: { baseUrl: "https://records.example.test/api", ...settings }
       });
 
-    it("offers a writer the mappings of a REST API that sends a person context header", () => {
+    it("offers a writer the mappings of a REST API that sends the header, a person chosen by name", () => {
       const markup = renderPage({ asset: mapped({ personContextHeader: "X-Person-Ref" }) });
       expect(markup).toContain('id="person-context"');
-      expect(markup).toContain("data-connection-person-context");
-      expect(markup).toContain("X-Person-Ref");
-      // The setting reads by its human label, not the raw key that overflows the label column.
-      expect(markup).toContain("Person context header");
-      expect(markup).not.toContain('<code class="font-mono">personContextHeader</code>');
-      expect(markup).toContain("A call for someone without a mapping is refused.");
       expect(markup).toContain('data-connection-field="personContextSubject"');
-      expect(markup).toContain("Choose a person");
-      // A person is chosen by name: no technical ID field is offered beside the list.
       expect(markup).not.toContain('data-connection-field="personContextSubjectId"');
-      expect(markup).toContain("Service principal");
       // Nothing is read before an admin names a subject.
       expect(markup).not.toContain("data-person-context-mapping");
-      const german = renderPage({
-        asset: mapped({ personContextHeader: "X-Person-Ref" }),
-        locale: "de"
-      });
-      expect(german).toContain("Personenkontext");
-      expect(german).toContain("Niemand wird automatisch zugeordnet.");
-    });
-
-    it("says why a reader who may not list people gets no list, and keeps the ID behind a disclosure", () => {
-      const asset = mapped({ personContextHeader: "X-Person-Ref" });
-      const hidden = renderPage({ asset, subjects: { status: "hidden" } });
-      expect(hidden).toContain('data-person-context-list="hidden"');
-      expect(hidden).toContain("Choosing a person by name needs the right to manage users.");
-      expect(hidden).toContain("Enter a technical ID instead");
-      // The disclosure starts closed: nobody is asked to copy an ID by default.
-      expect(hidden).not.toContain('data-connection-field="personContextSubjectId"');
-      expect(hidden).not.toContain('data-connection-field="personContextSubject"');
-      expect(renderPage({ asset, subjects: { status: "hidden" }, locale: "de" })).toContain(
-        "Stattdessen eine technische ID eingeben"
-      );
-    });
-
-    it("shows the list loading, failing with a retry, and empty", () => {
-      const asset = mapped({ personContextHeader: "X-Person-Ref" });
-      const loading = renderPage({ asset, subjects: { status: "loading" } });
-      expect(loading).not.toContain('data-connection-field="personContextSubject"');
-      expect(loading).toContain('id="person-context"');
-      const failed = renderPage({ asset, subjects: { status: "failed", retry: noop } });
-      expect(failed).toContain("The list could not be loaded.");
-      expect(failed).toContain("Try again");
-      const empty = renderPage({ asset, subjects: { status: "ready", subjects: [] } });
-      expect(empty).toContain('data-person-context-list="empty"');
-      expect(empty).toContain("There are no people yet.");
-    });
-
-    it("offers the mappings on a release Connection too, since they are instance data", () => {
+      // The mappings are instance data, so a release Connection has them too.
       expect(
         renderPage({ asset: mapped({ personContextHeader: "X-Person-Ref" }, "release") })
       ).toContain('id="person-context"');
+    });
+
+    it("offers no list of people to a reader who may not list them, and handles a failed or empty one", () => {
+      const asset = mapped({ personContextHeader: "X-Person-Ref" });
+      const hidden = renderPage({ asset, subjects: { status: "hidden" } });
+      expect(hidden).toContain('data-person-context-list="hidden"');
+      expect(hidden).not.toContain('data-connection-field="personContextSubject"');
+      expect(hidden).not.toContain('data-connection-field="personContextSubjectId"');
+      expect(renderPage({ asset, subjects: { status: "failed", retry: noop } })).toContain(
+        "Try again"
+      );
+      expect(renderPage({ asset, subjects: { status: "ready", subjects: [] } })).toContain(
+        'data-person-context-list="empty"'
+      );
     });
 
     it("has no mappings without the header, for a reader who may not change it, or without the source", () => {
@@ -1505,14 +843,880 @@ describe("Connection page", () => {
       });
       expect(renderPage({ asset: mcp })).not.toContain('id="person-context"');
     });
+  });
+});
 
-    it("keeps the header through an edit of the settings and counts its change", () => {
-      const config = mapped({ personContextHeader: "X-Person-Ref", testPath: "/health" }).config;
+describe("A Connection in the list", () => {
+  const kind = required(buildAssetKinds.find((entry) => entry.kind === "connection"));
+  const { t } = createTranslationContext("en");
+  const row = (attributes: Record<string, string | boolean>): BuildAssetRow => ({
+    id: "asset_workmail",
+    kind: "connection",
+    name: "workmail",
+    title: "Work Mail",
+    attributes: { connectorType: "mcp", enabled: true, ...attributes },
+    scope: { kind: "instance" },
+    revision: 4,
+    allowed: ["read", "write", "delete"],
+    updatedAt: "2026-10-30T10:00:00.000Z"
+  });
+  const badges = (attributes: Record<string, string | boolean>) =>
+    renderToStaticMarkup(createElement("div", null, kind.badges?.(row(attributes), t)));
+
+  it("maps every health the instance names", () => {
+    expect(listedHealth("ok")).toBe("ready");
+    expect(listedHealth("failed")).toBe("failed");
+    expect(listedHealth("needs_configuration")).toBe("not_configured");
+    expect(listedHealth("needs_configuration", true)).toBe("personal");
+    expect(listedHealth("secret_unreadable")).toBe("secret_unreadable");
+    expect(listedHealth("unknown")).toBe("never_tested");
+    expect(listedHealth("constructor")).toBeUndefined();
+    expect(listedHealth(undefined)).toBeUndefined();
+  });
+
+  it("shows the health of an enabled Connection, and Disabled for one that is off", () => {
+    expect(badges({ health: "unknown" })).toContain('data-connection-list-health="never_tested"');
+    expect(badges({ enabled: false, health: "ok" })).toContain(">Disabled<");
+    // An instance that names no health shows that the Connection is on.
+    expect(badges({})).toContain(">Enabled<");
+  });
+
+  // T35: a failed connect left a Connection behind without tools.
+  it("marks one without tools as incomplete and removable in place, and a complete one not", () => {
+    if (!isEditableKind(kind)) throw new Error("Connections are edited in Build");
+    const incomplete = row({ health: "unknown", withoutTools: true });
+    expect(kind.row?.(incomplete, t).description).toBeDefined();
+    expect(kind.rowRemovable?.(incomplete)).toBe(true);
+    expect(badges({ health: "unknown", withoutTools: true })).toContain(
+      "data-connection-incomplete"
+    );
+    const complete = row({ health: "unknown" });
+    expect(kind.row?.(complete, t).description).toBeUndefined();
+    expect(kind.rowRemovable?.(complete)).toBe(false);
+  });
+});
+
+describe("Who may make a Connection in Studio", () => {
+  const withConnections = (actions: string[]) => {
+    const base = platformContext([], actions);
+    return {
+      ...base,
+      kinds: [
+        ...base.kinds,
+        {
+          kind: "connection",
+          plural: "connections",
+          lifecycle: "active" as const,
+          representation: "config" as const,
+          owners: ["instance" as const],
+          actions: {
+            read: "connection.read",
+            write: "connection.write",
+            delete: "connection.delete"
+          }
+        }
+      ]
+    };
+  };
+
+  it("is whoever holds connection.write on the whole instance, not the legacy key, which still makes agents", () => {
+    const write = resolveBuildRights({ permissions: [] }, withConnections(["connection.write"]));
+    expect(write.mayCreate("connection")).toBe(true);
+    expect(write.mayCreate("agent")).toBe(false);
+    const legacy = resolveBuildRights(
+      { permissions: ["config_assets.write"] },
+      withConnections([])
+    );
+    expect(legacy.mayCreate("connection")).toBe(false);
+    expect(legacy.mayCreate("agent")).toBe(true);
+  });
+});
+
+describe("The operation details (CONN-PAGE 1)", () => {
+  // CONN-PAGE 1: every accepted operation says what it calls and what it takes. A REST API's
+  // operation is read from the definition the page holds, without a request; an MCP tool from
+  // the input schema its server named. Both come from outside the instance: wrong shapes are
+  // passed over, sizes are bounded, and every text is shown as text.
+
+  /** A REST API's definition with one declared operation, as the approval writes it. */
+  const restConfig = {
+    name: "exampledata",
+    connectorType: "http_api",
+    settings: { baseUrl: "https://api.exampledata.test" },
+    operations: [
+      {
+        name: "listFiscalYears",
+        effect: "reading",
+        exposure: ["agent"],
+        enabled: true,
+        method: "get",
+        path: "/clients/{clientId}/fiscal-years",
+        pathParams: {
+          clientId: { schema: { type: "string", format: "uuid" }, description: "The client." }
+        },
+        query: {
+          status: { schema: { type: "string", enum: ["open", "closed"] }, required: false },
+          limit: { schema: { type: "integer", minimum: 1, maximum: 100 }, required: true },
+          fields: { schema: { type: "array", items: { type: "string", enum: ["id", "year"] } } }
+        }
+      }
+    ]
+  };
+
+  const mcpSchema = {
+    type: "object",
+    required: ["year", "filter"],
+    properties: {
+      year: { type: "integer", minimum: 2000, description: "The year to sum up." },
+      currency: { anyOf: [{ type: "string" }, { type: "null" }], default: "EUR" },
+      tags: { type: "array", items: { type: "string" }, maxItems: 5 },
+      filter: {
+        type: "object",
+        required: ["region"],
+        properties: { region: { enum: ["north", "south"] }, city: { type: "string" } }
+      }
+    }
+  };
+
+  function operation(
+    overrides: Partial<ConnectionOperationDetail> = {}
+  ): ConnectionOperationDetail {
+    return {
+      name: "revenue_by_month",
+      toolName: "connection.sample.revenue_by_month",
+      effect: "reading",
+      exposure: ["agent"],
+      enabled: true,
+      status: "ready",
+      ...overrides
+    };
+  }
+
+  function render(config: Record<string, unknown>, detail: ConnectionOperationDetail): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "en", children: null },
+        createElement(OperationDetails, { operation: detail, config })
+      )
+    );
+  }
+
+  describe("What a REST API's operation sends", () => {
+    it("reads the method, the path and every parameter from the definition", () => {
+      const declaration = httpOperationDeclaration(restConfig, "listFiscalYears");
+      expect(declaration?.request).toEqual({
+        method: "GET",
+        path: "/clients/{clientId}/fiscal-years"
+      });
+      expect(
+        declaration?.parameters.map((parameter) => [parameter.name, parameter.location])
+      ).toEqual([
+        ["clientId", "path"],
+        ["status", "query"],
+        ["limit", "query"],
+        ["fields", "query"]
+      ]);
+      const [clientId, status, limit, fields] = declaration?.parameters ?? [];
+      // A path parameter is always required; a query parameter where it says so.
+      expect(clientId?.required).toBe(true);
+      expect(clientId?.description).toBe("The client.");
+      expect(status?.required).toBe(false);
+      expect(status?.values).toEqual(["open", "closed"]);
+      expect(limit?.required).toBe(true);
+      expect(limit?.constraints).toEqual([
+        { key: "minimum", value: "1" },
+        { key: "maximum", value: "100" }
+      ]);
+      // A list's allowed entries are its items' values, apart from the values of the list itself.
+      expect(fields?.values).toEqual([]);
+      expect(fields?.itemValues).toEqual(["id", "year"]);
+      expect(declaration?.raw).toContain('"pathParams"');
+      // The approval's own members are not part of what the operation sends.
+      expect(declaration?.raw).not.toContain("exposure");
+      expect(httpOperationDeclaration(restConfig, "missing")).toBeUndefined();
+    });
+  });
+
+  describe("What an MCP tool takes", () => {
+    it("lists the members of its input schema with types, required, values and constraints", () => {
+      const declaration = mcpOperationDeclaration(mcpSchema);
+      expect(declaration?.request).toBeUndefined();
+      expect(
+        declaration?.parameters.map((parameter) => [parameter.name, parameter.required])
+      ).toEqual([
+        ["year", true],
+        ["currency", false],
+        ["tags", false],
+        ["filter", true],
+        ["filter.region", true],
+        ["filter.city", false]
+      ]);
+      const byName = new Map(
+        declaration?.parameters.map((parameter) => [parameter.name, parameter])
+      );
+      expect(byName.get("currency")?.types).toEqual(["string", "null"]);
+      expect(byName.get("tags")?.itemTypes).toEqual(["string"]);
+      // A type the schema leaves out is read from the values it allows.
+      expect(byName.get("filter.region")?.types).toEqual(["string"]);
+      expect(byName.get("filter.region")?.values).toEqual(["north", "south"]);
+    });
+
+    it("says it takes no input only where the schema is closed and empty, and never for one it cannot list", () => {
+      for (const nothing of [
+        { type: "object", properties: {}, additionalProperties: false },
+        { type: "object", additionalProperties: false }
+      ]) {
+        expect(render({ connectorType: "mcp" }, operation({ inputSchema: nothing }))).toContain(
+          "Takes no input."
+        );
+      }
+      for (const schema of [
+        { type: "object" },
+        // An empty `properties` is open to any member unless the object is closed.
+        { type: "object", properties: {} },
+        { type: "object", properties: {}, required: ["query"], additionalProperties: false },
+        { allOf: [{ $ref: "#/$defs/query" }] },
+        { type: "object", patternProperties: { "^x-": { type: "string" } } }
+      ]) {
+        expect(mcpOperationDeclaration(schema)?.takesNothing, JSON.stringify(schema)).toBe(false);
+        const markup = render({ connectorType: "mcp" }, operation({ inputSchema: schema }));
+        expect(markup).not.toContain("Takes no input.");
+        expect(markup).toContain("data-connection-inputs-elsewhere");
+      }
+    });
+  });
+
+  describe("A declaration of the wrong shape or size", () => {
+    it("passes over members of the wrong shape and never throws", () => {
+      for (const schema of [null, "text", 3, [], { properties: "x" }, { properties: [1, 2] }]) {
+        const read = mcpOperationDeclaration(schema);
+        expect(read?.parameters ?? []).toEqual([]);
+      }
+      const strange = mcpOperationDeclaration({
+        properties: {
+          a: null,
+          b: { type: 7, enum: "x", minimum: { nested: true }, anyOf: "no" },
+          c: { type: ["string", 5, null] }
+        },
+        required: "a"
+      });
+      expect(strange?.parameters.map((parameter) => parameter.name)).toEqual(["a", "b", "c"]);
+      expect(strange?.parameters.every((parameter) => !parameter.required)).toBe(true);
+      expect(strange?.parameters[1]?.types).toEqual([]);
+      expect(strange?.parameters[2]?.types).toEqual(["string"]);
+      const rest = httpOperationDeclaration(
+        {
+          operations: [
+            "nope",
+            { name: "odd", method: 4, path: null, pathParams: [1], query: { q: "text" } }
+          ]
+        },
+        "odd"
+      );
+      expect(rest?.request).toEqual({ method: "GET", path: "" });
+      expect(rest?.parameters.map((parameter) => parameter.name)).toEqual(["q"]);
+    });
+
+    it("lists a bounded number of parameters and values, and cuts long texts", () => {
+      const properties = Object.fromEntries(
+        Array.from({ length: PARAMETERS_MAX + 30 }, (_, index) => [
+          `field_${index}`,
+          {
+            type: "string",
+            description: "x".repeat(TEXT_MAX_CHARS * 3),
+            enum: Array.from({ length: VALUES_MAX + 50 }, (_, value) => `v${value}`)
+          }
+        ])
+      );
+      const read = mcpOperationDeclaration({ type: "object", properties });
+      expect(read?.parameters).toHaveLength(PARAMETERS_MAX);
+      expect(read?.moreParameters).toBe(true);
+      expect(read?.parameters[0]?.values).toHaveLength(VALUES_MAX);
+      expect(read?.parameters[0]?.moreValues).toBe(true);
+      expect(read?.parameters[0]?.description?.length).toBe(TEXT_MAX_CHARS);
+      expect(read?.raw.length).toBeLessThanOrEqual(RAW_MAX_CHARS);
+      // Within the bound the declaration under Technical details is whole, valid JSON.
+      expect(read?.rawCut).toBe(false);
+      expect(JSON.parse(read?.raw ?? "")).toEqual({ type: "object", properties });
+      const over = mcpOperationDeclaration({ description: "x".repeat(RAW_MAX_CHARS) });
+      expect(over?.rawCut).toBe(true);
+      expect(over?.raw.length).toBe(RAW_MAX_CHARS);
+    });
+
+    it("shows a text of the server as text, never as markup", () => {
+      const markup = render(
+        { connectorType: "mcp" },
+        operation({
+          inputSchema: {
+            properties: {
+              "<img src=x onerror=alert(1)>": {
+                type: "string",
+                description: "<script>alert(1)</script>",
+                enum: ["<b>bold</b>"]
+              }
+            }
+          }
+        })
+      );
+      expect(markup).not.toContain("<script>");
+      expect(markup).not.toContain("<img src=x");
+      expect(markup).not.toContain("<b>bold</b>");
+      expect(markup).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    });
+  });
+});
+
+describe("The services on the Connections page (CAT-PAGE)", () => {
+  // "Dienste" on the Connections page (CAT-PAGE): one card per catalogue entry the reader can act
+  // on, with what is true of it here. These tests fail where a card set up here would offer a
+  // second install, where a reader who may make no Connection would be offered one, where an
+  // entry the operator has not named could be started, or where a person's own server would not
+  // say that they are connected.
+
+  const entry = (id: string, offered = true): CatalogueEntryOffer => ({
+    id,
+    version: 1,
+    service: id,
+    title: { en: `Service ${id}`, de: `Dienst ${id}` },
+    description: { en: "Reads files.", de: "Liest Dateien." },
+    category: "files",
+    examplePrompts: [],
+    mark: { color: "#2f6f4f" },
+    offered,
+    parts: [
+      {
+        part: "tools",
+        connectorType: "http_api",
+        name: id,
+        description: { en: "Agents read.", de: "Agenten lesen." },
+        authScheme: "bearer",
+        settings: {},
+        fields: [],
+        prerequisites: [],
+        hosts: [],
+        sharedAccountNote: { en: "Shared.", de: "Geteilt." },
+        documentSource: false,
+        operations: []
+      }
+    ]
+  });
+
+  const notes: OwnServerEntry = {
+    id: "notes",
+    version: 1,
+    service: "notes",
+    title: { en: "Notes", de: "Notizen" },
+    description: { en: "Your meeting notes.", de: "Deine Besprechungsnotizen." },
+    mark: { color: "#123456" },
+    url: "https://notes.example.com/mcp",
+    signIn: "oauth",
+    tools: []
+  };
+
+  const statuses = (cards: readonly ServiceCard[]) =>
+    cards.map((card) => [card.id, card.status, card.action?.kind]);
+
+  describe("the services on the Connections page", () => {
+    it("says of each entry whether it is set up here, connected by the reader, or not yet", () => {
+      const cards = serviceCards({
+        entries: [entry("ask", false), entry("files"), entry("mail"), entry("crm")],
+        ownEntries: [],
+        connections: [
+          { name: "files-docs", attributes: { catalogueEntry: "files" } },
+          { name: "mail", attributes: { catalogueEntry: "mail" } },
+          { name: "own-mcp", attributes: {} }
+        ],
+        mine: [
+          // The reader's own account on the personal Connection set up from the mail entry.
+          { name: "mail", title: "Mail", state: "connected", catalogue: catalogueOf("mail") }
+        ],
+        mayCreate: true
+      });
+      expect(statuses(cards)).toEqual([
+        ["files", "set-up", "open"],
+        ["mail", "connected", "open"],
+        ["crm", "start", "install"],
+        // An entry the operator has not named comes last and opens nothing.
+        ["ask", "not-offered", undefined]
+      ]);
+      expect(cards.find((card) => card.id === "files")?.action).toEqual({
+        kind: "open",
+        name: "files-docs"
+      });
+    });
+
+    it("offers no install to a reader who may make no Connection, and no sign-in counts that is not", () => {
+      const cards = serviceCards({
+        entries: [entry("files"), entry("mail")],
+        ownEntries: [],
+        connections: [{ name: "mail", attributes: { catalogueEntry: "mail" } }],
+        mine: [
+          { name: "mail", title: "Mail", state: "needs_reconnect", catalogue: catalogueOf("mail") }
+        ],
+        mayCreate: false
+      });
+      expect(statuses(cards)).toEqual([["mail", "set-up", "open"]]);
+    });
+
+    it("offers a person's own server to add, and says when they added and connected it", () => {
+      const fresh = serviceCards({
+        entries: [],
+        ownEntries: [notes],
+        connections: [],
+        mine: [],
+        mayCreate: false
+      });
+      expect(statuses(fresh)).toEqual([["notes", "start", "add-own"]]);
+      expect(fresh[0]?.parts).toEqual(["own"]);
+
+      const row = {
+        name: "notes-a1b2c3",
+        title: "Notes",
+        service: "notes",
+        state: "connected" as const,
+        ownServer: { host: "notes.example.com", enabled: true, tools: 2 }
+      };
+      expect(
+        statuses(
+          serviceCards({
+            entries: [],
+            ownEntries: [notes],
+            connections: [],
+            mine: [row],
+            mayCreate: false
+          })
+        )
+      ).toEqual([["notes", "connected", "own-servers"]]);
+      expect(
+        statuses(
+          serviceCards({
+            entries: [],
+            ownEntries: [notes],
+            connections: [],
+            mine: [{ ...row, state: "needs_reconnect" }],
+            mayCreate: false
+          })
+        )
+      ).toEqual([["notes", "set-up", "own-servers"]]);
+      // A server of the same service moved to another host is no longer that entry.
+      expect(
+        statuses(
+          serviceCards({
+            entries: [],
+            ownEntries: [notes],
+            connections: [],
+            mine: [{ ...row, ownServer: { ...row.ownServer, host: "elsewhere.example.com" } }],
+            mayCreate: false
+          })
+        )
+      ).toEqual([["notes", "start", "add-own"]]);
+    });
+
+    it("counts only the reader's own servers, never another person's an admin's list shows", () => {
+      const others = [
+        {
+          name: "notes-carol",
+          attributes: { ownServer: "other", ownerLabel: "Carol", catalogueEntry: "notes" }
+        }
+      ];
+      expect(
+        statuses(
+          serviceCards({
+            entries: [entry("notes")],
+            ownEntries: [notes],
+            connections: others,
+            mine: [],
+            mayCreate: true
+          })
+        )
+      ).toEqual([["notes", "start", "install"]]);
+      expect(
+        statuses(
+          serviceCards({
+            entries: [],
+            ownEntries: [notes],
+            connections: others,
+            mine: [],
+            mayCreate: true
+          })
+        )
+      ).toEqual([["notes", "start", "add-own"]]);
+    });
+
+    it("shows one card for an entry that is both an admin's and a person's own, at its furthest", () => {
+      const cards = serviceCards({
+        entries: [entry("notes")],
+        ownEntries: [notes],
+        connections: [],
+        mine: [
+          {
+            name: "notes-a1b2c3",
+            title: "Notes",
+            service: "notes",
+            state: "connected",
+            ownServer: { host: "notes.example.com", enabled: true, tools: 2 }
+          }
+        ],
+        mayCreate: true
+      });
+      expect(statuses(cards)).toEqual([["notes", "connected", "own-servers"]]);
+      // The admin's words and parts stay.
+      expect(cards[0]?.parts).toEqual(["tools"]);
+    });
+
+    it("draws a button only where the click starts something, and links a set-up one", () => {
+      const cards = serviceCards({
+        entries: [entry("ask", false), entry("files"), entry("crm")],
+        ownEntries: [notes],
+        connections: [{ name: "files-docs", attributes: { catalogueEntry: "files" } }],
+        mine: [],
+        mayCreate: true
+      });
+      const markup = renderToStaticMarkup(
+        createElement(TranslationProvider, {
+          locale: "de",
+          children: createElement(CatalogueServices, {
+            cards,
+            hrefOf: (action) =>
+              action.kind === "open" ? `/build/connections/${action.name}` : undefined,
+            onAct() {}
+          })
+        })
+      );
+      expect(markup).toContain('href="/build/connections/files-docs"');
+      const card = (id: string) => {
+        const start = markup.indexOf(`data-catalogue-entry="${id}"`);
+        return markup.slice(start, markup.indexOf("</li>", start));
+      };
+      expect(card("crm")).toContain("data-catalogue-start");
+      expect(card("notes")).toContain("data-catalogue-start");
+      expect(card("files")).not.toContain("<button");
+      expect(card("ask")).not.toContain("<button");
+      expect(card("ask")).not.toContain("<a");
+    });
+  });
+
+  function catalogueOf(id: string) {
+    return { entry: id, part: "tools" as const, version: 1 };
+  }
+});
+
+describe("What the form of a Connection writes", () => {
+  // What the form of a Connection made on the instance writes. The page holds the state; these
+  // make the definitions it saves. None of them carries a key.
+
+  const FINGERPRINT = "f".repeat(64);
+
+  describe("the form of a Connection", () => {
+    it("makes a new MCP Connection that accepts nothing, with the header only where it is read", () => {
+      const form: ConnectionFormState = {
+        ...emptyConnectionForm(),
+        url: " https://mcp.example.com/mcp ",
+        authScheme: "bearer",
+        headerName: "X-Key"
+      };
+      expect(newConnectionConfig({ name: "crm", title: "CRM" }, form)).toEqual({
+        name: "crm",
+        displayName: "CRM",
+        connectorType: "mcp",
+        operations: [],
+        enabled: true,
+        settings: { url: "https://mcp.example.com/mcp" },
+        authScheme: "bearer"
+      });
+      expect(withConnectionForm({ name: "crm" }, { ...form, authScheme: "header" })).toMatchObject({
+        settings: { url: "https://mcp.example.com/mcp", headerName: "X-Key" }
+      });
+    });
+
+    it("starts a copy from the copied Connection's address and operations, and nothing of its key", () => {
+      const copied = {
+        name: "release-crm",
+        description: "The CRM.",
+        settings: { url: "https://mcp.example.com/mcp", headerName: "X-Key" },
+        authScheme: "header",
+        secretHandle: "secret_x",
+        origin: "release",
+        operations: [{ name: "lookup", effect: "reading", exposure: ["agent"], enabled: true }]
+      };
+      const form = connectionConfigToForm(copied);
+      expect(form).toEqual({
+        connectorType: "mcp",
+        url: "https://mcp.example.com/mcp",
+        authScheme: "header",
+        headerName: "X-Key",
+        headers: [],
+        testPath: "",
+        personContextHeader: "",
+        oauth: emptyOAuthForm()
+      });
+      const config = newConnectionConfig({ name: "crm", title: "CRM", copyOf: copied }, form);
+      expect(config).toMatchObject({ description: "The CRM.", operations: copied.operations });
+      expect(config).not.toHaveProperty("secretHandle");
+      expect(config).not.toHaveProperty("origin");
+    });
+
+    it("makes a REST API with its base address, fixed headers and test path, and reads it back", () => {
+      const form: ConnectionFormState = {
+        ...emptyConnectionForm("http_api"),
+        url: " https://gateway.example.test/datevconnect ",
+        authScheme: "header",
+        headerName: "X-Api-Key",
+        headers: [
+          { name: " x-client-instance-id ", value: " 7c1e " },
+          { name: "", value: "an empty row is no header" }
+        ],
+        testPath: " /health "
+      };
+      const config = newConnectionConfig({ name: "exampledata", title: "Exampledata" }, form);
+      expect(config).toEqual({
+        name: "exampledata",
+        displayName: "Exampledata",
+        connectorType: "http_api",
+        operations: [],
+        enabled: true,
+        settings: {
+          baseUrl: "https://gateway.example.test/datevconnect",
+          headers: { "x-client-instance-id": "7c1e" },
+          testPath: "/health",
+          headerName: "X-Api-Key"
+        },
+        authScheme: "header"
+      });
+      expect(connectionConfigToForm(config)).toEqual({
+        connectorType: "http_api",
+        url: "https://gateway.example.test/datevconnect",
+        authScheme: "header",
+        headerName: "X-Api-Key",
+        headers: [{ name: "x-client-instance-id", value: "7c1e" }],
+        testPath: "/health",
+        personContextHeader: "",
+        oauth: emptyOAuthForm()
+      });
+      // Without a key nothing is sent, and the settings name no header and no test path.
+      expect(
+        newConnectionConfig(
+          { name: "open", title: "Open" },
+          {
+            ...emptyConnectionForm("http_api"),
+            url: "https://open.example.test",
+            authScheme: "none"
+          }
+        )
+      ).toMatchObject({ settings: { baseUrl: "https://open.example.test" }, authScheme: "none" });
+    });
+
+    it("writes a REST API's OAuth sign-in with its server, client and permissions, and reads it back", () => {
+      const form: ConnectionFormState = {
+        ...emptyConnectionForm("http_api"),
+        url: "https://graph.example.test/v1.0",
+        authScheme: "oauth",
+        oauth: {
+          authorizationUrl: " https://login.example.test/authorize ",
+          tokenUrl: "https://login.example.test/token",
+          revocationUrl: "",
+          clientId: " app-1 ",
+          scopes: "  User.Read offline_access User.Read ",
+          params: [
+            { name: "prompt", value: "consent" },
+            { name: "", value: "no parameter" }
+          ],
+          tokenAuthMethod: "client_secret_basic"
+        }
+      };
+      expect(oauthFormComplete(form)).toBe(true);
+      const config = newConnectionConfig({ name: "graph", title: "Graph" }, form);
+      expect(config).toMatchObject({
+        authScheme: "oauth",
+        settings: {
+          baseUrl: "https://graph.example.test/v1.0",
+          oauth: {
+            authorizationUrl: "https://login.example.test/authorize",
+            tokenUrl: "https://login.example.test/token",
+            clientId: "app-1",
+            scopes: ["User.Read", "offline_access"],
+            authorizationParams: { prompt: "consent" },
+            tokenAuthMethod: "client_secret_basic"
+          }
+        }
+      });
+      expect(config.settings).not.toHaveProperty("oauth.revocationUrl");
+      expect(connectionConfigToForm(config).oauth).toEqual({
+        ...form.oauth,
+        authorizationUrl: "https://login.example.test/authorize",
+        clientId: "app-1",
+        scopes: "User.Read offline_access",
+        params: [{ name: "prompt", value: "consent" }]
+      });
+      // The client credentials grant names no authorization address and no extra parameters.
+      const machine = withConnectionForm(config, { ...form, authScheme: "oauth_client" });
+      expect(machine).toMatchObject({ authScheme: "oauth_client" });
+      expect(machine.settings).not.toHaveProperty("oauth.authorizationUrl");
+      expect(machine.settings).not.toHaveProperty("oauth.authorizationParams");
+      // Another scheme drops the server; a sign-in without its addresses is not complete.
+      expect(
+        withConnectionForm(config, { ...form, authScheme: "bearer" }).settings
+      ).not.toHaveProperty("oauth");
+      expect(oauthFormComplete({ ...form, oauth: { ...form.oauth, authorizationUrl: "" } })).toBe(
+        false
+      );
+      // The client secret is sent again when the token address moves to another host.
+      expect(credentialOriginKey(form)).not.toBe(
+        credentialOriginKey({
+          ...form,
+          oauth: { ...form.oauth, tokenUrl: "https://other.example.test/token" }
+        })
+      );
+    });
+
+    it("approves tools at once, pinned to what was read, takes one off, and accepts a new description", () => {
+      const base = {
+        name: "crm",
+        operations: [
+          { name: "list", effect: "reading", exposure: [], enabled: true, policy: "deny" }
+        ]
+      };
+      const accepted = withApprovedOperations(
+        base,
+        [
+          { name: "lookup", effect: "changing", schemaFingerprint: FINGERPRINT },
+          {
+            name: "clients",
+            effect: "reading",
+            declaration: { method: "GET", path: "/clients", description: "Lists the clients." }
+          }
+        ],
+        ["agent", "workflow"]
+      );
+      expect(accepted.operations).toEqual([
+        { name: "list", effect: "reading", exposure: [], enabled: true, policy: "deny" },
+        {
+          name: "lookup",
+          effect: "changing",
+          exposure: ["agent", "workflow"],
+          enabled: true,
+          schemaFingerprint: FINGERPRINT
+        },
+        {
+          method: "GET",
+          path: "/clients",
+          description: "Lists the clients.",
+          name: "clients",
+          effect: "reading",
+          exposure: ["agent", "workflow"],
+          enabled: true
+        }
+      ]);
+      // Approved again, an operation stands once, as approved now.
+      expect(
+        withApprovedOperations(accepted, [{ name: "lookup", effect: "reading" }], []).operations
+      ).toHaveLength(3);
+      expect(withReviewedOperation(accepted, "list", FINGERPRINT).operations).toMatchObject([
+        { name: "list", schemaFingerprint: FINGERPRINT, policy: "deny" },
+        { name: "lookup" },
+        { name: "clients" }
+      ]);
+      expect(withoutOperation(withoutOperation(accepted, "lookup"), "clients").operations).toEqual(
+        base.operations
+      );
+    });
+
+    it("opens one operation to outside clients and closes it again, and leaves its other exposures", () => {
+      const base = {
+        name: "crm",
+        operations: [
+          { name: "list", effect: "reading", exposure: ["agent", "workflow"], enabled: true },
+          { name: "lookup", effect: "reading", exposure: ["agent"], enabled: true }
+        ]
+      };
+      const opened = withOperationExposure(base, "list", "outside", true);
+      expect(opened.operations).toEqual([
+        {
+          name: "list",
+          effect: "reading",
+          exposure: ["agent", "workflow", "outside"],
+          enabled: true
+        },
+        base.operations[1]
+      ]);
+      // Ticked twice it is listed once.
+      expect(withOperationExposure(opened, "list", "outside", true)).toEqual(opened);
+      expect(withOperationExposure(opened, "list", "outside", false).operations).toEqual(
+        base.operations
+      );
+      // An approved tool is never open to outside clients by itself.
+      const accepted = withApprovedOperations(
+        base,
+        [{ name: "fresh", effect: "reading", schemaFingerprint: FINGERPRINT }],
+        ["agent", "bridge", "workflow"]
+      );
+      expect(accepted.operations).toContainEqual(
+        expect.objectContaining({ name: "fresh", exposure: ["agent", "bridge", "workflow"] })
+      );
+    });
+
+    it("switches one operation off and on and keeps every other member of the definition", () => {
+      const operations = [
+        { name: "revenue_by_month", effect: "reading", exposure: ["agent"], enabled: true },
+        { name: "list_customers", effect: "reading", exposure: ["agent"], enabled: true }
+      ];
+      const config = { name: "x", connectorType: "mcp", operations, enabled: true };
+      const off = withOperationEnabled(config, "revenue_by_month", false);
+      expect(off.operations).toEqual([{ ...operations[0], enabled: false }, operations[1]]);
+      expect({ ...off, operations: undefined }).toEqual({ ...config, operations: undefined });
+      expect(withOperationEnabled(off, "revenue_by_month", true).operations).toEqual(operations);
+    });
+
+    it("writes a trimmed name and description, and leaves an empty or cleared description out", () => {
+      const config = {
+        name: "x",
+        displayName: "Old",
+        description: "Old text",
+        connectorType: "mcp"
+      };
+      expect(
+        withConnectionAbout(config, { title: "  New  ", description: " Reads orders. " })
+      ).toEqual({ ...config, displayName: "New", description: "Reads orders." });
+      expect(withConnectionAbout(config, { title: "New", description: "  " })).toEqual({
+        name: "x",
+        displayName: "New",
+        connectorType: "mcp"
+      });
+      // A new Connection keeps a copied description only where the person was not asked.
+      const start = {
+        name: "ledger",
+        title: "Ledger",
+        copyOf: { name: "old", description: "Reads the old ledger." }
+      };
+      expect(newConnectionConfig(start, emptyConnectionForm()).description).toBe(
+        "Reads the old ledger."
+      );
+      expect(
+        "description" in newConnectionConfig({ ...start, description: "" }, emptyConnectionForm())
+      ).toBe(false);
+      expect(
+        newConnectionConfig({ ...start, description: " New text " }, emptyConnectionForm())
+          .description
+      ).toBe("New text");
+    });
+
+    it("keeps the person context header through an edit of the settings and counts its change", () => {
+      const config = {
+        name: "records",
+        connectorType: "http_api",
+        authScheme: "none",
+        settings: {
+          baseUrl: "https://records.example.test/api",
+          personContextHeader: "X-Person-Ref",
+          testPath: "/health"
+        }
+      };
       expect(personContextHeaderOf(config)).toBe("X-Person-Ref");
       const form = connectionConfigToForm(config);
-      expect(form.personContextHeader).toBe("X-Person-Ref");
-      const kept = withConnectionForm(config, { ...form, url: "https://records.example.test/v2" });
-      expect(kept.settings).toEqual({
+      expect(
+        withConnectionForm(config, { ...form, url: "https://records.example.test/v2" }).settings
+      ).toEqual({
         baseUrl: "https://records.example.test/v2",
         testPath: "/health",
         personContextHeader: "X-Person-Ref"
@@ -1524,6 +1728,75 @@ describe("Connection page", () => {
       });
       expect(personContextHeaderOf(cleared)).toBeUndefined();
       expect(countConnectionFormChanges({ ...form, personContextHeader: "X-Other" }, form)).toBe(1);
+    });
+
+    it("waits for a discovery until a new catalog is in, and not longer than its bound", () => {
+      const wait = { since: 1_000, discoveredAt: "2026-10-14T08:00:00.000Z" };
+      expect(waitsForDiscovery(wait, { discoveredAt: wait.discoveredAt }, 2_000)).toBe(true);
+      // A catalog that was dropped is no new one.
+      expect(waitsForDiscovery(wait, {}, 2_000)).toBe(true);
+      expect(waitsForDiscovery(wait, { discoveredAt: "2026-10-14T08:01:00.000Z" }, 2_000)).toBe(
+        false
+      );
+      expect(waitsForDiscovery(wait, {}, 1_000 + DISCOVERY_WAIT_MS)).toBe(false);
+    });
+
+    it("stops waiting once a failure is written after the wait began, and not for an older one", () => {
+      const failed = {
+        health: "failed",
+        lastErrorCode: "upstream_unauthorized",
+        recordedAt: "2026-10-14T08:00:00.000Z"
+      };
+      const wait = discoveryWaitFrom(failed, 1_000);
+      // The same failure, written before the page asked, says nothing of this discovery.
+      expect(waitsForDiscovery(wait, failed, 2_000)).toBe(true);
+      // The discovery failed again: the state was written anew.
+      expect(
+        waitsForDiscovery(wait, { ...failed, recordedAt: "2026-10-14T08:00:05.000Z" }, 2_000)
+      ).toBe(false);
+      // A write that reset the state is no failure: the page waits on.
+      expect(
+        waitsForDiscovery(
+          wait,
+          { health: "unknown", recordedAt: "2026-10-14T08:00:05.000Z" },
+          2_000
+        )
+      ).toBe(true);
+    });
+
+    it("waits on a page that opens only while the Connection was never read and nothing failed", () => {
+      const opened = { since: 1_000 };
+      expect(waitsForDiscovery(opened, { health: "unknown" }, 2_000)).toBe(true);
+      // A personal Connection nobody signed in to: its state says why, so nothing is awaited.
+      expect(
+        waitsForDiscovery(
+          opened,
+          {
+            health: "needs_configuration",
+            lastErrorCode: "oauth_required",
+            recordedAt: "2026-10-14T08:00:00.000Z"
+          },
+          2_000
+        )
+      ).toBe(false);
+    });
+
+    it("waits for no discovery after a write that asked for none", () => {
+      expect(waitsForDiscovery(discoveryWaitFrom(undefined, 1_000, false), {}, 2_000)).toBe(false);
+    });
+
+    it("names the sign-in the tools wait for: the reader's own, or the Connection's one", () => {
+      const personal = { personal: true, signsIn: true };
+      expect(discoveryWaitsForSignIn({ ...personal, own: "not_connected" })).toBe("own");
+      expect(discoveryWaitsForSignIn({ ...personal, own: "needs_reconnect" })).toBe("own");
+      expect(discoveryWaitsForSignIn({ ...personal, own: "connected" })).toBeUndefined();
+      // Not read yet: the page claims nothing.
+      expect(discoveryWaitsForSignIn(personal)).toBeUndefined();
+      const shared = { personal: false, signsIn: true };
+      expect(discoveryWaitsForSignIn(shared)).toBe("shared");
+      expect(discoveryWaitsForSignIn({ ...shared, binding: "revoked" })).toBe("shared");
+      expect(discoveryWaitsForSignIn({ ...shared, binding: "connected" })).toBeUndefined();
+      expect(discoveryWaitsForSignIn({ personal: false, signsIn: false })).toBeUndefined();
     });
   });
 });

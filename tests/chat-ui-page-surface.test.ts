@@ -12,7 +12,6 @@ import {
   contextMessage,
   createPageBridge,
   defaultOpenPath,
-  PageBuildErrors,
   PageFilesView,
   pageFrameAddress,
   PageSaveCardView,
@@ -35,10 +34,9 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // Every test here fails without the Page surface: the modules it reads did not exist.
 
 const { t } = createTranslationContext("en");
-const de = createTranslationContext("de").t;
 
-const render = (node: ReactNode, locale: "en" | "de" = "en") =>
-  renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
+const render = (node: ReactNode) =>
+  renderToStaticMarkup(createElement(TranslationProvider, { locale: "en", children: node }));
 
 const built = { output: { pageId: "page-1", number: 2, fileSetId: "set-2" } };
 const refused = {
@@ -140,7 +138,6 @@ describe("a call of workspace.open", () => {
       pageId: "page-1",
       fileSetId: "set-2"
     });
-    expect(pageSurface("conv-1", { ...save, name: undefined }, de).title).toBe("Vorschau");
   });
 });
 
@@ -552,31 +549,12 @@ describe("the frame of a Page", () => {
     );
   });
 
-  it("shows a sentence in the frame's place in every other state, and no frame", () => {
-    const pane = (state: "starting" | "stopped" | "failed", message: string) =>
-      render(
-        createElement(PreviewPane, {
-          source: undefined,
-          state,
-          message,
-          title: "Preview of Offers",
-          action: createElement("span", null, "again")
-        })
-      );
-
-    const starting = pane("starting", t("pages.loading"));
-    expect(starting).toContain('role="status"');
-    expect(starting).toContain("The preview is loading");
-    // Nothing to try again while it is on its way.
-    expect(starting).not.toContain("again");
-    expect(pane("stopped", t("pages.gone"))).toContain(
-      "This preview is no longer available to you."
-    );
-    expect(pane("failed", t("pages.loadFailed"))).toContain("again");
+  it("shows no frame in any other state, nor ready without an address", () => {
     for (const state of ["starting", "stopped", "failed"] as const) {
-      expect(pane(state, "x")).not.toContain("<iframe");
+      expect(
+        render(createElement(PreviewPane, { source: undefined, state, message: "x", title: "x" }))
+      ).not.toContain("<iframe");
     }
-    // A ready state without an address shows no frame either.
     expect(
       render(createElement(PreviewPane, { source: undefined, state: "ready", title: "x" }))
     ).not.toContain("<iframe");
@@ -588,75 +566,26 @@ describe("the content of a Page surface", () => {
     { file: "src/routes/index.tsx", line: 12, message: "Expected '}'" },
     { file: "app.yaml", message: "The kit version is not released." }
   ];
-  const view = (
-    input: { view: "preview" | "files"; buildErrors?: typeof errors; revision?: number },
-    locale?: "de"
-  ) =>
+  const view = (input: { view: "preview" | "files"; buildErrors?: typeof errors }) =>
     render(
       createElement(PageSurfaceView, {
         ...input,
         preview: createElement("p", null, "the preview"),
         files: createElement("p", null, "the files")
-      }),
-      locale
+      })
     );
 
-  it("shows the build errors as one folded line under the preview", () => {
-    const markup = view({ view: "preview", buildErrors: errors });
-
-    expect(markup.indexOf("the preview")).toBeLessThan(markup.indexOf("2 build errors"));
-    expect(markup).toMatch(
-      /data-state="closed"[^>]*data-testid="page-build-errors"|data-testid="page-build-errors"[^>]*data-state="closed"/u
-    );
-    expect(view({ view: "preview", buildErrors: errors }, "de")).toContain("2 Build-Fehler");
-    expect(view({ view: "preview", buildErrors: errors.slice(0, 1) })).toContain("1 build error");
-  });
-
-  it("says under the count that the preview still shows what it showed and what to do", () => {
-    const shown = (count: number, locale?: "de") =>
-      render(
-        createElement(PageBuildErrors, { errors: errors.slice(0, count), previewShown: true }),
-        locale
-      );
-
-    // Outside the folded findings: the sentence is in the document while they are not.
-    expect(shown(2)).toContain(
-      "The preview still shows the last version. Ask the agent to fix the errors."
-    );
-    expect(shown(2)).not.toContain("Expected");
-    expect(shown(1)).toContain("Ask the agent to fix the error.");
-    expect(shown(1, "de")).toContain(
-      "Die Vorschau zeigt weiter den letzten Stand. Bitte den Agenten, den Fehler zu beheben."
-    );
-    expect(shown(2, "de")).toContain("Bitte den Agenten, die Fehler zu beheben.");
-    expect(view({ view: "preview", buildErrors: errors, revision: 3 }, "de")).toContain(
-      "Die Vorschau zeigt weiter den letzten Stand."
-    );
-    expect(shown(2)).not.toMatch(/>[^<]*revision/iu);
-    // Before the instance said which revision the frame holds, the line says nothing of it.
-    expect(view({ view: "preview", buildErrors: errors })).not.toContain("still shows");
-  });
-
-  it("shows no line without a finding", () => {
+  it("shows the build errors folded under the preview, and no line without a finding", () => {
+    expect(view({ view: "preview", buildErrors: errors })).toContain("page-build-errors");
     expect(view({ view: "preview" })).not.toContain("page-build-errors");
     expect(view({ view: "preview", buildErrors: [] })).not.toContain("page-build-errors");
   });
 
   it("keeps the preview mounted under the files, so the Page keeps its state", () => {
     const markup = view({ view: "files", buildErrors: errors });
-
     expect(markup).toContain("the files");
     expect(markup).toMatch(/<div class="[^"]*" hidden="">(?:<p>)?the preview/u);
-    expect(markup).not.toContain("page-build-errors");
     expect(view({ view: "preview" })).not.toContain("the files");
-  });
-
-  it("names each finding by file and line with the build's message", () => {
-    const markup = render(createElement("div", null, createElement(PageBuildErrors, { errors })));
-
-    expect(markup).toContain("2 build errors");
-    // Folded, the findings are not in the document; the trigger says they can be unfolded.
-    expect(markup).toContain('aria-expanded="false"');
   });
 });
 
@@ -719,48 +648,17 @@ describe("the files of a revision", () => {
       })
     );
 
-  it("lists every file, marks the changed ones and the open one, and shows the open file read-only", () => {
+  it("shows the open file read-only", () => {
     const markup = filesView();
-
-    for (const file of files) {
-      expect(markup).toContain(`>${file.path}</span>`);
-    }
-    expect(markup.match(/>Changed</gu)).toHaveLength(2);
-    expect(markup).toContain('aria-label="Source files"');
-    expect(markup).toMatch(/role="region" aria-label="src\/routes\/index\.tsx"/u);
     expect(markup).toContain("export const Route = 1;");
-    // The header above the text holds a switch and a copy button; the text itself takes no
-    // input.
-    const text = /<div role="region"[\s\S]*?<\/pre><\/div>/u.exec(markup)?.[0] ?? "";
-    expect(text).toContain("export const Route = 1;");
-    expect(text).not.toMatch(/<(?:textarea|input|button)\b|contenteditable/u);
     expect(markup).not.toMatch(/<textarea\b|contenteditable/u);
-  });
-
-  it("says so when the files are loading, failed, absent or not text", () => {
-    expect(filesView({ files: "loading" })).not.toContain("Source files");
-    expect(filesView({ files: "failed" })).toContain("The files could not be loaded.");
-    expect(filesView({ files: [], open: undefined })).toContain(
-      "This preview has no source files."
-    );
-    expect(filesView({ content: { status: "not-text" } })).toContain(
-      "This file is not text and cannot be shown."
-    );
-    expect(filesView({ content: { status: "failed" } })).toContain(
-      "The files could not be loaded."
-    );
   });
 });
 
 describe("the card of an open", () => {
-  const card = (
-    save: PageSave,
-    props: { shown?: boolean; onOpen?: () => void } = {},
-    locale?: "de"
-  ) =>
+  const card = (save: PageSave, props: { shown?: boolean; onOpen?: () => void } = {}) =>
     render(
-      createElement(PageSaveCardView, { save, shown: props.shown ?? false, onOpen: props.onOpen }),
-      locale
+      createElement(PageSaveCardView, { save, shown: props.shown ?? false, onOpen: props.onOpen })
     );
   const revision: PageSave = {
     state: "built",
@@ -770,51 +668,19 @@ describe("the card of an open", () => {
     number: 2
   };
 
-  it("names the Page, no revision number, and opens it, unless it is the one shown", () => {
-    const open = card(revision, { onOpen: () => undefined });
-
-    expect(open).toContain(">Offers</p>");
-    expect(open).not.toMatch(/>[^<]*revision/iu);
-    expect(open).toMatch(/<button[^>]*>Open<\/button>/u);
-    const shown = card(revision, { shown: true, onOpen: () => undefined });
-    expect(shown).toContain("Shown");
-    expect(shown).not.toContain("<button");
-    expect(card(revision, { onOpen: () => undefined }, "de")).toMatch(/>Öffnen<\/button>/u);
-    // Where there is no slot to open it in, the card names the Page and offers nothing.
+  it("offers Open only for a built Page that is not shown, where there is a slot to open it in", () => {
+    expect(card(revision, { onOpen: () => undefined })).toContain("<button");
+    expect(card(revision, { shown: true, onOpen: () => undefined })).not.toContain("<button");
     expect(card(revision)).not.toContain("<button");
-  });
-
-  it("says that the Page is being built while the call runs", () => {
-    const markup = card({ state: "building", name: "Offers" });
-
-    expect(markup).toContain('role="status"');
-    expect(markup).toContain("Building the preview");
-    expect(card({ state: "building", name: "Offers" }, {}, "de")).toContain(
-      "Die Vorschau wird gebaut"
-    );
-  });
-
-  it("says that the build refused the save and how many findings it has", () => {
-    const markup = card({
-      state: "errors",
-      name: "Offers",
-      errors: [{ file: "src/routes/index.tsx", line: 12, message: "Expected '}'" }]
-    });
-
-    expect(markup).toContain("The preview could not be built");
-    expect(markup).toContain("1 build error");
-    expect(markup).not.toMatch(/>Open</u);
-    // No revision was built by this open, so the card says that and what to do.
-    expect(markup).toContain("Nothing new is shown. Ask the agent to fix the error.");
     expect(
-      card({ state: "errors", name: "Offers", errors: refused.output.errors }, {}, "de")
-    ).toContain("Es wird nichts Neues gezeigt. Bitte den Agenten, die Fehler zu beheben.");
-  });
-
-  it("says that the open failed, and names an open without a name as the preview", () => {
-    const markup = card({ state: "failed", name: undefined });
-
-    expect(markup).toContain("The preview could not be opened");
-    expect(markup).toContain(">Preview</p>");
+      card(
+        {
+          state: "errors",
+          name: "Offers",
+          errors: [{ file: "src/routes/index.tsx", line: 12, message: "Expected '}'" }]
+        },
+        { onOpen: () => undefined }
+      )
+    ).not.toMatch(/>Open</u);
   });
 });

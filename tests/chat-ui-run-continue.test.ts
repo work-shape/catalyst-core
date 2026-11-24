@@ -1,7 +1,10 @@
-import { createElement } from "react";
+// @vitest-environment happy-dom
+
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import type { ConversationThreadSnapshot, RunObservation } from "@work-shape/catalyst-api-client";
 import { runObservationSchema } from "@work-shape/catalyst-api-contract";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyRunObservationToControllerState,
   createControllerStateFromSnapshot,
@@ -124,13 +127,12 @@ describe("going on after a rate-limited run (T6)", () => {
     const readyAt = Date.parse(failedAt) + RATE_LIMIT_CONTINUE_WAIT_MS;
     expect(secondsUntil(readyAt, Date.parse(failedAt))).toBe(60);
     expect(secondsUntil(readyAt, readyAt - 41_500)).toBe(42);
-    expect(secondsUntil(readyAt, readyAt)).toBe(0);
     expect(secondsUntil(readyAt, readyAt + 5_000)).toBe(0);
     // A browser clock behind the server's would otherwise count longer than the notice says.
     expect(secondsUntil(readyAt, readyAt - 10 * 60_000)).toBe(60);
   });
 
-  it("shows the button disabled with its count while the wait lasts, in German", () => {
+  it("holds the button while the wait lasts or the composer cannot send", () => {
     const render = (readyAt: number, canSend = true) =>
       renderToStaticMarkup(
         createElement(TranslationProvider, {
@@ -140,13 +142,50 @@ describe("going on after a rate-limited run (T6)", () => {
           })
         })
       );
-    const waiting = render(Date.now() + 41_500);
-    expect(waiting).toContain("Weitermachen in 42 s");
-    expect(waiting).toMatch(/<button[^>]*disabled=""/u);
-    const ready = render(Date.now() - 1_000);
-    expect(ready).toContain(">Weitermachen</button>");
-    expect(ready).not.toMatch(/<button[^>]*disabled=""/u);
+    expect(render(Date.now() + 41_500)).toMatch(/<button[^>]*disabled=""/u);
+    expect(render(Date.now() - 1_000)).not.toMatch(/<button[^>]*disabled=""/u);
     // While the composer could not send either, such as during another run, it waits too.
     expect(render(Date.now() - 1_000, false)).toMatch(/<button[^>]*disabled=""/u);
+  });
+});
+
+// Moved down from the browser suite: once the wait is over, "Continue" sends the word once.
+afterEach(() => {
+  document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+});
+
+describe("Continue after a rate-limited run", () => {
+  it("sends once, however often it is pressed", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const send = vi.fn();
+    await act(async () => {
+      root.render(
+        createElement(TranslationProvider, {
+          locale: "en",
+          children: createElement(RunContinueAction, {
+            offer: { runId: "run_1", readyAt: Date.now() - 1_000, canSend: true, send }
+          })
+        })
+      );
+      await Promise.resolve();
+    });
+    const button = container.querySelector<HTMLButtonElement>("[data-testid=run-continue]");
+    expect(button?.disabled).toBe(false);
+
+    // Each press is its own event, as two clicks of a person are.
+    for (let press = 0; press < 2; press += 1) {
+      await act(async () => {
+        button?.click();
+        await Promise.resolve();
+      });
+    }
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(button?.disabled).toBe(true);
+    act(() => root.unmount());
   });
 });

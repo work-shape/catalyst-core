@@ -62,54 +62,36 @@ const refusal = {
 };
 
 describe("the thread read of a conversation that is gone", () => {
-  it("refuses a deleted conversation", async () => {
+  it("refuses a deleted, an expired, an unreachable and a never made conversation alike", async () => {
     const app = await createApp();
-    const conversationId = await createConversation(app, "reader");
-    expect((await readThread(app, conversationId)).statusCode).toBe(200);
-
+    const deletedId = await createConversation(app, "reader");
+    expect((await readThread(app, deletedId)).statusCode).toBe(200);
     const deleted = await app.call(
       "conversations.delete",
-      { params: { conversationId } },
+      { params: { conversationId: deletedId } },
       "reader"
     );
     expect(deleted.statusCode).toBe(200);
+    await expect(readThread(app, deletedId)).resolves.toEqual(refusal);
 
-    await expect(readThread(app, conversationId)).resolves.toEqual(refusal);
-    await app.close();
-  });
-
-  it("refuses a conversation whose retention expired", async () => {
-    const app = await createApp();
-    const conversationId = await createConversation(app, "reader");
-    expect((await readThread(app, conversationId)).statusCode).toBe(200);
-
+    const expiredId = await createConversation(app, "reader");
+    expect((await readThread(app, expiredId)).statusCode).toBe(200);
     // The retention job's own step, at a moment after the conversation's retention date.
     const later = new Date(Date.UTC(2100, 0, 1)).toISOString();
     await expect(
       app.stores.conversations.expireConversation({
         clientInstanceId,
-        conversationId: asConversationId(conversationId),
+        conversationId: asConversationId(expiredId),
         expiredAt: later,
         now: later
       })
     ).resolves.toMatchObject({ status: "expired" });
+    await expect(readThread(app, expiredId)).resolves.toEqual(refusal);
 
-    await expect(readThread(app, conversationId)).resolves.toEqual(refusal);
-    await app.close();
-  });
-
-  it("refuses a conversation in a workspace the reader does not reach", async () => {
-    const app = await createApp();
     // The outsider's own conversation lies in the outsider's Personal Workspace.
-    const conversationId = await createConversation(app, "outsider");
-
-    await expect(readThread(app, conversationId)).resolves.toEqual(refusal);
-    await app.close();
-  });
-
-  it("refuses an address no conversation ever had", async () => {
-    const app = await createApp();
-
+    await expect(readThread(app, await createConversation(app, "outsider"))).resolves.toEqual(
+      refusal
+    );
     await expect(readThread(app, "conv_never_made")).resolves.toEqual(refusal);
     await app.close();
   });

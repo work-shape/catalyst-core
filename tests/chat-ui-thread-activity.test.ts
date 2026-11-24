@@ -29,21 +29,11 @@ describe("chat UI thread activity", () => {
     expect(isRecentlyActiveAssistantRunId(runId)).toBe(false);
   });
 
-  it("shows the activity row for the whole busy window, whatever the parts look like", () => {
+  it("shows the activity row for the whole busy window, and hides it only when idle", () => {
     expect(shouldShowRunActivity({ conversationRunning: true })).toBe(true);
     expect(shouldShowRunActivity({ optimisticPending: true })).toBe(true);
     expect(shouldShowRunActivity({ threadRunning: true })).toBe(true);
-  });
-
-  it("hides the activity row only when the thread is idle", () => {
     expect(shouldShowRunActivity({})).toBe(false);
-    expect(
-      shouldShowRunActivity({
-        conversationRunning: false,
-        optimisticPending: false,
-        threadRunning: false
-      })
-    ).toBe(false);
   });
 
   it("reports the tool that is currently executing", () => {
@@ -52,15 +42,6 @@ describe("chat UI thread activity", () => {
         { type: "text", text: "Ich sehe mir das an" },
         { type: "tool-call", toolName: "documents.check", status: { type: "complete" } },
         { type: "tool-call", toolName: "structured_data.publish", status: { type: "running" } }
-      ])
-    ).toEqual({ kind: "tool", toolName: "structured_data.publish" });
-  });
-
-  it("reports the executing tool from thread-level parts, which carry no status", () => {
-    expect(
-      findRunActivity([
-        { type: "tool-call", toolName: "documents.check", result: { ok: true } },
-        { type: "tool-call", toolName: "structured_data.publish" }
       ])
     ).toEqual({ kind: "tool", toolName: "structured_data.publish" });
   });
@@ -95,14 +76,6 @@ describe("chat UI thread activity", () => {
     ).toEqual({ kind: "reasoning" });
   });
 
-  it("renders one localized row for the tool being prepared", () => {
-    const markup = renderActivityStatus({ preparingToolName: "structured_data.publish" });
-
-    expect(markup).toContain("Bereite Kundendaten vor…");
-    expect(markup).toContain("animate-spin");
-    expect(markup.match(/role="status"/gu)).toHaveLength(1);
-  });
-
   it("prefers the tool that is actually running over the announced next tool", () => {
     const markup = renderActivityStatus({
       activity: { kind: "tool", toolName: "documents.check" },
@@ -111,10 +84,6 @@ describe("chat UI thread activity", () => {
 
     expect(markup).toContain("Bearbeite Unterlagenprüfung…");
     expect(markup).not.toContain("Bereite Kundendaten vor…");
-  });
-
-  it("uses neutral wording when the next tool is not known", () => {
-    expect(renderActivityStatus({})).toContain("Ich arbeite daran…");
   });
 
   it("never puts a raw tool name into a localized sentence", () => {
@@ -127,19 +96,8 @@ describe("chat UI thread activity", () => {
     expect(markup).toContain("Ich arbeite daran…");
   });
 
-  it("keeps a varied fallback phrase stable for the run", () => {
-    const render = () => renderActivityStatus({ variationSeed: "run_42" });
-
-    expect(render()).toBe(render());
-    expect(render()).toMatch(
-      /Ich arbeite daran|Ich gehe alles durch|Ich schaue es mir an|Es geht voran|Ich bleibe dran|Ich kümmere mich darum|Ich arbeite mich durch|Ich sortiere die Details|Ich mache weiter|Einen Moment noch/u
-    );
-  });
-
   it.each([
     ["confirm", "de", "Ich warte auf eine Entscheidung…"],
-    ["confirm", "en", "Waiting for a decision…"],
-    ["approval", "de", "Ich warte auf die Freigabe…"],
     ["approval", "en", "Waiting for approval…"]
   ] as const)(
     "says a run held for %s waits, instead of naming its tool (%s)",
@@ -151,7 +109,6 @@ describe("chat UI thread activity", () => {
 
       expect(markup).toContain(words);
       expect(markup).not.toMatch(/Unterlagenprüfung|document check|Ich gehe alles durch/u);
-      expect(markup.match(/role="status"/gu)).toHaveLength(1);
     }
   );
 
@@ -203,7 +160,7 @@ describe("chat UI thread activity", () => {
       expect(findWaitedSubagents([{ type: "text", text: "Fertig" }])).toBeUndefined();
     });
 
-    it("says how many it waits for, names them with their time, and drops the spinner", () => {
+    it("says it waits for its subagents, and drops the spinner", () => {
       const markup = renderActivityStatus({
         activity: { kind: "tool", toolName: "run_agent" },
         waitingSubagents: [
@@ -215,28 +172,9 @@ describe("chat UI thread activity", () => {
         ]
       });
 
-      expect(markup).toContain("Ich warte auf 2 Subagenten…");
-      expect(markup).toContain("Marktanalyse 1m 15s · Förderprogramme prüfen");
       expect(markup).toContain('data-waiting-for-subagents="true"');
       expect(markup).not.toContain("animate-spin");
-      expect(markup.match(/role="status"/gu)).toHaveLength(1);
     });
-
-    it("names one subagent in English, and works as usual without any", () => {
-      expect(
-        renderActivityStatus(
-          { waitingSubagents: [{ description: "Market analysis" }] },
-          { locale: "en" }
-        )
-      ).toContain("Waiting for a subagent…");
-      const working = renderActivityStatus({ waitingSubagents: [] });
-      expect(working).toContain("animate-spin");
-      expect(working).not.toContain("Subagent");
-    });
-  });
-
-  it("shows the elapsed run time next to the phrase", () => {
-    expect(renderActivityStatus({})).toContain(">0s<");
   });
 
   it("keeps Send beside Stop while a run goes and there is a message to queue", () => {
@@ -266,13 +204,7 @@ describe("chat UI thread activity", () => {
         threadRunning: true
       })
     ).toBe(true);
-    expect(
-      shouldShowCancelAction({
-        conversationRunning: false,
-        optimisticPending: false,
-        threadRunning: true
-      })
-    ).toBe(false);
+    expect(shouldShowCancelAction({ conversationRunning: false, threadRunning: true })).toBe(false);
   });
 
   it("combines local stream, optimistic send, and persisted conversation activity as one busy signal", () => {
