@@ -16,7 +16,7 @@ describe("ChipList on one line", () => {
   let container: HTMLElement;
   let root: ReturnType<typeof createRoot>;
   let room = 0;
-  let resized: (() => void)[] = [];
+  let resized: ((entries: unknown[]) => void)[] = [];
 
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -24,7 +24,7 @@ describe("ChipList on one line", () => {
     vi.stubGlobal(
       "ResizeObserver",
       class {
-        constructor(callback: () => void) {
+        constructor(callback: (entries: unknown[]) => void) {
           resized.push(callback);
         }
         observe() {}
@@ -76,7 +76,7 @@ describe("ChipList on one line", () => {
   };
   const resizeTo = (width: number) => {
     room = width;
-    act(() => resized.forEach((callback) => callback()));
+    act(() => resized.forEach((callback) => callback([])));
   };
   const row = () => container.querySelector('ul[aria-label="Knowledge"]');
   const shown = () =>
@@ -127,6 +127,22 @@ describe("ChipList on one line", () => {
     ]);
     // Each keeps its description: a label that takes focus for it.
     expect(rest?.querySelectorAll("button")).toHaveLength(5);
+  });
+
+  it("does not open its list on focus alone, so Tab passes over +N", () => {
+    render(9, 460);
+    act(() => more()?.focus());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("does not open its list again by itself once +N comes back", () => {
+    render(9, 460);
+    act(() => more()?.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    resizeTo(2000);
+    resizeTo(460);
+    expect(more()).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("keeps what it measures out of sight and out of reach", () => {

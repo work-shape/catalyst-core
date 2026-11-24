@@ -274,7 +274,7 @@ const moreChipClassName = (size: ChipSize, tone: ChipTone) =>
 /**
  * Chips side by side on one line that never wraps. The list measures its room and shows as
  * many chips as fit; the rest stand behind one chip with their number, "+3", which opens a
- * small list of them on a click and on keyboard focus. It measures again when its width or
+ * small list of them on a click, Enter or Space. It measures again when its width or
  * its chips change, so it holds at any width down to a phone's. A single chip wider than the
  * room shortens with an ellipsis.
  */
@@ -294,8 +294,6 @@ export function ChipList({
   const [mounted, setMounted] = useState(false);
   const [fit, setFit] = useState(chips.length);
   const [open, setOpen] = useState(false);
-  // Focus that returns to "+3" as its list closes does not open it again.
-  const returningFocus = useRef(false);
   useLayoutEffect(() => setMounted(true), []);
   useLayoutEffect(() => {
     const row = rowRef.current;
@@ -320,6 +318,10 @@ export function ChipList({
   }
   const shown = Math.min(fit, chips.length);
   const hidden = chips.length - shown;
+  // Once every chip fits, "+3" is gone: its list does not open by itself when it comes back.
+  if (hidden === 0 && open) {
+    setOpen(false);
+  }
   return (
     <div className="w-full min-w-0">
       <ul
@@ -345,13 +347,6 @@ export function ChipList({
               <PopoverTrigger
                 aria-label={moreLabel?.(hidden)}
                 className={moreChipClassName(size, tone)}
-                onFocus={(event) => {
-                  if (returningFocus.current) {
-                    returningFocus.current = false;
-                  } else if (event.currentTarget.matches(":focus-visible")) {
-                    setOpen(true);
-                  }
-                }}
               >
                 +{hidden}
               </PopoverTrigger>
@@ -364,9 +359,6 @@ export function ChipList({
                 onOpenAutoFocus={(event) => {
                   event.preventDefault();
                   restRef.current?.focus();
-                }}
-                onCloseAutoFocus={() => {
-                  returningFocus.current = true;
                 }}
               >
                 <ul
