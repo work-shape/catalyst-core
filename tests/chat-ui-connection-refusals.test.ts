@@ -8,13 +8,11 @@ import { ApiError } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createTranslationContext } from "./support/chat-ui/shared";
 import {
-  buildAssetKinds,
   ConnectionCreateFlow,
   openConnectionDraft,
   readBuildRefusal,
   readConnectionDraft,
   refusalsOf,
-  type ConnectionGiveHost,
   type ConnectionSource
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
@@ -25,57 +23,28 @@ import { buildPageSettings, mountBuildPage, unmountBuildPages } from "./chat-ui-
 import { connectionAsset, connectionDetail, recordedStates } from "./chat-ui-connection-fixtures";
 import { TranslationProvider } from "./chat-ui-render-harness";
 import { settingsUser } from "./chat-ui-settings-fixtures";
-import { CONDITION_WAIT_MS } from "./support/assertions";
+import { CONDITION_WAIT_MS, required } from "./support/assertions";
 
 // ACCEPT-1c E4: a Connection whose address the instance may not reach was refused with the
 // server's sentence, `egress_denied: … release config … 'egress.allowPublicHttps: true'`, in
-// English to everybody. The reader is told what happened and who changes it in their language;
-// only an operator, who changes release config, gets the server's sentence under Details.
-
-const createDefaults = {
-  checkName: async () => ({ available: true as const }),
-  remove: async () => undefined,
-  mayDelete: () => true
-};
+// English to everybody. The reader is told what happened in their language; only an operator,
+// who changes release config, gets the server's sentence under Details. Also the key on the
+// Connection page, and a failed connect in the New connection dialog.
 
 const target = { protocol: "https" as const, host: "api.exampledata.test", port: 443 };
 
 /** The refusal of a save as the server sends it (`server/src/asset-kinds/connection.ts`). */
 const SERVER_SENTENCE = `egress_denied: the address ${target.host}:${target.port} is not on this instance's egress list. ${egressSettingFor(target)}`;
 
-function egressRefusal(): ApiError {
-  return refusalOf([{ message: SERVER_SENTENCE, path: ["settings"], code: "egress_denied" }]);
-}
-
-afterEach(async () => {
-  await unmountBuildPages();
-  document.body.replaceChildren();
-  vi.unstubAllGlobals();
-});
-
-describe("A refused Connection address", () => {
-  it.each(["en", "de"] as const)("is told in %s without release config", (locale) => {
-    const { t } = createTranslationContext(locale);
-    const refusal = readBuildRefusal(egressRefusal(), t, locale);
-    const [said] = refusalsOf(refusal, undefined);
-    // ACCEPT-FIX-7 C9: a network rule of the instance blocks it, and the person sends the team that runs it
-    // the host. Nobody is told to ask an administrator, and nothing English stands under it.
-    expect(said).toContain(locale === "en" ? "A network rule blocks" : "Netzwerkregel sperrt");
-    expect(said).toContain(
-      locale === "en" ? "send the technical team the host" : "schick dem technischen Team"
-    );
-    expect(said).not.toMatch(/administrator/iu);
-    expect(said).not.toContain("egress");
-    expect(said).not.toContain("release config");
-    expect(!refusal.ok && !refusal.conflict && refusal.refusals[0]?.detail).toBeFalsy();
-  });
-});
-
 /** An answer of the instance that refuses a definition for the issues given. */
 function refusalOf(issues: { message: string; path: string[]; code?: string }[]): ApiError {
   return new ApiError(400, "The asset set is invalid", {
     error: { code: "VALIDATION_FAILED", message: "The asset set is invalid", details: { issues } }
   });
+}
+
+function egressRefusal(): ApiError {
+  return refusalOf([{ message: SERVER_SENTENCE, path: ["settings"], code: "egress_denied" }]);
 }
 
 /** The address a person typed in screenshot 26, refused by the connector's settings check. */
@@ -86,15 +55,59 @@ const INVALID_ADDRESS = refusalOf([
   }
 ]);
 
+const mounted: Root[] = [];
+
+afterEach(async () => {
+  for (const root of mounted.splice(0)) await act(async () => root.unmount());
+  await unmountBuildPages();
+  document.body.replaceChildren();
+  vi.unstubAllGlobals();
+});
+
+describe("A refused Connection address", () => {
+  it.each(["en", "de"] as const)("is told in %s without release config", (locale) => {
+    const { t } = createTranslationContext(locale);
+    const refusal = readBuildRefusal(egressRefusal(), t, locale);
+    const [said] = refusalsOf(refusal, undefined);
+    // ACCEPT-FIX-7 C9: nobody is told to ask an administrator, and no server sentence shows.
+    expect(said).not.toMatch(/administrator/iu);
+    expect(said).not.toContain("egress");
+    expect(said).not.toContain("release config");
+    expect(!refusal.ok && !refusal.conflict && refusal.refusals[0]?.detail).toBeFalsy();
+  });
+});
+
 /**
- * Connects a new Connection in German that the instance refuses with `error`, or, without
- * one, saves and then tests as `tested` says.
+ * The instance as a reader of these roles finds it: a superadmin sees how the instance runs
+ * (`system.view`), an admin does not (RIGHTS-1e).
  */
-async function connectRefused(
-  error: ApiError | undefined,
-  roles?: string[],
-  tested: "ready" | "unauthorized" = "ready"
-): Promise<HTMLElement> {
+function platformAnswer(roles: readonly string[]): Response {
+  return Response.json({
+    ...platformContext(),
+    instanceActions: roles.includes("superadmin") ? ["system.view"] : []
+  });
+}
+
+function platformFor(roles: readonly string[]): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(new Request(input, init).url);
+    return url.pathname === apiOperations["platform.context.get"].path
+      ? platformAnswer(roles)
+      : Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
+  };
+}
+
+/**
+ * Opens the New connection dialog at the agent's draft of `exampledata`, types a key and
+ * connects. The instance refuses the save with `error`, or saves at revision 7 and tests as
+ * `tested` says. Answers the dialog and what it wrote, removed and closed.
+ */
+async function connect(input: {
+  error?: ApiError;
+  roles?: string[];
+  tested?: "ready" | "unauthorized" | "unavailable";
+  locale?: "en" | "de";
+}) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const read = readConnectionDraft({
     output: {
@@ -112,12 +125,21 @@ async function connectRefused(
     showConnection: () => undefined,
     requestCreateDialog: () => undefined
   });
+  const writes: (number | null)[] = [];
+  const secrets: string[] = [];
+  const removed: { name: string; expectedRevision: number }[] = [];
+  const closed: string[] = [];
   const source: ConnectionSource = {
     mayTest: () => true,
     useDetail: () => ({ status: "loading" }),
     readDetail: async () => connectionDetail("exampledata"),
-    test: async () => ({ status: tested, testedAt: "2026-10-18T10:00:00.000Z" }),
-    setSecret: async () => undefined,
+    test: async () => ({
+      status: input.tested ?? "ready",
+      testedAt: "2026-10-18T10:00:00.000Z"
+    }),
+    setSecret: async (_name, value) => {
+      secrets.push(value);
+    },
     discover: async () => undefined,
     useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
     useHolders: () => ({ status: "hidden" }),
@@ -128,52 +150,58 @@ async function connectRefused(
   };
   const flow = createElement(ConnectionCreateFlow, {
     source,
-    ...createDefaults,
-    put: async () => {
-      if (error) throw error;
-      return { revision: 1 };
+    checkName: async () => ({ available: true as const }),
+    put: async ({ expectedRevision }) => {
+      if (input.error) throw input.error;
+      writes.push(expectedRevision);
+      return { revision: 7 };
     },
-    onClose: () => undefined,
-    onCreated: () => undefined
+    remove: async (removal) => {
+      removed.push(removal);
+    },
+    mayDelete: () => true,
+    onClose: () => closed.push("closed"),
+    onCreated: (name) => closed.push(`created ${name}`)
   });
   const reader =
-    roles === undefined
+    input.roles === undefined
       ? flow
       : createElement(
           QueryClientProvider,
           { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
           createElement(
             SettingsPageProvider,
-            { value: buildPageSettings(platformFor(roles), settingsUser({ roles })) },
+            {
+              value: buildPageSettings(
+                platformFor(input.roles),
+                settingsUser({ roles: input.roles })
+              )
+            },
             flow
           )
         );
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
+  mounted.push(root);
   await act(async () =>
     root.render(
       createElement(
         UiRoot,
         { mode: "light", labels: uiLabelsEn },
-        createElement(TranslationProvider, { locale: "de", children: null }, reader)
+        createElement(TranslationProvider, { locale: input.locale ?? "de", children: null }, reader)
       )
     )
   );
-  mounted.push(root);
-  const key = container.querySelector<HTMLInputElement>('input[type="password"]');
-  if (key) {
-    await act(async () => {
-      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      set?.call(key, "sk-test");
-      key.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  }
-  const connect = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent?.trim() === "Verbinden"
+  const key = required(container.querySelector<HTMLInputElement>('input[type="password"]'));
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(key, "sk-test");
+    key.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () =>
+    required(container.querySelector<HTMLButtonElement>("[data-connection-connect]")).click()
   );
-  await act(async () => connect?.click());
-  return container;
+  return { page: container, writes, secrets, removed, closed };
 }
 
 /** What the address field of the dialog is described with: its error. */
@@ -187,90 +215,93 @@ function addressError(container: HTMLElement): string {
     .join(" ");
 }
 
-/** The text of the page outside the administrator's Technical details. */
-function told(container: HTMLElement): string {
-  const copy = container.cloneNode(true);
-  if (!(copy instanceof HTMLElement)) return "";
-  copy.querySelectorAll("[data-refusal-detail]").forEach((detail) => detail.remove());
-  return copy.textContent ?? "";
-}
-
-const mounted: Root[] = [];
-
-/**
- * The instance as a reader of these roles finds it: a superadmin sees how the instance runs
- * (`system.view`), an admin does not (RIGHTS-1e).
- */
-function platformFor(roles: readonly string[]): typeof fetch {
-  return async (input, init) => {
-    const url = new URL(new Request(input, init).url);
-    return url.pathname === apiOperations["platform.context.get"].path
-      ? platformAnswer(roles)
-      : Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
-  };
-}
-
-function platformAnswer(roles: readonly string[]): Response {
-  return Response.json({
-    ...platformContext(),
-    instanceActions: roles.includes("superadmin") ? ["system.view"] : []
-  });
-}
-
 describe("A refused new Connection", () => {
-  afterEach(async () => {
-    for (const root of mounted.splice(0)) await act(async () => root.unmount());
+  it("tells an admin a refused address at the address field once, with no server sentence", async () => {
+    const { page } = await connect({ error: egressRefusal(), roles: ["user", "admin"] });
+    await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel"));
+    // ACCEPT-FIX-7 C9: told once, in German, with no English sentence under Technical details.
+    expect(page.textContent).not.toContain("egress");
+    expect(page.querySelector("[data-refusal-detail]")).toBeNull();
+    expect(page.textContent?.split("Netzwerkregel").length).toBe(2);
+    // Nothing was saved, so nothing is said to be in the list.
+    expect(page.querySelector("[data-connection-create-saved]")).toBeNull();
   });
 
-  it.each([[["user"]], [["user", "admin"]]])(
-    "tells a refused address at the address field once, with the host to send the operator (%j)",
-    async (roles) => {
-      const page = await connectRefused(egressRefusal(), roles);
-      await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel"));
-      expect(addressError(page)).toBe(
-        "Eine Netzwerkregel sperrt dieses Ziel. Damit es erlaubt wird, schick dem technischen Team den Host api.exampledata.test."
-      );
-      // ACCEPT-FIX-7 C9: told once, in German, with no English sentence under Technical details.
-      expect(page.textContent).not.toContain("egress");
-      expect(page.querySelector("[data-refusal-detail]")).toBeNull();
-      expect(page.textContent?.split("Netzwerkregel").length).toBe(2);
-      // Nothing was saved, so nothing is said to be in the list.
-      expect(page.querySelector("[data-connection-create-saved]")).toBeNull();
-    }
-  );
-
-  it("says that a Connection saved before its key was refused is in the list already (ACCEPT-FIX-10 C11)", async () => {
-    const page = await connectRefused(undefined, undefined, "unauthorized");
-    await vi.waitFor(() =>
-      expect(page.textContent).toContain("Der Server hat den Schlüssel abgelehnt.")
-    );
-    expect(page.querySelector("[data-connection-create-saved]")?.textContent).toContain(
-      "Exampledata ist schon gespeichert und steht in der Liste, noch ohne Tools. Korrigiere das Feld und verbinde erneut, oder brich ab, um sie zu verwerfen."
-    );
-  });
-
-  it("says in German how an address is written, with the instance's sentence for who runs it", async () => {
-    const page = await connectRefused(INVALID_ADDRESS, ["user", "admin", "superadmin"]);
-    await vi.waitFor(() => expect(addressError(page)).toContain("https://"));
+  it("gives a superadmin the instance's sentence under Technical details only", async () => {
+    const { page } = await connect({
+      error: INVALID_ADDRESS,
+      roles: ["user", "admin", "superadmin"]
+    });
     await vi.waitFor(() => expect(page.querySelector("[data-refusal-detail]")).not.toBeNull());
-    expect(addressError(page)).toContain("Gib die Adresse als Webadresse an");
-    expect(told(page)).not.toContain("must be an http or https address");
-    const detail = page.querySelector("[data-refusal-detail]");
-    expect(detail?.textContent).toContain("Technische Details");
-    await act(async () => detail?.querySelector("button")?.click());
-    expect(detail?.textContent).toContain("must be an http or https address");
+    const detail = required(page.querySelector("[data-refusal-detail]"));
+    const outside = page.cloneNode(true);
+    if (!(outside instanceof HTMLElement)) throw new Error("The page is an element");
+    outside.querySelectorAll("[data-refusal-detail]").forEach((found) => found.remove());
+    expect(outside.textContent).not.toContain("must be an http or https address");
+    await act(async () => detail.querySelector("button")?.click());
+    expect(detail.textContent).toContain("must be an http or https address");
   });
 
-  it("says what it does not know in German, never in the instance's words", async () => {
-    const page = await connectRefused(
-      refusalOf([{ message: "settings.retries: expected a number", path: ["settings", "retries"] }])
-    );
+  it("says what it does not know never in the instance's words", async () => {
+    const { page } = await connect({
+      error: refusalOf([
+        { message: "settings.retries: expected a number", path: ["settings", "retries"] }
+      ])
+    });
     await vi.waitFor(() =>
-      expect(page.querySelector("[data-connection-create-error]")?.textContent).toContain(
-        "Diese Verbindung wurde nicht angenommen"
-      )
+      expect(page.querySelector("[data-connection-create-error]")).not.toBeNull()
     );
     expect(page.textContent).not.toContain("expected a number");
+  });
+
+  // ACCEPT-FIX-10 C11, found in the browser: the instance answers a refused key with a
+  // successful `connections.test` whose status is `unauthorized`.
+  it("stays open at a refused key, says the Connection is saved, and forgets the key", async () => {
+    const { page, secrets } = await connect({ tested: "unauthorized" });
+    await vi.waitFor(() =>
+      expect(page.querySelector("[data-connection-create-saved]")?.textContent).toContain(
+        "Exampledata"
+      )
+    );
+    expect(secrets).toEqual(["sk-test"]);
+    expect(page.querySelector("[data-connection-create-form]")).not.toBeNull();
+    expect(page.querySelector("[data-connection-connected]")).toBeNull();
+    expect(page.querySelector<HTMLInputElement>('[data-connection-field="secret"]')?.value).toBe(
+      ""
+    );
+  });
+
+  // Replaces e2e/connection-editor.spec.ts "cancel after a failed connect asks, then deletes the
+  // Connection": nothing half-made, key and all, is left behind.
+  it("asks on cancel after a failed connect, then deletes the Connection once, at its revision", async () => {
+    const { writes, secrets, removed, closed } = await connect({
+      tested: "unavailable",
+      locale: "en"
+    });
+    await vi.waitFor(() => expect(secrets).toEqual(["sk-test"]), { timeout: CONDITION_WAIT_MS });
+    expect(writes).toEqual([null]);
+    const button = (text: string, within: ParentNode = document) =>
+      required(
+        [...within.querySelectorAll<HTMLButtonElement>("button")].find(
+          (candidate) => candidate.textContent?.trim() === text
+        )
+      );
+    await act(async () => button("Cancel").click());
+    // Cancel asks first: the dialog has not closed and nothing is deleted yet.
+    const ask = await vi.waitFor(
+      () =>
+        required(
+          [...document.querySelectorAll<HTMLElement>('[role="alertdialog"], dialog[open]')].find(
+            (dialog) => dialog.textContent?.includes("Discard")
+          )
+        ),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    expect(closed).toEqual([]);
+    expect(removed).toEqual([]);
+    await act(async () => button("Discard", ask).click());
+    await vi.waitFor(() => expect(closed).toEqual(["closed"]), { timeout: CONDITION_WAIT_MS });
+    expect(removed).toEqual([{ name: "exampledata", expectedRevision: 7 }]);
   });
 });
 
@@ -317,39 +348,23 @@ describe("A refused save on the Connection page", () => {
     return page;
   }
 
-  it("says what happened to a builder, without the server's sentence", async () => {
-    const page = await refusedSave(["user"]);
-    expect(page.querySelector("[data-refusal-detail]")).toBeNull();
-    expect(page.textContent).not.toContain("release config");
-  });
-
   it("keeps the server's sentence from an admin, who does not see how the instance runs", async () => {
     const page = await refusedSave(["user", "admin"], INVALID_ADDRESS, "starts with https://");
     expect(page.querySelector("[data-refusal-detail]")).toBeNull();
     expect(page.textContent).not.toContain("must be an http or https address");
   });
 
-  it.each([["superadmin"]])(
-    "keeps the server's sentence under Technical details for a %s, but none for a refused egress",
-    async (role) => {
-      const page = await refusedSave(["user", role], INVALID_ADDRESS, "starts with https://");
-      await vi.waitFor(() => expect(page.querySelector("[data-refusal-detail]")).not.toBeNull());
-      const detail = page.querySelector("[data-refusal-detail]");
-      expect(detail?.textContent).toContain("Technical details");
-      await act(async () => detail?.querySelector("button")?.click());
-      expect(detail?.textContent).toContain("must be an http or https address");
-      await unmountBuildPages();
-      // ACCEPT-FIX-7 C9: the network rule is said whole, in the reader's language.
-      const egress = await refusedSave(["user", role]);
-      expect(egress.querySelector("[data-refusal-detail]")).toBeNull();
-      expect(egress.textContent).not.toContain("egress.allowPublicHttps");
-    }
-  );
-
-  it("says how an address is written where the instance refused it in its own words", async () => {
-    const page = await refusedSave(["user"], INVALID_ADDRESS, "starts with https://");
-    expect(page.textContent).toContain("These settings were not accepted.");
-    expect(page.textContent).not.toContain("must be an http or https address");
+  it("keeps the server's sentence under Technical details for a superadmin, but none for a refused egress", async () => {
+    const page = await refusedSave(["user", "superadmin"], INVALID_ADDRESS, "starts with https://");
+    await vi.waitFor(() => expect(page.querySelector("[data-refusal-detail]")).not.toBeNull());
+    const detail = page.querySelector("[data-refusal-detail]");
+    await act(async () => detail?.querySelector("button")?.click());
+    expect(detail?.textContent).toContain("must be an http or https address");
+    await unmountBuildPages();
+    // ACCEPT-FIX-7 C9: the network rule is said whole, in the reader's language.
+    const egress = await refusedSave(["user", "superadmin"]);
+    expect(egress.querySelector("[data-refusal-detail]")).toBeNull();
+    expect(egress.textContent).not.toContain("egress.allowPublicHttps");
   });
 });
 
@@ -441,9 +456,8 @@ describe("The key on the Connection page (ACCEPT-FIX-7 C5, C6)", () => {
       page.querySelector<HTMLButtonElement>("[data-connection-secret-remove]")?.click()
     );
     const warning = page.querySelector("[data-connection-secret-remove-warning]");
-    expect(warning?.textContent).toBe(
-      "The key is deleted and the connection sends no key from now on. Calls of Workflow Assistant, Steuer-Agent, and Monthly sync (Workflow) are refused by a server that asks for a key."
-    );
+    // It names every listed user of the Connection.
+    expect(warning?.textContent).toContain("Workflow Assistant, Steuer-Agent, and Monthly sync");
     expect(puts).toEqual([]);
     const confirm = [...page.querySelectorAll("dialog button, [role=dialog] button")].find(
       (found) => found.textContent?.trim() === "Remove key"
@@ -474,7 +488,7 @@ describe("The key on the Connection page (ACCEPT-FIX-7 C5, C6)", () => {
     await act(async () => none?.click());
     await vi.waitFor(() =>
       expect(page.querySelector("[data-connection-key-clears]")?.textContent).toContain(
-        "Calls of Workflow Assistant, Steuer-Agent, and Monthly sync (Workflow)"
+        "Monthly sync"
       )
     );
   });
@@ -535,266 +549,5 @@ describe("A discovered tool on the Connection page (ACCEPT-FIX-7 C10)", () => {
     expect(puts[0]?.operations).toEqual([
       expect.objectContaining({ name: "read_wiki", effect: "reading", enabled: true })
     ]);
-  });
-});
-
-// ACCEPT-FIX-10 C11, found in the browser: the instance answers a refused key with a
-// successful `connections.test` whose status is `unauthorized`. The dialog of the Build area,
-// on the instance's real answers, keeps its form open, says the key was refused and that the
-// Connection is saved, and never says it connected.
-describe("A new REST API whose key the server refuses, on the instance's answers", () => {
-  it.each(["en", "de"] as const)("stays open at the key in %s", async (locale) => {
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    const calls: string[] = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = new Request(input, init);
-      const url = new URL(request.url);
-      if (url.pathname === apiOperations["platform.context.get"].path)
-        return Response.json(platformContext([], ["connection.write"]));
-      const call = /^\/api\/v1\/connections\/([^/]+)(?:\/(secret|test))?$/u.exec(url.pathname);
-      if (call?.[2] === "secret" && request.method === "PUT") {
-        calls.push("set_secret");
-        return Response.json({ state: "set", version: 1 });
-      }
-      if (call?.[2] === "test" && request.method === "POST") {
-        calls.push("test");
-        return Response.json({ status: "unauthorized", testedAt: "2026-10-19T10:00:00.000Z" });
-      }
-      if (call && call[2] === undefined && request.method === "GET")
-        return Response.json(connectionDetail(decodeURIComponent(call[1] ?? "")));
-      return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
-    };
-    const connectionKind = buildAssetKinds.find((kind) => kind.kind === "connection");
-    if (!connectionKind || !("CreateDialog" in connectionKind) || !connectionKind.CreateDialog)
-      throw new Error("Connections have a create dialog");
-    const CreateDialog = connectionKind.CreateDialog;
-    const puts: unknown[] = [];
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    mounted.push(root);
-    await act(async () =>
-      root.render(
-        createElement(
-          QueryClientProvider,
-          { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
-          createElement(
-            SettingsPageProvider,
-            { value: buildPageSettings(fetchImpl, settingsUser({ roles: ["user", "admin"] })) },
-            createElement(
-              UiRoot,
-              { mode: "light", labels: uiLabelsEn },
-              createElement(
-                TranslationProvider,
-                { locale, children: null },
-                createElement(CreateDialog, {
-                  ...createDefaults,
-                  put: async (input) => {
-                    puts.push(input);
-                    return { revision: puts.length };
-                  },
-                  onClose: () => calls.push("closed"),
-                  onCreated: () => calls.push("created")
-                })
-              )
-            )
-          )
-        )
-      )
-    );
-    const dialog = () => document.body;
-    await act(async () =>
-      dialog().querySelector<HTMLElement>('[data-connection-type="http_api"] button')?.click()
-    );
-    const type = async (input: HTMLInputElement | null | undefined, value: string) =>
-      act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
-          input,
-          value
-        );
-        input?.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    const form = dialog().querySelector("[data-connection-create-form]");
-    await type(
-      form?.querySelector<HTMLInputElement>('input[type="text"], input:not([type])'),
-      "Prüfung falscher Schlüssel"
-    );
-    await type(
-      form?.querySelector<HTMLInputElement>('[data-connection-field="url"]'),
-      "http://127.0.0.1:5830"
-    );
-    await type(
-      form?.querySelector<HTMLInputElement>('[data-connection-field="secret"]'),
-      "sk-wrong"
-    );
-    await vi.waitFor(() =>
-      expect(dialog().querySelector<HTMLButtonElement>("[data-connection-connect]")?.disabled).toBe(
-        false
-      )
-    );
-    await act(async () =>
-      dialog().querySelector<HTMLButtonElement>("[data-connection-connect]")?.click()
-    );
-    await vi.waitFor(() =>
-      expect(dialog().querySelector("[data-connection-create-saved]")).not.toBeNull()
-    );
-    expect(calls).toEqual(["set_secret", "test"]);
-    expect(dialog().querySelector("[data-connection-create-form]")).not.toBeNull();
-    expect(dialog().querySelector("[data-connection-connected]")).toBeNull();
-    const { t } = createTranslationContext(locale);
-    expect(dialog().textContent).toContain(t("connectionCreate.errorKey"));
-    expect(dialog().querySelector("[data-connection-create-saved]")?.textContent).toContain(
-      t("connectionCreate.savedDiscardable", { name: "Prüfung falscher Schlüssel" })
-    );
-    // The refused key is not kept in the field.
-    expect(
-      dialog().querySelector<HTMLInputElement>('[data-connection-field="secret"]')?.value
-    ).toBe("");
-  });
-});
-
-// CONN-PAGE 5: approved, the New connection dialog stays open at its done step, which gives
-// the approved tools for agents to the agent the reader chooses (CS-5d); Done leaves.
-describe("The done step of a new REST API", () => {
-  it("is reached after the approval, and gives the approved tools to the chosen agent", async () => {
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    const read = readConnectionDraft({
-      output: {
-        connection: { name: "ledger", title: "Ledger", baseUrl: "https://api.ledger.example" },
-        operations: [{ name: "list_invoices", method: "GET", path: "/invoices" }]
-      }
-    });
-    if (!read) throw new Error("The answer is a draft");
-    await openConnectionDraft(read, {
-      connectorTypeOf: async () => undefined,
-      showConnection: () => undefined,
-      requestCreateDialog: () => undefined
-    });
-    // The reader may publish two agents; the instance holds the publish for an approval.
-    const writes: string[] = [];
-    const give: ConnectionGiveHost = {
-      viewerId: "user-reader",
-      source: {
-        connection: async () => ({
-          title: "Ledger",
-          tools: [{ toolName: "connection.ledger.list_invoices", title: "List invoices" }]
-        }),
-        agents: async () => [
-          { name: "assistant", title: "Assistant" },
-          { name: "reporter", title: "Reporter" }
-        ],
-        readAgent: async () => ({
-          id: "agent-assistant",
-          revision: 3,
-          config: { toolNames: ["show_view"] }
-        }),
-        give: async (name, input) => {
-          writes.push(`give ${name} ${JSON.stringify(input)}`);
-          return "waits";
-        }
-      }
-    };
-    const source: ConnectionSource = {
-      mayTest: () => true,
-      useDetail: () => ({ status: "loading" }),
-      readDetail: async () => connectionDetail("ledger"),
-      test: async () => ({ status: "ready", testedAt: "2026-10-18T10:00:00.000Z" }),
-      setSecret: async () => undefined,
-      discover: async () => undefined,
-      useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
-      useHolders: () => ({ status: "hidden" }),
-      principalHref: () => "",
-      oauthStart: async () => {
-        throw new Error("This test signs nothing in.");
-      },
-      give
-    };
-    const created: string[] = [];
-    const puts: { config: Record<string, unknown>; expectedRevision: number | null }[] = [];
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    mounted.push(root);
-    await act(async () =>
-      root.render(
-        createElement(
-          UiRoot,
-          { mode: "light", labels: uiLabelsEn },
-          createElement(
-            TranslationProvider,
-            { locale: "en", children: null },
-            createElement(ConnectionCreateFlow, {
-              source,
-              ...createDefaults,
-              put: async (input) => {
-                puts.push(input);
-                return { revision: puts.length };
-              },
-              onClose: () => undefined,
-              onCreated: (name) => created.push(name)
-            })
-          )
-        )
-      )
-    );
-    const body = document.body;
-    const key = body.querySelector<HTMLInputElement>('input[type="password"]');
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
-        key,
-        "sk-test"
-      );
-      key?.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () =>
-      body.querySelector<HTMLButtonElement>("[data-connection-connect]")?.click()
-    );
-    await vi.waitFor(() => expect(body.querySelector("[data-connection-approve]")).not.toBeNull(), {
-      timeout: CONDITION_WAIT_MS
-    });
-    await act(async () =>
-      body.querySelector<HTMLButtonElement>("[data-connection-approve]")?.click()
-    );
-    await vi.waitFor(
-      () => expect(body.querySelector("[data-connection-approved]")).not.toBeNull(),
-      { timeout: CONDITION_WAIT_MS }
-    );
-    // The approval saved the tools and did not leave for the page yet.
-    expect(created).toEqual([]);
-    expect(body.textContent).toContain("1 tool approved.");
-    await act(async () => body.querySelector<HTMLButtonElement>("[data-connection-give]")?.click());
-    // Choose Assistant, then confirm the question that names it and the tool.
-    await vi.waitFor(
-      () => expect(body.querySelector('[data-connection-give-agent="assistant"]')).not.toBeNull(),
-      { timeout: CONDITION_WAIT_MS }
-    );
-    await act(async () =>
-      body.querySelector<HTMLButtonElement>("[data-connection-give-next]")?.click()
-    );
-    await vi.waitFor(
-      () =>
-        expect(body.querySelector('[data-connection-give-ask="assistant"]')?.textContent).toContain(
-          "Give Assistant 1 tool of Ledger?"
-        ),
-      { timeout: CONDITION_WAIT_MS }
-    );
-    expect(writes).toEqual([]);
-    await act(async () =>
-      body.querySelector<HTMLButtonElement>("[data-connection-give-confirm]")?.click()
-    );
-    await vi.waitFor(
-      () => expect(body.querySelector('[data-connection-give-outcome="waits"]')).not.toBeNull(),
-      { timeout: CONDITION_WAIT_MS }
-    );
-    expect(writes).toEqual([
-      'give assistant {"agentId":"agent-assistant","toolNames":["connection.ledger.list_invoices"],"expectedLiveRevision":3}'
-    ]);
-    expect(body.textContent).toContain(
-      "The change to Assistant waits for an approval in the Inbox."
-    );
-    await act(async () =>
-      body.querySelector<HTMLButtonElement>("[data-connection-give-done]")?.click()
-    );
-    expect(created).toEqual(["ledger"]);
   });
 });

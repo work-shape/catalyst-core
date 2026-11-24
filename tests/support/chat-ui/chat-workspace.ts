@@ -6,7 +6,7 @@ export {
   readLastDockConversation,
   storeLastDockConversation
 } from "../../../packages/chat-ui/src/chat/workspace/dock-last";
-export { workspaceShortcutLabel } from "../../../packages/chat-ui/src/chat/workspace/workspace-shortcuts";
+
 export { WorkspaceDraftsProvider } from "../../../packages/chat-ui/src/chat/workspace/workspace-drafts";
 export {
   chosenLocale,
@@ -28,7 +28,6 @@ export { ClientBrandingHeader } from "../../../packages/chat-ui/src/chat/workspa
 export {
   addressDockConversation,
   clampDockWidth,
-  DOCK_DEFAULT_WIDTH,
   dockConversationOfSearch,
   dockMotion,
   dockPlacement,
@@ -38,7 +37,7 @@ export {
   dockConversationToReuse,
   openConversationAbout
 } from "../../../packages/chat-ui/src/chat/workspace/open-conversation-about";
-export { UserMenu } from "../../../packages/chat-ui/src/chat/workspace/user-menu";
+
 export {
   createPrivateConversationWith,
   newConversationPrivacy
@@ -55,7 +54,6 @@ export {
 } from "../../../packages/chat-ui/src/chat/workspace/workspace-chat-model";
 export {
   ConfigCheckPanel,
-  OutdatedInterfaceBanner,
   SessionCheckPanel,
   StagingBanner,
   WorkspaceChrome

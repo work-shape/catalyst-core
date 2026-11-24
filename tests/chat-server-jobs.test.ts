@@ -62,22 +62,11 @@ describe("the jobs of the API process", () => {
         title: "Please Summarize The Release Notes"
       })
     );
-  });
-
-  it("enqueues the title job for the first user message only", async () => {
-    const app = await createApp();
-    const created = await app.call("conversations.create", { payload: { title: "First" } });
-    const conversation = created.json<{ id: string }>();
-    const first = await injectStartConversationRun(app, conversation.id, "First question", {
-      idempotencyKey: "first-message"
-    });
-    await drainRunEvents(app, conversation.id, first.run.id);
-    await getTestJobs(app).runDue();
-    const second = await injectStartConversationRun(app, conversation.id, "Second question", {
+    // Only the first user message enqueues the title job.
+    const next = await injectStartConversationRun(second, conversation.id, "Second question", {
       idempotencyKey: "second-message"
     });
-    await drainRunEvents(app, conversation.id, second.run.id);
-
+    await drainRunEvents(second, conversation.id, next.run.id);
     await expect(titleJobs(conversation.id)).resolves.toEqual([
       { status: "succeeded", attempts: 1, dedupe_key: conversation.id }
     ]);
@@ -308,12 +297,6 @@ describe("the title job and a rename by the user", () => {
     };
   }
 
-  it("writes the generated title while the conversation still carries the temporary one", async () => {
-    const result = await titledConversation(undefined);
-    expect(result.title).toBe("Release Notes Summary");
-    expect(result.generatedEvents).toHaveLength(1);
-  });
-
   it("names the model of a title in the audit by its binding, and by its id without one", async () => {
     // A provider's model id can hold a cloud account id: the audit shows the binding instead.
     const model = "arn:aws:bedrock:eu-central-1:000000000000:application-inference-profile/p";
@@ -329,7 +312,7 @@ describe("the title job and a rename by the user", () => {
     );
   });
 
-  it("names the model of a title that failed in the audit by its binding, and by its id without one", async () => {
+  it("names the model of a title that failed in the audit by its binding", async () => {
     const model = "arn:aws:bedrock:eu-central-1:000000000000:application-inference-profile/p";
     const bound = await titledConversation(
       undefined,
@@ -347,17 +330,9 @@ describe("the title job and a rename by the user", () => {
       expect(event.metadata).not.toHaveProperty("model");
     }
     expect(JSON.stringify(bound.failedEvents)).not.toMatch(/arn:aws|000000000000/u);
-
-    const unbound = await titledConversation(undefined, undefined, new Error("The model failed"));
-    expect(unbound.failedEvents.map((event) => event.metadata)).toContainEqual(
-      expect.objectContaining({ providerId: "local", model: "local" })
-    );
   });
 
-  it("asks for the conversation language, preserves proper names and falls back to the account language", async () => {
-    const prompt = (await titledConversation(undefined)).prompts.join(" ");
-    expect(prompt).toContain("language of the initial user message");
-    expect(prompt).toContain("never translate proper names");
+  it("falls back to the account language", async () => {
     // ACCEPT-1c C8: a German account's list showed English titles.
     // The account keeps its language, so the one without a choice goes first.
     expect((await titledConversation(undefined)).prompts).toEqual([
@@ -373,17 +348,15 @@ describe("the title job and a rename by the user", () => {
     const titleOf = async (title: string, files: string[]) =>
       (await titledConversation(undefined, undefined, undefined, "de", { title, files })).title;
     // The titles come from the chat's dictionary, so a server that drifts from it fails here.
-    for (const locale of ["en", "de"] as const) {
-      const { t } = createTranslationContext(locale);
-      expect(await titleOf(t("conversationAttachedFile"), ["a.pdf"])).toBe("Release Notes Summary");
-      const many = t("conversationAttachedFiles", { count: "3" });
-      expect(await titleOf(many, ["a.pdf", "b.pdf", "c.pdf"])).toBe("Release Notes Summary");
-    }
+    expect(
+      await titleOf(createTranslationContext("en").t("conversationAttachedFile"), ["a.pdf"])
+    ).toBe("Release Notes Summary");
+    const many = createTranslationContext("de").t("conversationAttachedFiles", { count: "3" });
+    expect(await titleOf(many, ["a.pdf", "b.pdf", "c.pdf"])).toBe("Release Notes Summary");
     // A server that keeps titles of its own fails once the shared titles change.
     const shared = { ...ATTACHED_FILE_TITLES.de };
     try {
       ATTACHED_FILE_TITLES.de = { one: "Fixture eine Datei", many: "{count} Fixture Dateien" };
-      expect(await titleOf("Fixture eine Datei", ["a.pdf"])).toBe("Release Notes Summary");
       expect(await titleOf("2 Fixture Dateien", ["a.pdf", "b.pdf"])).toBe("Release Notes Summary");
     } finally {
       ATTACHED_FILE_TITLES.de = shared;

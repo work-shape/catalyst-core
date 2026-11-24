@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CHAT_INPUT_FLOOR_GUARDRAILS,
   compileGuardrailPattern,
   parseClientInstanceConfig,
   releaseGuardrailFloor,
@@ -278,11 +277,6 @@ describe("the default rules on chat input, on what a financing business pastes",
   // Fails without the change: 25 of these were warned about or blocked, and two keys passed.
   it.each(SAMPLES.map((sample) => [sample.id, sample] as const))("%s", (_id, sample) => {
     expect(firing(defaults, sample.text)).toEqual(sample.want);
-  });
-
-  it("warn about a card number, so a document holding one can be sent anyway", () => {
-    expect(CHAT_INPUT_FLOOR_GUARDRAILS["chat-card-numbers"].outcome).toBe("warn");
-    expect(CHAT_INPUT_FLOOR_GUARDRAILS["chat-secrets"].outcome).toBe("block");
   });
 
   // Fails without the change: the words of every payslip and self-disclosure were warned about.

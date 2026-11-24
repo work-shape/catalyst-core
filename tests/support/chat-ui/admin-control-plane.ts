@@ -2,9 +2,7 @@ export {
   constrainCredentialScopes,
   copyStateFor,
   DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS,
-  expiryInputToIso,
   isCredentialActive,
-  optionalTrimmedValue,
   scopesAllowedByPermissions
 } from "../../../packages/chat-ui/src/admin/control-plane/api-access-model";
 export { ApiAccessPanel } from "../../../packages/chat-ui/src/admin/control-plane/api-access-panel";
@@ -37,7 +35,6 @@ export {
   personalKeyWorkspaceOffer
 } from "../../../packages/chat-ui/src/admin/control-plane/personal-api-keys-model";
 export {
-  authSourceLabel,
   filterUsers,
   formToUpdateInput,
   setUserPermission,
@@ -48,6 +45,6 @@ export {
   userStatusFilterOf,
   userToForm
 } from "../../../packages/chat-ui/src/admin/control-plane/user-administration-model";
-export { UserPermissionOverview } from "../../../packages/chat-ui/src/admin/control-plane/user-permission-overview";
+
 export { UserPermissionsCard } from "../../../packages/chat-ui/src/admin/control-plane/user-permissions-card";
 export { useControlPlaneModel } from "../../../packages/chat-ui/src/admin/control-plane/control-plane-model";

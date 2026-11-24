@@ -18,7 +18,7 @@ export {
   installStaleChunkRecovery,
   STALE_CHUNK_RELOAD_COOLDOWN_MS
 } from "../../../packages/chat-ui/src/shared/stale-chunk-recovery";
-export { resolveThemeModePreference } from "../../../packages/chat-ui/src/shared/theme";
+
 export {
   routeCollaborationWorkspaceId,
   routeConversationId,

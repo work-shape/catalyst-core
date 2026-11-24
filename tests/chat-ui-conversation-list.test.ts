@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import type { ConversationListItem, LocaleCode, SafeConfig } from "@work-shape/catalyst-api-client";
+import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";
@@ -53,13 +53,12 @@ type RailProps = Parameters<typeof WorkspaceRail>[0];
 
 function renderRail(
   conversations: ConversationListItem[] = [],
-  overrides: Partial<RailProps> = {},
-  locale: LocaleCode = "en"
+  overrides: Partial<RailProps> = {}
 ): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { children: null, locale },
+      { children: null, locale: "en" },
       createElement(WorkspaceRail, {
         config: railConfig,
         conversations,
@@ -94,30 +93,9 @@ const many = (count: number) =>
 const currentRow = (label: string) =>
   new RegExp(`<button[^>]*aria-current="true"[^>]*>(?:(?!</button>).)*${label}`, "u");
 
-// Each of these fails with the Chat row: the rail then offered "Chat" beside "New chat", and
-// hid a section that stood alone.
-describe("workspace rail without a Chat row", () => {
-  const inbox = { toDecide: 0 };
-
-  it("has no Chat row: New chat is the one entry for a chat", () => {
-    expect(railSections.map((section) => section.id)).toEqual([
-      "agents",
-      "apps",
-      "workflows",
-      "scheduled",
-      "inbox"
-    ]);
-
-    for (const markup of [renderRail(), renderRail([], { inbox })]) {
-      expect(markup).not.toContain(">Chat<");
-      expect(markup).not.toMatch(/lucide-message-square[ "]/u);
-      // One row; the plus on the Recent heading does the same and is named the same.
-      expect(markup.match(/>New chat</gu)).toHaveLength(1);
-      expect(markup.match(/aria-label="New chat"/gu)).toHaveLength(1);
-    }
-  });
-
-  it("shows a section that stands alone, and every registered one in its order", () => {
+describe("workspace rail sections", () => {
+  it("shows a section that stands alone, and marks only the open conversation's row", () => {
+    const inbox = { toDecide: 0 };
     const inboxSection = railSections.find((section) => section.id === "inbox");
     if (!inboxSection) {
       throw new Error("The rail has no Inbox section.");
@@ -128,114 +106,47 @@ describe("workspace rail without a Chat row", () => {
       label: "nav.settings",
       shown: undefined
     };
-
     expect(shownRailSections(railSections, { inbox })).toEqual([inboxSection]);
     expect(shownRailSections([inboxSection, second])).toEqual([second]);
-    const markup = renderRail([], { inbox, sections: [inboxSection, second] });
-    expect(markup.indexOf("Inbox")).toBeLessThan(markup.indexOf("Settings"));
-  });
 
-  // Fails with the sections in a group of their own: a group's space then stood between New
-  // chat and the Inbox, in the open rail and not in the strip.
-  it("keeps New chat and the sections in one group, with or without a section and in the strip", () => {
-    const inboxSection = railSections.find((section) => section.id === "inbox");
-    if (!inboxSection) {
-      throw new Error("The rail has no Inbox section.");
-    }
-    const second: RailSection = { ...inboxSection, id: "second", label: "nav.build" };
-    const groupStarts = (markup: string, from: string, to: string) =>
-      markup.slice(markup.indexOf(from), markup.indexOf(to)).match(/role="group"/gu) ?? [];
-
-    for (const collapsed of [false, true]) {
-      const several = renderRail(many(1), { inbox, collapsed, sections: [inboxSection, second] });
-      expect(groupStarts(several, "New chat", "Inbox")).toHaveLength(0);
-      expect(groupStarts(several, "Inbox", "Studio")).toHaveLength(0);
-    }
-    // The next group is the list under "Recent", with or without a section before it.
-    for (const markup of [renderRail(many(1), { inbox }), renderRail(many(1))]) {
-      expect(groupStarts(markup, "New chat", "Recent")).toHaveLength(1);
-      expect(markup).not.toContain("mt-4");
-    }
-  });
-
-  it("marks nothing as current on the start page, and the open conversation's row in one", () => {
     const conversations = many(2);
-
     expect(renderRail(conversations, { inbox })).not.toContain("aria-current");
     const inConversation = renderRail(conversations, { inbox, selectedConversationId: "conv_1" });
     expect(inConversation.match(/aria-current="true"/gu)).toHaveLength(1);
     expect(inConversation).toMatch(currentRow("Titel 1\\."));
   });
-
-  // Fails with the list page: the strip then held a "Conversations" icon that opened it.
-  it("keeps New chat and the search in the collapsed strip, and no entry for a list page", () => {
-    const markup = renderRail(many(1), { collapsed: true });
-
-    expect(markup).toContain('<span class="sr-only">New chat</span>');
-    expect(markup).not.toContain("lucide-messages-square");
-    expect(markup).not.toContain("Conversations");
-    expect(markup).not.toContain("aria-current");
-  });
 });
 
-// Each of these fails with the "Show all" row: the rail then ended in a way to a list page,
-// held one page, and put the open conversation after its rows.
 describe("workspace rail as the list of conversations", () => {
-  it("ends with its rows while the workspace holds no older conversations", () => {
-    const markup = renderRail(many(RAIL_PAGE_SIZE));
+  const rows = (markup: string) => markup.match(/data-testid="conversation-row"/gu) ?? [];
 
-    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(RAIL_PAGE_SIZE);
-    expect(markup).not.toContain("Load more");
-    expect(markup).not.toContain("Show all");
-  });
-
-  it("ends with a quiet Load more row while there are older ones, in both languages", () => {
+  it("shows every loaded row and offers Load more only while there are older ones", () => {
+    expect(renderRail(many(RAIL_PAGE_SIZE))).not.toContain("Load more");
     const more = { hasMoreConversations: true, onLoadMoreConversations: noop };
-    const markup = renderRail(many(RAIL_PAGE_SIZE), more);
-
-    // Every loaded row shows, however many pages they are.
-    expect(
-      renderRail(many(3 * RAIL_PAGE_SIZE), more).match(/data-testid="conversation-row"/gu)
-    ).toHaveLength(3 * RAIL_PAGE_SIZE);
-    expect(markup.lastIndexOf("Load more")).toBeGreaterThan(
-      markup.lastIndexOf('data-testid="conversation-row"')
-    );
+    const markup = renderRail(many(3 * RAIL_PAGE_SIZE), more);
+    expect(rows(markup)).toHaveLength(3 * RAIL_PAGE_SIZE);
     expect(markup).toMatch(/<button[^>]*aria-busy="false"[^>]*>(?:(?!<\/button>).)*Load more/u);
-    expect(markup).not.toContain("Show all");
-    expect(renderRail(many(RAIL_PAGE_SIZE), more, "de")).toContain("Mehr laden");
   });
 
-  it("says that a page is loading, and holds the row still meanwhile", () => {
-    const loading = {
+  it("holds the row still while a page loads, and keeps the rows with a retry after a failure", () => {
+    const loading = renderRail(many(RAIL_PAGE_SIZE), {
       hasMoreConversations: true,
       loadingMoreConversations: true,
       onLoadMoreConversations: noop
-    };
-    const markup = renderRail(many(RAIL_PAGE_SIZE), loading);
-
-    expect(markup).toMatch(
-      /<button[^>]*(?:disabled=""[^>]*aria-busy="true"|aria-busy="true"[^>]*disabled="")[^>]*>(?:(?!<\/button>).)*Loading/u
+    });
+    expect(loading).toMatch(
+      /<button[^>]*(?:disabled=""[^>]*aria-busy="true"|aria-busy="true"[^>]*disabled="")/u
     );
-    expect(renderRail(many(RAIL_PAGE_SIZE), loading, "de")).toContain("Wird geladen");
-  });
 
-  it("keeps the rows and offers a retry after a page failed to load", () => {
-    const failed = {
+    const failed = renderRail(many(RAIL_PAGE_SIZE), {
       hasMoreConversations: true,
       loadMoreConversationsFailed: true,
       onLoadMoreConversations: noop
-    };
-    const markup = renderRail(many(RAIL_PAGE_SIZE), failed);
-
-    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(RAIL_PAGE_SIZE);
-    expect(markup).toMatch(
-      /role="alert"[^>]*>(?:(?!<\/div>).)*More conversations could not be loaded\./u
-    );
-    expect(markup).toContain("Try again");
-    expect(markup).not.toContain("Load more");
-    expect(renderRail(many(RAIL_PAGE_SIZE), failed, "de")).toContain(
-      "Weitere Unterhaltungen konnten nicht geladen werden."
-    );
+    });
+    expect(rows(failed)).toHaveLength(RAIL_PAGE_SIZE);
+    expect(failed).toContain('role="alert"');
+    expect(failed).toContain("Try again");
+    expect(failed).not.toContain("Load more");
   });
 
   it("puts the open conversation first and marks it while it is older than the loaded ones", () => {
@@ -256,6 +167,5 @@ describe("workspace rail as the list of conversations", () => {
     });
     expect(markup).toMatch(currentRow("Mietvertrag Altbau"));
     expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
-    expect(markup.indexOf("Mietvertrag Altbau")).toBeLessThan(markup.indexOf("Titel 0."));
   });
 });

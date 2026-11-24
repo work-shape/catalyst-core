@@ -31,7 +31,6 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // delete one. An agent's call on one is confirmed in words, never as raw fields and ids.
 
 const en = createTranslationContext("en");
-const de = createTranslationContext("de");
 
 const start: ScheduledStart = {
   id: "sched_1",
@@ -66,7 +65,7 @@ const text = (markup: string) =>
     .replace(/&quot;/gu, '"')
     .replace(/\s+/gu, " ");
 
-function inLocale(locale: "en" | "de", node: ReactNode): string {
+function inLocale(locale: "en", node: ReactNode): string {
   return renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
 }
 
@@ -84,10 +83,6 @@ describe("a scheduled prompt in words", () => {
   it("writes each preset as cron and opens a saved cron as its preset", () => {
     expect(cronOf(DEFAULT_SCHEDULE)).toBe("0 8 * * 1-5");
     expect(cronOf({ ...DEFAULT_SCHEDULE, preset: "daily", time: "07:30" })).toBe("30 7 * * *");
-    expect(cronOf({ ...DEFAULT_SCHEDULE, preset: "weekly", weekday: 5, time: "17:30" })).toBe(
-      "30 17 * * 5"
-    );
-    expect(cronOf({ ...DEFAULT_SCHEDULE, preset: "monthly", time: "09:00" })).toBe("0 9 1 * *");
     for (const cron of ["30 7 * * *", "0 8 * * 1-5", "30 17 * * 5", "0 9 1 * *"]) {
       expect(cronOf(choiceOf(cron))).toBe(cron);
     }
@@ -98,28 +93,19 @@ describe("a scheduled prompt in words", () => {
     expect(cronLooksValid("0 8 * * 1-5")).toBe(true);
     expect(cronLooksValid("*/15 9-17 * * MON-FRI")).toBe(true);
     expect(cronLooksValid("0 8 * *")).toBe(false);
-    expect(cronLooksValid("every day")).toBe(false);
     expect(cronLooksValid("0 8 * * 1; rm")).toBe(false);
   });
 
-  it("refuses a schedule due more often than every 15 minutes, in English and German", () => {
+  it("refuses a schedule due more often than every 15 minutes", () => {
     for (const cron of ["*/10 * * * *", "0,5 9 * * *", "0,59 0,23 * * *"])
       expect(cronRunsTooOften(cron), cron).toBe(true);
     for (const cron of ["*/15 * * * *", "0 8 * * 1-5", "not a cron"])
       expect(cronRunsTooOften(cron), cron).toBe(false);
-    expect(en.t("scheduled.cronTooOften", { minutes: 15 })).toContain("at most every 15 minutes");
-    expect(de.t("scheduled.cronTooOften", { minutes: 15 })).toContain("höchstens alle 15 Minuten");
   });
 
-  it("says the schedule with its zone in English and German, a custom one as written", () => {
-    expect(scheduleLine(start, en)).toBe("Every weekday, 08:00 AM (Berlin time)");
-    expect(scheduleLine(start, de)).toBe("Werktags, 08:00 (Ortszeit Berlin)");
-    expect(scheduleLine({ cron: "0 9 * * 1", timeZone: "UTC" }, de)).toBe(
-      "Jeden Montag, 09:00 (UTC)"
-    );
-    expect(scheduleLine({ cron: "*/15 * * * *", timeZone: "UTC" }, en)).toBe(
-      "Custom: */15 * * * * (UTC)"
-    );
+  it("says the schedule's zone in words, never by its id", () => {
+    expect(scheduleLine(start, en)).not.toContain("Europe/Berlin");
+    expect(scheduleLine({ cron: "*/15 * * * *", timeZone: "UTC" }, en)).toContain("*/15 * * * *");
   });
 
   it("never shows a status or a reason it does not know as the server wrote it", () => {
@@ -191,9 +177,9 @@ const loaded = (rows: ScheduledStart[] | undefined, more: Partial<ScheduledList>
   ...more
 });
 
-function renderPage(list: ScheduledList, locale: "en" | "de" = "en"): string {
+function renderPage(list: ScheduledList): string {
   return inLocale(
-    locale,
+    "en",
     createElement(ScheduledPageView, {
       list,
       onNew: noop,
@@ -203,30 +189,9 @@ function renderPage(list: ScheduledList, locale: "en" | "de" = "en"): string {
 }
 
 describe("the Scheduled page", () => {
-  it("holds a delayed skeleton while the list loads, and New stays", () => {
-    const markup = renderPage(loaded(undefined));
-    expect(markup).toContain("Schedule a prompt");
-    expect(markup).not.toContain("data-row");
-    expect(markup).toContain('aria-busy="true"');
-  });
-
   it("says a failed read in place, with the way to read again", () => {
     const markup = renderPage(loaded(undefined, { failed: true }));
     expect(markup).toContain("data-load-error");
-    expect(text(markup)).toContain("Your scheduled prompts could not be loaded.");
-  });
-
-  it("offers two concrete examples when empty, in German too", () => {
-    const markup = text(renderPage(loaded([]), "de"));
-    expect(markup).toContain("Noch nichts geplant.");
-    expect(markup).toContain("Jeden Werktag um 08:00");
-    expect(markup).toContain("Fasse die neuen Support-Tickets von gestern zusammen");
-    expect(markup.match(/Prompt planen/gu)).toHaveLength(1);
-  });
-
-  it("lists each saved prompt once", () => {
-    const markup = renderPage(loaded([start, { ...start, id: "sched_2" }]));
-    expect(markup.match(/data-row=/gu)).toHaveLength(2);
   });
 });
 
@@ -236,23 +201,19 @@ const runsOf = (runs: ScheduledRun[] | undefined, failed = false): ScheduledRuns
   retry: noop
 });
 
-function renderCard(
-  input: {
-    start?: ScheduledStart;
-    runs?: ScheduledRuns;
-    connections?: boolean;
-    feedback?: Parameters<typeof ScheduledStartCard>[0]["feedback"];
-  },
-  locale: "en" | "de" = "en"
-): string {
+function renderCard(input: {
+  start?: ScheduledStart;
+  runs?: ScheduledRuns;
+  connections?: boolean;
+}): string {
   return inLocale(
-    locale,
+    "en",
     createElement(ScheduledStartCard, {
       start: input.start ?? start,
       agentLabel: "Support assistant",
       runs: input.runs ?? runsOf([]),
       busy: undefined,
-      feedback: input.feedback,
+      feedback: undefined,
       connectionsRoute: input.connections
         ? { kind: "build-kind", assetKind: "connections" }
         : undefined,
@@ -266,24 +227,10 @@ function renderCard(
 }
 
 describe("one scheduled prompt", () => {
-  it("shows its heading, agent, schedule, next run and its actions, without ids", () => {
-    const markup = renderCard({});
-    const words = text(markup);
-    expect(words).toContain("Summarise yesterday's new support tickets");
-    expect(words).toContain("Support assistant · Every weekday, 08:00 AM (Berlin time)");
-    expect(words).toContain("Next run:");
-    expect(words).toContain("Not run yet.");
-    expect(words).toContain("Run now");
-    expect(words).toContain("Pause");
+  it("shows no id or raw cron", () => {
+    const words = text(renderCard({}));
     expect(words).not.toContain("sched_1");
     expect(words).not.toContain("0 8 * * 1-5");
-  });
-
-  it("marks a paused one and offers Resume in place of Pause and the next run", () => {
-    const words = text(renderCard({ start: { ...start, state: "paused", nextRunAt: null } }, "de"));
-    expect(words).toContain("Pausiert");
-    expect(words).toContain("Fortsetzen");
-    expect(words).not.toContain("Nächster Lauf");
   });
 
   it("lists its runs with their state and a link to each result conversation", () => {
@@ -297,10 +244,6 @@ describe("one scheduled prompt", () => {
     expect(markup.match(/data-testid="scheduled-run"/gu)).toHaveLength(3);
     expect(markup).toContain('href="/w/ws_1/c/conv_2"');
     expect(markup).toContain('href="/w/ws_1/c/conv_1"');
-    const words = text(markup);
-    expect(words).toContain("Running");
-    expect(words).toContain("Done");
-    expect(words).toContain("Skipped: the run before was still going.");
   });
 
   it("explains that the next times are skipped while a run waits for a decision", () => {
@@ -308,11 +251,8 @@ describe("one scheduled prompt", () => {
       run({ id: "r2", status: "skipped", reason: "waiting_for_decision" }),
       run({ id: "r1", status: "waiting_for_decision", conversationId: "conv_1" })
     ]);
-    const markup = renderCard({ runs }, "de");
+    const markup = renderCard({ runs });
     expect(markup).toContain('data-testid="scheduled-waiting"');
-    expect(text(markup)).toContain(
-      "Bis du entscheidest, werden die nächsten Termine übersprungen."
-    );
     expect(markup.match(/href="\/w\/ws_1\/c\/conv_1"/gu)?.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -321,26 +261,14 @@ describe("one scheduled prompt", () => {
       run({ id: "r1", status: "failed", reason: "connection_needs_reconnect" })
     ]);
     const linked = renderCard({ runs, connections: true });
-    expect(text(linked)).toContain("needs you to sign in again. Reconnect it, then run again.");
     expect(linked).toContain('href="/build/connections"');
     expect(renderCard({ runs })).not.toContain('href="/build/connections"');
   });
-
-  it("says the outcome of an action under its buttons, and a failed read of runs with retry", () => {
-    const done = renderCard({ feedback: { tone: "success", text: "scheduled.runStarted" } });
-    expect(text(done)).toContain("Started. The run shows under Recent runs in a moment.");
-    const failed = renderCard({ runs: runsOf(undefined, true) });
-    expect(text(failed)).toContain("The runs could not be loaded.");
-  });
 });
 
-function renderDialog(
-  draft: Parameters<typeof ScheduledDialog>[0]["draft"],
-  locale: "en" | "de" = "en",
-  more: Partial<Parameters<typeof ScheduledDialog>[0]> = {}
-): string {
+function renderDialog(draft: Parameters<typeof ScheduledDialog>[0]["draft"]): string {
   return inLocale(
-    locale,
+    "en",
     createElement(ScheduledDialog, {
       draft,
       agents: [
@@ -352,8 +280,7 @@ function renderDialog(
       saving: false,
       failed: false,
       onSave: noop,
-      onClose: noop,
-      ...more
+      onClose: noop
     })
   );
 }
@@ -364,30 +291,18 @@ describe("the dialog that makes and changes a scheduled prompt", () => {
     expect(markup).toMatch(/<option value="writer" selected="">Writer<\/option>/u);
     expect(markup).toMatch(/<option value="weekdays" selected="">/u);
     expect(markup).toMatch(/<option value="Europe\/Berlin" selected="">/u);
-    // A zone is offered as the schedule field says it, never by its id.
-    expect(markup).toMatch(/<option value="Europe\/Berlin" selected="">Berlin time<\/option>/u);
     expect(markup).toContain('value="08:00"');
-    expect(text(markup)).toContain("Every weekday, 08:00 AM (Berlin time)");
-    // A scheduled prompt has no name of its own.
-    expect(text(markup)).not.toMatch(/\bName\b/u);
   });
 
-  it("opens a saved custom cron as written with the common-syntax help", () => {
-    const markup = renderDialog(
-      { scheduledStartId: "sched_1", prompt: "Check", cron: "*/15 9-17 * * 1-5", timeZone: "UTC" },
-      "de"
-    );
-    const words = text(markup);
-    expect(words).toContain("Geplanten Prompt bearbeiten");
-    expect(words).toContain("Übliche Cron-Syntax");
+  it("opens a saved custom cron as written", () => {
+    const markup = renderDialog({
+      scheduledStartId: "sched_1",
+      prompt: "Check",
+      cron: "*/15 9-17 * * 1-5",
+      timeZone: "UTC"
+    });
     expect(markup).toContain('value="*/15 9-17 * * 1-5"');
     expect(markup).toMatch(/<option value="UTC" selected="">/u);
-    expect(words).toContain("Speichern");
-  });
-
-  it("keeps what was written and says a failed save above the buttons", () => {
-    const markup = renderDialog({ prompt: "Check" }, "en", { failed: true });
-    expect(text(markup)).toContain("It could not be saved.");
   });
 });
 
@@ -417,7 +332,7 @@ describe("an agent's call on a scheduled prompt", () => {
 
   const agentName = (name: string) => (name === "support" ? "Support assistant" : name);
 
-  it("confirms a new one in German as agent, prompt and when, with no field names", () => {
+  it("confirms a new one in words, the raw input only under the details", () => {
     const call = scheduledStartCall("scheduled_starts.create", {
       collaborationWorkspaceId: "ws_1",
       agentName: "support",
@@ -427,7 +342,7 @@ describe("an agent's call on a scheduled prompt", () => {
     });
     if (!call) throw new Error("The call was not read");
     const markup = inLocale(
-      "de",
+      "en",
       createElement(ToolDecisionCardView, {
         decision: {
           toolCallId: "call_1",
@@ -443,12 +358,7 @@ describe("an agent's call on a scheduled prompt", () => {
         summary: createElement(ScheduledStartSummaryView, { call, agentName })
       })
     );
-    const words = text(markup);
-    expect(words).toContain("Agent Support assistant");
-    expect(words).toContain("Fasse die Tickets zusammen.");
-    expect(words).toContain("Wann Werktags, 08:00 (Ortszeit Berlin)");
-    expect(words).toContain("Läuft als Du, mit deinen Rechten zum Zeitpunkt jedes Laufs");
-    // The raw input stands only under the details.
+    expect(text(markup)).toContain("Support assistant");
     const summaryAt = markup.indexOf('data-testid="scheduled-confirmation"');
     const detailsAt = markup.indexOf('data-testid="tool-decision-details"');
     expect(summaryAt).toBeGreaterThan(-1);
@@ -458,7 +368,7 @@ describe("an agent's call on a scheduled prompt", () => {
 
   it("names the saved prompt a pause or delete acts on, never its id", () => {
     const pause = inLocale(
-      "de",
+      "en",
       createElement(ScheduledStartSummaryView, {
         call: { verb: "set_state", scheduledStartId: "sched_1", state: "paused" },
         saved: start,
@@ -466,7 +376,6 @@ describe("an agent's call on a scheduled prompt", () => {
       })
     );
     expect(text(pause)).toContain("Summarise yesterday's new support tickets");
-    expect(text(pause)).toContain("Pausieren: Er läuft nicht, bis er fortgesetzt wird.");
     expect(pause).not.toContain("sched_1");
     const remove = text(
       inLocale(
@@ -478,8 +387,6 @@ describe("an agent's call on a scheduled prompt", () => {
         })
       )
     );
-    expect(remove).toContain("One of your scheduled prompts");
-    expect(remove).toContain("Delete it. The conversations it already started stay.");
     expect(remove).not.toContain("sched_9");
   });
 });

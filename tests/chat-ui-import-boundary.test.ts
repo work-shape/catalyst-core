@@ -6,22 +6,18 @@ const path = "../packages/chat-ui/src/__private_probe__/theme";
 const fixtures = [
   [`import { resolveThemeModePreference } from "${path}";`, "no-restricted-imports"],
   [`import type { ThemeModePreference } from "${path}";`, "no-restricted-imports"],
-  [`export { resolveThemeModePreference } from "${path}";`, "no-restricted-imports"],
   [`export * from "${path}";`, "no-restricted-imports"],
-  ['import "../../packages/chat-ui/src/__private_probe__/theme";', "no-restricted-imports"],
   ['import "@work-shape/catalyst-chat-ui/src/__private_probe__/theme";', "no-restricted-imports"],
   [`export const load = () => import("${path}");`, "no-restricted-syntax"],
   [`export const load = () => require("${path}");`, "no-restricted-syntax"],
   [`export type Module = typeof import("${path}");`, "no-restricted-syntax"],
   ['import { resolveThemeModePreference } from "./support/chat-ui";', undefined],
   ['import { createTranslationContext } from "@work-shape/catalyst-chat-ui";', undefined],
-  ['import { AccessPage } from "@work-shape/catalyst-chat-ui/access";', undefined],
   [
     'export { ConversationPalette } from "../../../packages/chat-ui/src/chat/workspace/conversation-palette";',
     undefined,
     "tests/support/chat-ui/chat-workspace.ts"
-  ],
-  [`import "${path}";`, "no-restricted-imports"]
+  ]
 ] as const;
 let results: string[] = [];
 

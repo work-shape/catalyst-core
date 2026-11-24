@@ -33,7 +33,7 @@ const SKIPPED_FOLDERS = new Set(["__MACOSX"]);
 const SKIPPED_FILES = new Set([".DS_Store"]);
 
 /** Folders and files a system adds beside what a person means to hand over. */
-export function isSkippedUploadPath(path: string): boolean {
+function isSkippedUploadPath(path: string): boolean {
   const segments = path.split("/").filter((segment) => segment !== "");
   const name = segments.at(-1);
   return (

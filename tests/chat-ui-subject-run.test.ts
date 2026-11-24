@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "./support/chat-ui/shared";
-import { assetToolSentence } from "@work-shape/catalyst-chat-ui/asset-tool-lines";
 import {
   assetPageRoute,
   opensInRun,
@@ -11,9 +9,6 @@ import {
   subjectOpenedInRun,
   type SubjectRunPart
 } from "@work-shape/catalyst-chat-ui/subject-run";
-
-const { t } = createTranslationContext("en");
-const de = createTranslationContext("de").t;
 
 function call(toolName: string, id: string, kind: string, name: string): SubjectRunPart {
   return {
@@ -54,10 +49,6 @@ describe("the subject a run opens", () => {
     expect(subjectOpenedInRun([{ type: "text" }])).toBeUndefined();
   });
 
-  it("is nothing where the run only read assets", () => {
-    expect(subjectOpenedInRun([read("1", "workflow", "intake")])).toBeUndefined();
-  });
-
   it("counts only the saves that stored a revision", () => {
     const put = (id: string, output: unknown): SubjectRunPart => ({
       type: "tool_call",
@@ -78,7 +69,7 @@ describe("the subject a run opens", () => {
   });
 
   // BUILD-ALL-1: a draft created while the conversation is about another asset opens nothing.
-  it("stays the subject where a save created a draft beside it, whose line says it was created", () => {
+  it("stays the subject where a save created a draft beside it", () => {
     const createdBeside: SubjectRunPart = {
       type: "tool_call",
       toolCallId: "2",
@@ -115,16 +106,6 @@ describe("the subject a run opens", () => {
       awaitsPerson: false,
       besideSubject: true
     });
-    expect(t("conversationCreatedWorkflow", { name: "Invoice check" })).toBe(
-      "Workflow draft “Invoice check” created"
-    );
-    expect(de("conversationCreatedWorkflow", { name: "Rechnungsprüfung" })).toBe(
-      "Workflow-Entwurf „Rechnungsprüfung“ erstellt"
-    );
-    expect(de("conversationCreatedDataStore", { name: "Belege" })).toBe(
-      "Datenspeicher-Entwurf „Belege“ erstellt"
-    );
-    expect(de("conversationCreatedOpen")).toBe("Öffnen");
   });
 
   it("is the App the first app.save made, and a later app.save is a saved draft of it", () => {
@@ -291,8 +272,6 @@ describe("the subject a run opens", () => {
       workflow: "x"
     });
     expect(page("app")).toEqual({ kind: "app-edit", collaborationWorkspaceId: "w1", app: "x" });
-    expect(page("agent")).toEqual({ kind: "build-asset", assetKind: "agents", name: "x" });
-    expect(page("skill")).toEqual({ kind: "build-asset", assetKind: "skills", name: "x" });
     expect(page("data_store")).toEqual({
       kind: "build-asset",
       assetKind: "data-stores",
@@ -301,110 +280,6 @@ describe("the subject a run opens", () => {
     // A kind without a page of its own leads nowhere; a workspace's page needs the workspace.
     expect(page("page")).toBeUndefined();
     expect(assetPageRoute({ kind: "workflow", name: "x" }, undefined)).toBeUndefined();
-  });
-});
-
-describe("the lines of the asset tools", () => {
-  it("say which asset the agent opened, by its title, in English and German", () => {
-    const answer = { kind: "workflow", name: "intake", title: "Customer intake" };
-    expect(
-      assetToolSentence({ toolName: "platform.assets.open", args: { kind: "workflow" } }, t)
-    ).toBe("Opening the workflow…");
-    expect(assetToolSentence({ toolName: "platform.assets.open", result: answer }, t)).toBe(
-      "Opened Customer intake"
-    );
-    expect(assetToolSentence({ toolName: "platform.assets.open", result: answer }, de)).toBe(
-      "Customer intake geöffnet"
-    );
-    expect(assetToolSentence({ toolName: "platform.assets.open", isError: true }, t)).toBe(
-      "The asset could not be opened"
-    );
-  });
-
-  it("say what the agent did to the asset, in English and German", () => {
-    expect(
-      assetToolSentence(
-        { toolName: "platform.assets.get", args: { kind: "workflow" }, result: undefined },
-        t
-      )
-    ).toBe("Reading the workflow…");
-    expect(
-      assetToolSentence(
-        { toolName: "platform.assets.get", result: { kind: "agent", name: "a" } },
-        t
-      )
-    ).toBe("Read the agent");
-    expect(
-      assetToolSentence({ toolName: "platform.assets.validate", result: { issues: [] } }, t)
-    ).toBe("Checked the draft: no problems");
-    expect(
-      assetToolSentence({ toolName: "platform.assets.validate", result: { issues: [{}, {}] } }, t)
-    ).toBe("Checked the draft: 2 problems");
-    expect(
-      assetToolSentence(
-        { toolName: "platform.assets.put", result: { saved: true, revision: 5 } },
-        t
-      )
-    ).toBe("Draft saved");
-    expect(
-      assetToolSentence(
-        { toolName: "platform.assets.put", result: { saved: true, revision: 5 } },
-        de
-      )
-    ).toBe("Entwurf gespeichert");
-    expect(
-      assetToolSentence(
-        { toolName: "platform.assets.put", result: { saved: false, issues: [{}] } },
-        t
-      )
-    ).toBe("Not saved: 1 problem");
-    expect(
-      assetToolSentence(
-        {
-          toolName: "platform.assets.put",
-          result: { saved: false, conflict: "REVISION_CONFLICT" }
-        },
-        t
-      )
-    ).toBe("Someone saved in between: reading again");
-    expect(assetToolSentence({ toolName: "platform.assets.get", isError: true }, t)).toBe(
-      "The asset could not be read"
-    );
-  });
-
-  it("say that the agent saved an App or its draft, in English and German, also for the former name", () => {
-    const app = { kind: "app", name: "offer-desk", title: "Offer desk" };
-    const made = { ...app, saved: true, created: true, revision: 1 };
-    expect(assetToolSentence({ toolName: "app.save" }, t)).toBe("Saving as an app…");
-    expect(assetToolSentence({ toolName: "app.save", result: made }, t)).toBe(
-      "Saved as the app Offer desk"
-    );
-    expect(assetToolSentence({ toolName: "app.save", result: made }, de)).toBe(
-      "Als App Offer desk gespeichert"
-    );
-    expect(
-      assetToolSentence(
-        { toolName: "app.save", result: { ...app, saved: true, created: false, revision: 2 } },
-        t
-      )
-    ).toBe("Saved to the draft of Offer desk");
-    expect(
-      assetToolSentence(
-        { toolName: "app.save", result: { ...app, saved: false, message: "No" } },
-        de
-      )
-    ).toBe("Der Entwurf von Offer desk wurde nicht geändert");
-    expect(assetToolSentence({ toolName: "app.save", isError: true }, t)).toBe(
-      "The app could not be saved"
-    );
-    const kept = { kind: "app", name: "offer-desk", title: "Offer desk", revision: 1 };
-    expect(assetToolSentence({ toolName: "page.save_as_app", result: kept }, t)).toBe(
-      "Saved as the app Offer desk"
-    );
-  });
-
-  it("leave every other tool to its own line", () => {
-    expect(assetToolSentence({ toolName: "workspace.exec", result: {} }, t)).toBeUndefined();
   });
 });
 

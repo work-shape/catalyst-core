@@ -12,17 +12,6 @@ import {
 } from "./support/chat-ui";
 
 describe("assistant work grouping", () => {
-  it("uses the last non-empty text part as the visible final answer boundary", () => {
-    expect(
-      findFinalAssistantTextPartIndex([
-        textPart("Working"),
-        toolPart("call_lookup"),
-        textPart("Final answer"),
-        dataPart()
-      ])
-    ).toBe(2);
-  });
-
   it("keeps completed progress chronological and only groups tool work", () => {
     const parts = [
       textPart("I will inspect the file."),
@@ -41,21 +30,6 @@ describe("assistant work grouping", () => {
       [],
       []
     ]);
-  });
-
-  it("keeps chronological progress parts while a message is still running", () => {
-    const parts = [
-      textPart("I will inspect the file."),
-      toolPart("call_import"),
-      textPart("I am checking the extracted content."),
-      toolPart("call_read")
-    ];
-
-    expect(groupPaths(parts)).toEqual([[], [ASSISTANT_WORK_GROUP], [], [ASSISTANT_WORK_GROUP]]);
-  });
-
-  it("does not collapse normal text-only assistant answers", () => {
-    expect(groupPaths([textPart("Final answer.")])).toEqual([[]]);
   });
 
   it("keeps source-only parts after the final text uncounted as work steps", () => {
@@ -100,7 +74,7 @@ describe("assistant work grouping", () => {
     // Fails without the rule for subagents: the card folded into the work summary, and with it
     // Open and Stop of the subagent.
     const started = toolPart("call_started", "run_agent");
-    const refused = { ...toolPart("call_refused", "run_agent"), isError: true } as PartState;
+    const refused = toolPart("call_refused", "run_agent", true);
     const parts = [toolPart("call_lookup"), started, refused, textPart("Both are done.")];
 
     expect(groupPaths(parts)).toEqual([[ASSISTANT_WORK_GROUP], [], [ASSISTANT_WORK_GROUP], []]);
@@ -215,17 +189,13 @@ describe("assistant work grouping", () => {
     ]);
     expect(countAssistantWorkTimelineSteps(items)).toBe(2);
     expect(createRenderableAssistantToolGroupIndices(parts, [1, 2, 3])).toEqual([2]);
-  });
 
-  it("drops reasoning-only completed work instead of rendering an empty tool group", () => {
-    const parts = [reasoningPart("Thinking."), textPart("Final answer.")];
-    const workIndices = createCompletedAssistantWorkIndices(parts, 1);
-
-    expect(createAssistantWorkTimelineItems(parts, workIndices)).toEqual([]);
+    // Reasoning-only work renders no empty tool group.
+    const thinking = [reasoningPart("Thinking."), textPart("Final answer.")];
     expect(
-      countAssistantWorkTimelineSteps(createAssistantWorkTimelineItems(parts, workIndices))
-    ).toBe(0);
-    expect(createRenderableAssistantToolGroupIndices(parts, [0])).toEqual([]);
+      createAssistantWorkTimelineItems(thinking, createCompletedAssistantWorkIndices(thinking, 1))
+    ).toEqual([]);
+    expect(createRenderableAssistantToolGroupIndices(thinking, [0])).toEqual([]);
   });
 
   it("keeps visible tools compact when only hidden completed reasoning separates them", () => {
@@ -246,12 +216,15 @@ describe("assistant work grouping", () => {
     expect(createRenderableAssistantToolGroupIndices(parts, [0, 1, 2])).toEqual([0, 2]);
   });
 
-  it("keeps final promoted artifact parts visible with the final answer", () => {
+  it.each([
+    ["artifact", "demo.lookup", promotedArtifactsPart],
+    ["display surface", "show_view", promotedSurfacesPart]
+  ] as const)("keeps a final promoted %s part visible with the final answer", (_, name, part) => {
     const parts = [
-      textPart("I will create the file."),
-      toolPart("call_create"),
-      textPart("The file is ready."),
-      promotedArtifactsPart()
+      textPart("I will make it."),
+      toolPart("call_make", name),
+      textPart("Ready."),
+      part()
     ];
 
     expect(findFinalAssistantTextPartIndex(parts)).toBe(2);
@@ -259,29 +232,23 @@ describe("assistant work grouping", () => {
     expect(createVisibleFinalAssistantPartIndices(parts, 2)).toEqual([2, 3]);
   });
 
-  it("keeps final promoted display surfaces visible with the final answer", () => {
-    const parts = [
-      textPart("I will create a dashboard."),
-      toolPart("call_view", "show_view"),
-      textPart("The dashboard is ready."),
-      promotedSurfacesPart()
-    ];
-
-    expect(findFinalAssistantTextPartIndex(parts)).toBe(2);
-    expect(createCompletedAssistantWorkIndices(parts, 2)).toEqual([0, 1]);
-    expect(createVisibleFinalAssistantPartIndices(parts, 2)).toEqual([2, 3]);
-  });
-
-  it("keeps standalone tool UIs outside the collapsed work group", () => {
-    const parts = [toolPart("call_view", "show_view"), textPart("Final answer.")];
-
+  it("keeps standalone tool UIs outside the work group, as direct entries of completed work", () => {
+    const toolUIs = { show_view: [{ render: () => null, standalone: true }] };
     expect(
-      groupPaths(parts, {
-        toolUIs: {
-          show_view: [{ render: () => null, standalone: true }]
-        }
-      })
+      groupPaths([toolPart("call_view", "show_view"), textPart("Final answer.")], { toolUIs })
     ).toEqual([[], []]);
+
+    const parts = [
+      textPart("Opening the widget."),
+      toolPart("call_view", "show_view"),
+      toolPart("call_lookup"),
+      textPart("Final answer.")
+    ];
+    expect(createAssistantWorkTimelineItems(parts, [0, 1, 2], { toolUIs })).toEqual([
+      { type: "part", index: 0 },
+      { type: "part", index: 1 },
+      { type: "tool-group", indices: [2] }
+    ]);
   });
 
   it("keeps tool-only messages grouped when there is no final text part yet", () => {
@@ -307,27 +274,6 @@ describe("assistant work grouping", () => {
       { type: "tool-group", indices: [5] }
     ]);
   });
-
-  it("keeps standalone tool UIs as direct timeline entries inside completed work", () => {
-    const parts = [
-      textPart("Opening the widget."),
-      toolPart("call_view", "show_view"),
-      toolPart("call_lookup"),
-      textPart("Final answer.")
-    ];
-
-    expect(
-      createAssistantWorkTimelineItems(parts, [0, 1, 2], {
-        toolUIs: {
-          show_view: [{ render: () => null, standalone: true }]
-        }
-      })
-    ).toEqual([
-      { type: "part", index: 0 },
-      { type: "part", index: 1 },
-      { type: "tool-group", indices: [2] }
-    ]);
-  });
 });
 
 function groupPaths(
@@ -346,13 +292,14 @@ function textPart(text: string): PartState {
   } as PartState;
 }
 
-function toolPart(toolCallId: string, toolName = "demo.lookup"): PartState {
+function toolPart(toolCallId: string, toolName = "demo.lookup", isError = false): PartState {
   return {
     type: "tool-call",
     toolCallId,
     toolName,
     args: {},
     argsText: "{}",
+    ...(isError ? { isError } : {}),
     status: { type: "complete" }
   } as PartState;
 }

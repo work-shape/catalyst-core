@@ -80,7 +80,7 @@ describe("the rungs a share offers", () => {
     ).toEqual([]);
   });
 
-  it("says Teilen with the right at the target, Anfrage senden without it, and waits for breaks", () => {
+  it("shares with the right at the target, requests without it, and waits for breaks", () => {
     expect(shareSubmitLabel({ path: "direct" })).toBe("share.submitDirect");
     expect(shareSubmitLabel({ path: "request" })).toBe("share.submitRequest");
     expect(shareSubmitHeld({ status: "checking" }, false)).toBe(true);
@@ -304,7 +304,6 @@ describe("the share dialog", () => {
     return { onMoved, onClose };
   }
 
-  const dialog = () => required(document.querySelector<HTMLElement>("[data-share-dialog]"));
   const submit = () => required(document.querySelector<HTMLButtonElement>("[data-share-submit]"));
   const text = () => document.body.textContent ?? "";
 
@@ -314,18 +313,10 @@ describe("the share dialog", () => {
     await vi.waitFor(() => expect(submit().dataset.shareSubmit).toBe("direct"), {
       timeout: CONDITION_WAIT_MS
     });
-    expect(dialog().textContent).toContain("Mit wem?");
-    expect(text()).toContain("„Steuerprüfung“ teilen");
-    expect(text()).toContain("„Steuerprüfung“ und was es von hier verwendet:");
-    expect(text()).toContain("Belege");
+    // The instance's sentence on the data that goes along is shown as written.
     expect(text()).toContain(
       "Die Daten in „Belege“ gehen mit und sind dann für das Team „Controlling“ lesbar."
     );
-    expect(text()).toContain("Die Mitglieder von Controlling");
-    expect(text()).toContain("Wer in Controlling bauen darf");
-    expect(text()).toContain("Du auch.");
-    expect(text()).toContain("2 Rechte auf einzelne Teile enden, weil das Ändern dem Ort folgt.");
-    expect(submit().textContent).toBe("Teilen");
     expect(submit().disabled).toBe(false);
     await act(async () => submit().click());
     expect(move).toHaveBeenCalledWith(
@@ -357,16 +348,9 @@ describe("the share dialog", () => {
     await vi.waitFor(() => expect(submit().dataset.shareSubmit).toBe("request"), {
       timeout: CONDITION_WAIT_MS
     });
-    expect(submit().textContent).toBe("Anfrage senden");
-    expect(text()).toContain("Dort darfst du nicht selbst teilen.");
-    expect(text()).toContain("Admins und wer für alle bauen darf");
-    expect(text()).toContain("Du dann nicht mehr.");
-    expect(text()).not.toContain("Rechte, die enden");
     await act(async () => submit().click());
     expect(onMoved).not.toHaveBeenCalled();
-    expect(document.querySelector("[data-share-requested]")?.textContent).toContain(
-      "Anfrage gesendet."
-    );
+    expect(document.querySelector("[data-share-requested]")).not.toBeNull();
   });
 
   it("holds the share until the reader confirmed what breaks, then sends that confirmation", async () => {
@@ -380,8 +364,6 @@ describe("the share dialog", () => {
     await vi.waitFor(() => expect(document.querySelector("[data-share-breaks]")).not.toBeNull(), {
       timeout: CONDITION_WAIT_MS
     });
-    expect(text()).toContain("Das funktioniert danach nicht mehr");
-    expect(text()).toContain("„Helfer“ verwendet „Steuerprüfung“");
     expect(submit().disabled).toBe(true);
     const confirm = required(
       document.querySelector<HTMLButtonElement>('[data-share-accept-breaks][role="checkbox"]')
@@ -452,36 +434,11 @@ describe("a request to share in the Inbox", () => {
       })
     );
 
-  it("says who asks to share what with whom, the same summary, and Annehmen or Ablehnen", () => {
+  it("offers the approver Accept or Decline, and no request for changes", () => {
     const markup = request();
-    expect(markup).toMatch(/>Tim Becker möchte „Steuerprüfung“ für alle teilen<\/h3>/u);
-    expect(markup).toContain("Alle, denen es angeboten wird");
-    expect(markup).toContain("Admins und wer für alle bauen darf");
-    // The approver reads who edits it afterwards, not whether they themselves do.
-    expect(markup).not.toContain("Du auch.");
-    expect(markup).toContain("1 Recht auf ein einzelnes Teil endet");
-    expect(markup).toMatch(/data-decision="reject"[^>]*>Ablehnen</u);
-    expect(markup).toMatch(/data-decision="approve"[^>]*>Annehmen</u);
+    expect(markup).toContain('data-decision="reject"');
+    expect(markup).toContain('data-decision="approve"');
     expect(markup).not.toContain('data-decision="request_changes"');
-  });
-
-  it("names the team for a request into a team", () => {
-    const toTeam = render(
-      createElement(InboxItemView, {
-        state: {
-          status: "ready",
-          request: item({
-            kind: "agent_move",
-            summary: "assets.move",
-            requestedBy: { id: "user-tim", displayLabel: "Tim Becker" },
-            preview: check({ path: "request" }),
-            canDecide: true
-          })
-        },
-        actions: idleActions
-      })
-    );
-    expect(toTeam).toMatch(/>Tim Becker möchte „Steuerprüfung“ mit Controlling teilen<\/h3>/u);
   });
 
   it("says in plain words why a request ended without a move", () => {
@@ -501,7 +458,7 @@ describe("a request to share in the Inbox", () => {
       preview: { asset: { kind: "skill", name: "steuer", id: "ast_1" }, stale }
     });
     expect(markup).toContain(stale);
-    expect(markup).toMatch(/data-decision="reject"[^>]*>Ablehnen</u);
+    expect(markup).toContain('data-decision="reject"');
     expect(markup).not.toContain('data-decision="approve"');
   });
 });

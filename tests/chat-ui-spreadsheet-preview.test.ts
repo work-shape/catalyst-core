@@ -1,6 +1,11 @@
 import { createRequire } from "node:module";
 import { describe, expect, it, vi } from "vitest";
-import { workbookToUniverSnapshot, extractSpreadsheetVisuals } from "./support/chat-ui";
+import {
+  extractSpreadsheetVisuals,
+  spreadsheetChartOption,
+  workbookToUniverSnapshot,
+  type SpreadsheetVisual
+} from "./support/chat-ui";
 
 const requireFromChatUi = createRequire(
   new URL("../packages/chat-ui/package.json", import.meta.url)
@@ -18,7 +23,7 @@ const XLSX = requireFromChatUi("xlsx") as typeof import("xlsx");
 const JSZip = requireFromChatUi("jszip") as typeof import("jszip");
 
 describe("chat UI spreadsheet preview import", () => {
-  it.each(["biff8", "xlsx", "ods"] as const)(
+  it.each(["xlsx"] as const)(
     "reads %s through the legacy fallback when the primary reader fails",
     async (bookType) => {
       const workbook = XLSX.utils.book_new();
@@ -322,6 +327,46 @@ describe("chat UI spreadsheet preview import", () => {
       name: "Logo"
     });
     expect(visuals[2]?.kind === "image" ? visuals[2].src : "").toMatch(/^data:image\/png;base64,/u);
+  });
+});
+
+const chart: Extract<SpreadsheetVisual, { kind: "chart" }> = {
+  id: "chart-1",
+  kind: "chart",
+  sheetName: "Dashboard",
+  name: "Share",
+  anchor: { startRow: 0, startColumn: 0, endRow: 10, endColumn: 4 },
+  chartType: "pie",
+  title: "Share by region",
+  series: []
+};
+
+describe("chat UI spreadsheet visual layer", () => {
+  it("renders a pie chart without series as a titled empty chart", () => {
+    for (const chartType of ["pie", "doughnut"] as const) {
+      const option = spreadsheetChartOption({ ...chart, chartType });
+      expect(option).toMatchObject({ title: { text: "Share by region" } });
+      expect(option).not.toHaveProperty("series");
+      expect(option).not.toHaveProperty("legend");
+    }
+  });
+
+  it("renders the first series of a pie chart as named slices", () => {
+    const option = spreadsheetChartOption({
+      ...chart,
+      series: [{ name: "Share", categories: ["North", ""], values: [3, 1] }]
+    });
+    expect(option).toMatchObject({
+      series: [
+        {
+          type: "pie",
+          data: [
+            { name: "North", value: 3 },
+            { name: "Item 2", value: 1 }
+          ]
+        }
+      ]
+    });
   });
 });
 

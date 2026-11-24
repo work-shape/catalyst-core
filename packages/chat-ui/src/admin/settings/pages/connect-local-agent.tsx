@@ -34,7 +34,7 @@ export function localAgentCommand(tool: LocalAgentTool, version: string, url: st
 }
 
 /** The command as the page has it: read, unread, unreadable, or not offered by the instance. */
-export type LocalAgentCommandState =
+type LocalAgentCommandState =
   | { status: "loading" }
   | { status: "failed" }
   | { status: "unavailable" }
@@ -68,7 +68,7 @@ export function ConnectLocalAgentPage() {
   return <ConnectLocalAgentView tool={tool} onToolChange={setTool} state={state} />;
 }
 
-export function ConnectLocalAgentView({
+function ConnectLocalAgentView({
   tool,
   onToolChange,
   state

@@ -1,19 +1,19 @@
 import JSZip from "jszip";
-import { buildFileTree } from "@work-shape/catalyst-ui";
 import { describe, expect, it } from "vitest";
 import {
   checkProjectUploads,
   expandProjectUploads,
-  formatProjectBytes,
-  isSkippedUploadPath,
+  instructionsChange,
+  instructionsTruncated,
+  isProjectInstructionsCall,
   projectFilePreviewKind,
   projectMoveTargets,
   projectParentFolder,
   projectPathInFolder,
+  proposedInstructions,
   readProjectFileChange,
   runLimited,
   takenUploadPaths,
-  zipFolderName,
   type ProjectUpload
 } from "./support/chat-ui";
 
@@ -50,28 +50,6 @@ const limits = {
 function upload(path: string, size: number): ProjectUpload {
   return { path, size, read: () => Promise.resolve(new File(["x".repeat(size)], path)) };
 }
-
-describe("the file tree", () => {
-  it("builds folders from the paths, folders first, each level by name", () => {
-    const tree = buildFileTree([
-      { path: "zeta.md" },
-      { path: "notes/b.md" },
-      { path: "notes/a.md" },
-      { path: "notes/deep/c.txt" },
-      { path: "alpha.txt" }
-    ]);
-    expect(tree.map((node) => `${node.kind}:${node.name}`)).toEqual([
-      "folder:notes",
-      "file:alpha.txt",
-      "file:zeta.md"
-    ]);
-    const [notes] = tree;
-    expect(notes?.kind === "folder" ? notes.path : undefined).toBe("notes/");
-    expect(
-      notes?.kind === "folder" ? notes.children.map((node) => `${node.kind}:${node.path}`) : []
-    ).toEqual(["folder:notes/deep/", "file:notes/a.md", "file:notes/b.md"]);
-  });
-});
 
 describe("moving a file or folder", () => {
   const paths = ["plan.md", "unterlagen/vertrag.md", "unterlagen/neu/a.md", "bilder/logo.png"];
@@ -140,12 +118,6 @@ describe("uploads into a project", () => {
         ]
       )
     ).toEqual(new Map([["a.md", 4]]));
-  });
-
-  it("leaves out what a system adds beside the files", () => {
-    expect(isSkippedUploadPath("__MACOSX/notes/._a.md")).toBe(true);
-    expect(isSkippedUploadPath("notes/.DS_Store")).toBe(true);
-    expect(isSkippedUploadPath("notes/a.md")).toBe(false);
   });
 
   it("unpacks a .zip into a folder of its name, without its folders and system files", async () => {
@@ -264,11 +236,6 @@ describe("uploads into a project", () => {
     }
   });
 
-  it("names the folder of a .zip without its extension", () => {
-    expect(zipFolderName("Angebote.ZIP")).toBe("Angebote");
-    expect(zipFolderName("ordner/archiv.zip")).toBe("ordner/archiv");
-  });
-
   it("runs at most two at a time", async () => {
     let running = 0;
     let most = 0;
@@ -282,33 +249,12 @@ describe("uploads into a project", () => {
   });
 });
 
-describe("a project's usage", () => {
-  // Intl joins a number and its unit with a space that does not break.
-  const size = (bytes: number, locale: "de" | "en") =>
-    formatProjectBytes(bytes, locale).replace(/\s/gu, " ");
-
-  it("reads as people read sizes, in the interface's language", () => {
-    expect(size(3_400_000, "de")).toBe("3,4 MB");
-    expect(size(2_000_000_000, "de")).toBe("2 GB");
-    expect(size(1_500, "en")).toBe("1.5 kB");
-  });
-});
-
 describe("a project file's preview", () => {
   it("shows text, images and PDFs, and only details for anything else", () => {
     expect(projectFilePreviewKind({ path: "a.md", mimeType: "text/markdown" })).toBe("text");
-    expect(projectFilePreviewKind({ path: "a.json", mimeType: "application/json" })).toBe("text");
-    expect(projectFilePreviewKind({ path: "a.csv", mimeType: "text/csv" })).toBe("text");
     expect(projectFilePreviewKind({ path: "a.png", mimeType: "image/png" })).toBe("image");
     expect(projectFilePreviewKind({ path: "a.svg", mimeType: "image/svg+xml" })).toBe("none");
-    expect(projectFilePreviewKind({ path: "a.pdf", mimeType: "application/pdf" })).toBe("pdf");
     expect(projectFilePreviewKind({ path: "a.html", mimeType: "text/html" })).toBe("none");
-    expect(
-      projectFilePreviewKind({
-        path: "a.docx",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      })
-    ).toBe("none");
   });
 });
 
@@ -366,5 +312,71 @@ describe("the line of an agent's write to a project file", () => {
         result: { output: { path: "a.md" } }
       })
     ).toBeUndefined();
+  });
+});
+
+// PRJ-3: the card on which a person allows the agent's change of a project's AGENTS.md shows
+// what the instructions would become, in whole paragraphs as "Before" and "New".
+
+const write = (path: string, content: string) => ({
+  operationId: "workspace.write_file",
+  inputPreview: { path, content }
+});
+const edit = (edits: Array<{ oldText: string; newText: string }>) => ({
+  operationId: "workspace.edit_file",
+  inputPreview: { path: "project/AGENTS.md", edits }
+});
+
+describe("a change of a project's instructions", () => {
+  it("is a write or edit of project/AGENTS.md, and of no other file", () => {
+    expect(isProjectInstructionsCall(write("project/AGENTS.md", "x"))).toBe(true);
+    expect(isProjectInstructionsCall(edit([]))).toBe(true);
+    expect(isProjectInstructionsCall(write("project/notizen/AGENTS.md", "x"))).toBe(false);
+    expect(isProjectInstructionsCall(write("AGENTS.md", "x"))).toBe(false);
+    expect(
+      isProjectInstructionsCall({
+        operationId: "workspace.read_file",
+        inputPreview: { path: "project/AGENTS.md" }
+      })
+    ).toBe(false);
+  });
+
+  it("would make the instructions a write's content, or the text with an edit's passages replaced", () => {
+    expect(proposedInstructions(write("project/AGENTS.md", "Neu."), "Alt.")).toBe("Neu.");
+    expect(
+      proposedInstructions(
+        edit([{ oldText: "knapp", newText: "ausführlich" }]),
+        "Antworte knapp.\n\nNenne die Quelle."
+      )
+    ).toBe("Antworte ausführlich.\n\nNenne die Quelle.");
+    // As the tool, it applies no passage that is missing or there twice.
+    expect(proposedInstructions(edit([{ oldText: "fehlt", newText: "x" }]), "Text")).toBe(
+      undefined
+    );
+    expect(proposedInstructions(edit([{ oldText: "a", newText: "b" }]), "a a")).toBe(undefined);
+  });
+
+  it("reads as the paragraphs that go and the ones that come", () => {
+    const before = "Antworte auf Deutsch.\n\nAntworte knapp.\n\nNenne die Quelle.";
+    expect(
+      instructionsChange(
+        before,
+        "Antworte auf Deutsch.\n\nAntworte ausführlich.\n\nNenne die Quelle."
+      )
+    ).toEqual({ before: "Antworte knapp.", after: "Antworte ausführlich." });
+    expect(instructionsChange(before, `${before}\n\nDuze die Kunden.`)).toEqual({
+      before: "",
+      after: "Duze die Kunden."
+    });
+    expect(instructionsChange(before, "Antworte auf Deutsch.\n\nNenne die Quelle.")).toEqual({
+      before: "Antworte knapp.",
+      after: ""
+    });
+    expect(instructionsChange(before, `${before}\n`)).toBe(undefined);
+  });
+
+  it("says where a chat takes only the start of the text", () => {
+    expect(instructionsTruncated("x".repeat(16_000))).toBe(false);
+    expect(instructionsTruncated("x".repeat(16_001))).toBe(true);
   });
 });

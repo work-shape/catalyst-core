@@ -136,7 +136,7 @@ describe("a conversation with personal data starts runs only on allowed models",
     return { t, started, conversation, start, runs, blocked };
   }
 
-  it("refuses the us model a later turn names, and the agent whose own model is on us", async () => {
+  it("refuses the us model a later turn names, and the agent whose own model is on us, only with the mark", async () => {
     const { started, conversation, start, runs, blocked } = await setup(true);
     // The picker learns which model a conversation with personal data cannot use.
     expect(await blocked()).toEqual({ plain: false, other: true });
@@ -153,6 +153,8 @@ describe("a conversation with personal data starts runs only on allowed models",
     // The same conversation goes on with an allowed model.
     expect((await start(marked, "chooser")).outcome).toBe("200");
     expect(started).toEqual([undefined]);
+    // A conversation without the mark is left as before.
+    expect((await start(await conversation(false), "chooser", "other")).outcome).toBe("200");
   });
 
   it("refuses a follow-up queued behind a running turn on a blocked model", async () => {
@@ -164,11 +166,6 @@ describe("a conversation with personal data starts runs only on allowed models",
     );
     expect((await start(marked, "chooser", "plain", "queue")).outcome).toBe("200");
     expect(started).toEqual(["plain"]);
-  });
-
-  it("leaves a conversation without the mark as before", async () => {
-    const { conversation, start } = await setup(true);
-    expect((await start(await conversation(false), "chooser", "other")).outcome).toBe("200");
   });
 
   it("leaves an instance without Connections as before", async () => {

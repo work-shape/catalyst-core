@@ -153,50 +153,39 @@ function knowledgeBase(config: Record<string, unknown>): BuildAsset {
   };
 }
 
-describe("the skill chooser of an agent", () => {
-  it("offers the skill after the first page of each owner, read by its cursor", async () => {
-    const instance = heldAssets("skill");
-    const container = await mountBuildPage(agent(), "agents", instance.answer, AGENT_FIELDS);
-    await chooseFromBothPages(container, t("configSkills"), "skill");
-    expect(instance.lists).toEqual(
-      expect.arrayContaining([
-        { owner: "own", cursor: String(PAGE) },
-        { owner: "instance", cursor: String(PAGE) }
-      ])
-    );
-  });
-});
-
-describe("the Knowledge Base chooser of an agent", () => {
-  it("offers the Knowledge Base after the first page of each owner, read by its cursor", async () => {
-    const instance = heldAssets("knowledge_base");
-    const container = await mountBuildPage(agent(), "agents", instance.answer, AGENT_FIELDS);
-    await chooseFromBothPages(container, t("knowledge.agentSection"), "knowledge_base");
-    expect(instance.lists).toEqual(
-      expect.arrayContaining([
-        { owner: "own", cursor: String(PAGE) },
-        { owner: "instance", cursor: String(PAGE) }
-      ])
-    );
-  });
-});
-
-describe("the Data Store chooser of a Knowledge Base", () => {
-  it("offers the Data Store after the first page of each owner, read by its cursor", async () => {
-    const instance = heldAssets("data_store");
-    const container = await mountBuildPage(
-      knowledgeBase({ methods: ["structured"], backend: { dataStore: "" }, tables: [] }),
+describe("the choosers of Build", () => {
+  it.each([
+    ["skill", "skill", () => agent(), "agents", t("configSkills"), AGENT_FIELDS],
+    [
+      "Knowledge Base",
+      "knowledge_base",
+      () => agent(),
+      "agents",
+      t("knowledge.agentSection"),
+      AGENT_FIELDS
+    ],
+    [
+      "Data Store",
+      "data_store",
+      () => knowledgeBase({ methods: ["structured"], backend: { dataStore: "" }, tables: [] }),
       "knowledge-bases",
-      instance.answer
-    );
-    await chooseFromBothPages(container, t("knowledge.dataStore"), "data_store");
-    expect(instance.lists).toEqual(
-      expect.arrayContaining([
-        { owner: "own", cursor: String(PAGE) },
-        { owner: "instance", cursor: String(PAGE) }
-      ])
-    );
-  });
+      t("knowledge.dataStore"),
+      undefined
+    ]
+  ] as const)(
+    "offer the %s after the first page of each owner, read by its cursor",
+    async (_, kind, asset, area, label, fields) => {
+      const instance = heldAssets(kind);
+      const container = await mountBuildPage(asset(), area, instance.answer, fields);
+      await chooseFromBothPages(container, label, kind);
+      expect(instance.lists).toEqual(
+        expect.arrayContaining([
+          { owner: "own", cursor: String(PAGE) },
+          { owner: "instance", cursor: String(PAGE) }
+        ])
+      );
+    }
+  );
 });
 
 describe("the files the Add dialog of a Knowledge Base offers", () => {

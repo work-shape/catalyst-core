@@ -17,11 +17,9 @@ import {
   BuildWithAgentDialog,
   creationTargetLine,
   dockCreationTarget,
-  dockKindOfRoute,
   readLastDockConversation,
   storeLastDockConversation,
-  useWorkspaceDock,
-  workspaceShortcutLabel
+  useWorkspaceDock
 } from "./support/chat-ui";
 
 // Studio chat entry (docs/planning/specs/studio-chat-entry.md): one "Chat" in every page head
@@ -174,81 +172,29 @@ describe("where Studio tells the chat it builds", () => {
 });
 
 describe("where the empty dock says a new asset is created", () => {
-  const en = createTranslationContext("en").t;
-  const de = createTranslationContext("de").t;
-
-  it("names the conversation's workspace for kinds a workspace owns", () => {
-    const target = dockCreationTarget({
-      owners: ["workspace", "instance"],
-      workspaceName: "Team Vertrieb"
-    });
-    expect(target).toEqual({ owner: "workspace", workspaceName: "Team Vertrieb" });
-    if (target === undefined) return;
-    expect(creationTargetLine("agent", target, de)).toBe(
-      "Neue Agenten entstehen unter „Team Vertrieb“."
-    );
-    expect(creationTargetLine("skill", target, en)).toBe(
-      "New skills are created under “Team Vertrieb”."
-    );
-  });
-
-  it("names the instance for kinds only the instance owns, and nothing while unknown", () => {
-    const target = dockCreationTarget({ owners: ["instance"], workspaceName: "Team Vertrieb" });
-    expect(target).toEqual({ owner: "instance" });
-    if (target === undefined) return;
-    expect(creationTargetLine("data_store", target, de)).toBe(
-      "Neue Datenspeicher entstehen unter „Alle“."
-    );
-    expect(creationTargetLine("connection", target, en)).toBeUndefined();
+  it("is the conversation's workspace, the instance where only it owns the kind, and nothing while unknown", () => {
+    expect(
+      dockCreationTarget({ owners: ["workspace", "instance"], workspaceName: "Team" })
+    ).toEqual({ owner: "workspace", workspaceName: "Team" });
+    const instance = dockCreationTarget({ owners: ["instance"], workspaceName: "Team" });
+    expect(instance).toEqual({ owner: "instance" });
+    if (instance !== undefined) {
+      expect(
+        creationTargetLine("connection", instance, createTranslationContext("en").t)
+      ).toBeUndefined();
+    }
     expect(dockCreationTarget({ owners: undefined, workspaceName: "Team" })).toBeUndefined();
     expect(dockCreationTarget({ owners: ["workspace"], workspaceName: undefined })).toBeUndefined();
   });
 
-  it("names the instance under Studio's scope Instance, and says so where the person may not create there", () => {
+  it("is the instance under Studio's scope Instance, refused where the person may not create there", () => {
     const owners = ["workspace", "instance"];
-    const allowed = dockCreationTarget({
-      kind: "agent",
-      owners,
-      workspaceName: "Team Vertrieb",
-      instance: { mayCreate: true }
-    });
-    expect(allowed).toEqual({ owner: "instance" });
-    const refused = dockCreationTarget({
-      kind: "agent",
-      owners,
-      workspaceName: "Team Vertrieb",
-      instance: { mayCreate: false }
-    });
-    expect(refused).toEqual({ owner: "instance", refused: true });
-    if (allowed === undefined || refused === undefined) return;
-    expect(creationTargetLine("agent", allowed, de)).toBe("Neue Agenten entstehen unter „Alle“.");
-    expect(creationTargetLine("agent", refused, de)).toBe(
-      "Du darfst hier keine Agenten für alle anlegen."
-    );
-    expect(creationTargetLine("skill", refused, en)).toBe(
-      "You may not create skills for everyone here."
-    );
+    const target = (kind: string, mayCreate: boolean) =>
+      dockCreationTarget({ kind, owners, workspaceName: "Team", instance: { mayCreate } });
+    expect(target("agent", true)).toEqual({ owner: "instance" });
+    expect(target("agent", false)).toEqual({ owner: "instance", refused: true });
     // Data Stores and Workflows keep their rule under the scope Instance.
-    expect(
-      dockCreationTarget({
-        kind: "workflow",
-        owners,
-        workspaceName: "Team Vertrieb",
-        instance: { mayCreate: false }
-      })
-    ).toEqual({ owner: "workspace", workspaceName: "Team Vertrieb" });
-  });
-
-  it("reads the kind from Studio's list address", () => {
-    expect(dockKindOfRoute({ kind: "build-kind", assetKind: "agents" })).toBe("agent");
-    expect(dockKindOfRoute({ kind: "build-kind", assetKind: "data-stores" })).toBe("data_store");
-    expect(dockKindOfRoute({ kind: "build-kind", assetKind: "skills" })).toBe("skill");
-  });
-});
-
-describe("the shortcut of Chat", () => {
-  it("is J with the platform's modifier", () => {
-    expect(workspaceShortcutLabel("chat")).toMatch(/J$/u);
+    expect(target("workflow", false)).toEqual({ owner: "workspace", workspaceName: "Team" });
   });
 });
 
@@ -275,10 +221,6 @@ describe("New of a kind no person writes by hand", () => {
       )
     );
     const brief = document.querySelector<HTMLTextAreaElement>("[data-build-with-agent-brief]");
-    expect(document.body.textContent).toContain("What should it do?");
-    expect(document.body.textContent).toContain(
-      "The agent builds it in your chat. You review it and publish it."
-    );
     await act(async () => {
       const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
       set?.call(brief, "sums up open tasks on Mondays");

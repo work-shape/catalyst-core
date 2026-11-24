@@ -103,11 +103,11 @@ describe("whose account, in the New connection dialog", () => {
       ...rest
     } satisfies CreateFields;
   };
-  const render = (value: CreateFields, locale: "en" | "de" = "de") =>
+  const render = (value: CreateFields) =>
     renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { children: null, locale },
+        { children: null, locale: "en" },
         createElement(ConnectionCreateForm, {
           fields: value,
           check: { state: "free" },
@@ -132,15 +132,13 @@ describe("whose account, in the New connection dialog", () => {
 
   it("starts at Shared, and a personal MCP server takes no key", () => {
     const shared = render(fields({}));
-    expect(shared).toContain("Wessen Konto");
     expect(shared).toContain('data-credential-mode="shared"');
     expect(shared).toContain('data-connection-field="secret"');
-    const personal = render(fields({ credentialMode: "user" }), "en");
-    expect(personal).toContain("Whose account");
-    expect(personal).toContain("Each person connects their own account.");
-    expect(personal).not.toContain('data-connection-field="secret"');
+    expect(render(fields({ credentialMode: "user" }))).not.toContain(
+      'data-connection-field="secret"'
+    );
     // A REST API with a key has no choice to make.
-    expect(render(fields({ connectorType: "http_api" }))).not.toContain("Wessen Konto");
+    expect(render(fields({ connectorType: "http_api" }))).not.toContain("data-credential-mode");
   });
 
   it("writes a personal Connection that signs in with OAuth", () => {

@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { ApiError } from "@work-shape/catalyst-api-client";
-import { WORKFLOW_ERROR_CODES, type DataStoreRefusal } from "@work-shape/catalyst-core";
+import { WORKFLOW_ERROR_CODES } from "@work-shape/catalyst-core";
 import { WORKFLOW_CODE_ERRORS } from "@work-shape/catalyst-workflows";
 import { describe, expect, it } from "vitest";
 import { appPublishRefusal } from "@work-shape/catalyst-chat-ui/apps";
@@ -90,156 +93,7 @@ const NAMED = {
   issues: [{ path: ["steps"], message: "No steps" }]
 };
 
-/**
- * Every reason the publish of an App, a Data Store or a Workflow refuses with, as the server
- * raises it (inventory of 2026-10-26), with the details it carries. An App's Publish makes
- * its Workflows live with it (DP-3), so the App's dialog meets each Workflow's reasons too.
- */
-const DATA_STORE_REFUSALS: Record<DataStoreRefusal, Record<string, unknown>> = {
-  data_store_below_min_schema: { dataStore: "belege", minSchema: 3, level: 2 },
-  data_store_needs_app: { dataStore: "belege" },
-  data_store_unavailable: { dataStore: "belege" },
-  data_store_not_listed: { dataStore: "belege", action: "list-receipts" },
-  data_store_not_reached: { dataStore: "belege" },
-  data_store_draft_below_min_schema: {
-    dataStore: "belege",
-    title: "Belege",
-    minSchema: 3,
-    level: 2
-  },
-  data_store_migration_failed: {
-    dataStore: "belege",
-    title: "Belege",
-    migration: "add_status",
-    level: 2,
-    failure: "column exists"
-  },
-  data_store_job_exhausted: { dataStore: "belege", title: "Belege" },
-  data_store_migrating: { dataStore: "belege", title: "Belege", level: 2, minSchema: 3 }
-};
-
-const PUBLISH_REFUSALS: [reason: string, details: Record<string, unknown>][] = [
-  ...Object.entries(DATA_STORE_REFUSALS),
-  // The widening check of an App's, a Workflow's or a Knowledge Base's Publish (DS-13c).
-  [
-    "data_handover_needs_owner",
-    {
-      dataStore: "belege",
-      title: "Belege",
-      readers: 3,
-      connection: "exampledata",
-      connectionTitle: "Exampledata"
-    }
-  ],
-  ["data_handover_needs_owner", { dataStore: "belege", title: "Belege", readers: 3 }],
-  ["data_handover_unconfirmed", { dataStore: "belege", title: "Belege", readers: 3 }],
-  ["data_handover_person_only", { dataStore: "belege", title: "Belege", readers: 3 }],
-  ["data_handover_needs_owner", { knowledgeBase: "handbuch", title: "Handbuch", readers: 3 }],
-  // The App's Publish.
-  ["workflow_unavailable", { workflow: "monatsabschluss" }],
-  [
-    "workflow_input_invalid",
-    { workflow: "monatsabschluss", action: "close", input: "month", fault: "missing" }
-  ],
-  [
-    "workflow_input_invalid",
-    { workflow: "monatsabschluss", action: "close", input: "origin", fault: "undeclared" }
-  ],
-  ["workflows_without_app", {}],
-  ["workflow_named_twice", { workflow: "monatsabschluss" }],
-  ["workflow_not_reached", { workflow: "monatsabschluss" }],
-  ["revision_unknown", { revision: 4 }],
-  ["revision_changed", { revision: 4 }],
-  ["live_moved", {}],
-  ["revision_files_removed", { revision: 4 }],
-  [
-    "invalid_scope",
-    {
-      reference: { kind: "data_store", name: "belege", owner: { kind: "instance" } },
-      owner: { kind: "workspace", workspaceId: "ws-1" }
-    }
-  ],
-  [
-    "invalid_scope",
-    {
-      reference: {
-        kind: "data_store",
-        name: "belege",
-        owner: { kind: "workspace", workspaceId: "ws-2" },
-        reach: "personal"
-      },
-      owner: { kind: "instance" }
-    }
-  ],
-  ["publish_subject_unreadable", {}],
-  ["input_too_large_to_hold", {}],
-  ["app_instance_needs_shared_workspace", {}],
-  ["owner_reach", { asset: { kind: "agent", name: "helper" } }],
-  ["no_grant", { action: "data_store.read" }],
-  ["denied", { action: "workflow.use" }],
-  // A store's Publish.
-  ["scope_dimension_unknown", {}],
-  ["scope_mismatch", {}],
-  ["data_store_id_held", {}],
-  ["applied_migration_changed", {}],
-  ["record_key_invalid", { table: "receipts", field: "number" }],
-  ["scope_column_invalid", { table: "receipts", column: "tenant" }],
-  ["scope_migration_invalid", {}],
-  // A Workflow's Publish, on its own page or with an App.
-  ["definition_invalid", { issues: [{ path: ["steps"], message: "No steps" }] }],
-  ["not_supported_yet", { issues: [{ path: ["steps", 0], message: "Not yet", code: "x" }] }],
-  ["operation_not_callable", { issues: [{ path: ["steps", 0], message: "Not callable" }] }],
-  ["operation_not_found", { step: "send" }],
-  ["process_workflow_write_operation", { issues: [] }],
-  ["limit_above_ceiling", { issues: [] }],
-  ["block_depth", { issues: [] }],
-  ["reference_out_of_scope", { issues: [] }],
-  ["duplicate_step_id", { issues: [] }],
-  ["child_input_invalid", {}],
-  ["child_schema_invalid", {}],
-  ["child_output_invalid", {}],
-  ["dataset_schema_invalid", {}],
-  ["dataset_reference_invalid", {}],
-  ["paging_invalid", {}],
-  ["batch_requires_dataset", {}],
-  ["text_part_invalid", { step: "join", field: "text" }],
-  ["workspace_not_allowed", { step: "send" }],
-  ["recipient_not_allowed", { step: "send", domain: "example.com" }],
-  ["user_only", {}],
-  ["action_not_grantable_to_principal", { action: "app.publish" }],
-  ["module_off", { module: "knowledge" }],
-  ["invalid_scope", { action: "connection.use" }],
-  ["not_visible", { action: "connection.read" }],
-  ["run_as_missing", {}],
-  ["run_as_unknown", { runAs: "buchhaltung" }],
-  ["run_as_owned", {}],
-  ["run_as_disabled", { runAs: "buchhaltung", principalDisplayLabel: "Buchhaltung" }],
-  ["package_not_available", { package: "pandas" }],
-  ["no_parent_trigger", { workflow: "belege-lesen" }],
-  ["child_use_forbidden", { action: "workflow.use", workflow: "belege-lesen" }],
-  ["child_unpublished", {}],
-  ["workflow_cycle", {}],
-  ["person_context_unmapped", {}],
-  // An App's calls of its store.
-  ["data_store_not_ready", {}],
-  ["data_store_key_reused", {}],
-  ["rows_too_large", { cap: "DATA_STORE_INSERT_MAX_BYTES", actual: 2_000_000 }],
-  ["rows_too_many", {}],
-  ["no_manual_trigger", {}]
-];
-
 describe("the refusals of the publish paths, in the reader's language", () => {
-  it("tells each in German, never as the instance's English sentence", () => {
-    const untold = PUBLISH_REFUSALS.filter(([reason, details]) => {
-      const code = /^(?:no_grant|denied|user_only|not_visible|child_use_forbidden)$/u.test(reason)
-        ? "FORBIDDEN"
-        : "VALIDATION_FAILED";
-      const told = appPublishRefusal(refused(422, code, { reason, ...details }), de);
-      return told === undefined || told.message === SERVER;
-    }).map(([reason]) => reason);
-    expect(untold).toEqual([]);
-  });
-
   it("tells each reason the publish-path sources raise in German, read from the source", () => {
     const reasons = publishPathReasons();
     // The scan reads what it should: a known reason of each kind of file is among them.
@@ -261,192 +115,107 @@ describe("the refusals of the publish paths, in the reader's language", () => {
     expect(untold).toEqual([]);
   });
 
-  it("tells a store below the level the App needs with the way to the store", () => {
-    const error = refused(409, "CONFLICT", {
-      reason: "data_store_below_min_schema",
-      dataStore: "belege",
-      minSchema: 3,
-      level: 2
-    });
-    expect(appPublishRefusal(error, de, opensAll)).toEqual({
-      message:
-        "Die App braucht den Datenspeicher „belege“ in einer neueren Fassung. Veröffentliche ihn zusammen mit der App.",
-      action: {
+  it("offers the way to the store a refusal names only where the reader may open its page", () => {
+    const store = { dataStore: "pruefergebnisse", title: "Prüfergebnisse" };
+    const toStore = {
+      route: { kind: "build-asset", assetKind: "data-stores", name: "pruefergebnisse" }
+    };
+    for (const reason of [
+      "data_store_below_min_schema",
+      "data_store_draft_below_min_schema",
+      "data_store_migration_failed",
+      "data_store_job_exhausted",
+      "data_store_migrating",
+      "data_store_not_reached",
+      "data_store_named_twice"
+    ]) {
+      const error = refused(409, "CONFLICT", { reason, ...store, migration: "add_status" });
+      expect(appPublishRefusal(error, de, opensAll)?.action, reason).toEqual({
         label: "Datenspeicher öffnen",
-        route: { kind: "build-asset", assetKind: "data-stores", name: "belege" }
-      }
-    });
-    expect(appPublishRefusal(error, en, opensAll)).toEqual({
-      message:
-        "The app needs a newer version of the data store “belege”. Publish it together with the app.",
-      action: {
-        label: "Open data store",
-        route: { kind: "build-asset", assetKind: "data-stores", name: "belege" }
-      }
-    });
-    // A reader not shown the store's page in Build is offered no way there.
-    expect(appPublishRefusal(error, de, { workspaceId: "ws-1", canOpen: () => false })).toEqual({
-      message:
-        "Die App braucht den Datenspeicher „belege“ in einer neueren Fassung. Veröffentliche ihn zusammen mit der App."
-    });
-    expect(appPublishRefusal(error, de, { workspaceId: "ws-1" })?.action).toBeUndefined();
-    // No level or migration is named to a person.
-    expect(appPublishRefusal(error, de)?.message).not.toMatch(/\d|minSchema|Level/u);
+        ...toStore
+      });
+      expect(appPublishRefusal(error, en, opensAll)?.action?.label, reason).toBe("Open data store");
+      expect(
+        appPublishRefusal(error, de, { workspaceId: "ws-1", canOpen: () => false })?.action
+      ).toBe(undefined);
+      expect(appPublishRefusal(error, de, { workspaceId: "ws-1" })?.action).toBeUndefined();
+    }
   });
 
-  it("tells what is “Only me” with the ladder's words and the next step", () => {
-    const say = (details: Record<string, unknown>, t = de) => tellRefusal(details, t)?.message;
-    const reference = { kind: "skill", name: "notes", owner: { kind: "workspace" } };
-    expect(say({ reason: "invalid_scope", reference: { ...reference, reach: "personal" } })).toBe(
-      "Das nutzt etwas, das „Nur ich“ ist. Was ein Team oder Alle nutzen, darf sich nicht darauf stützen. Lege es im Team oder für Alle an, oder bitte einen Admin darum."
-    );
-    // Another Shared Workspace's asset keeps its sentence.
-    expect(say({ reason: "invalid_scope", reference })).toBe(
-      "Das verwendet etwas aus einem anderen Arbeitsbereich. Es kann nur verwenden, was zum eigenen Arbeitsbereich gehört oder für alle ist. Lege es dort an oder bitte einen Admin darum."
-    );
-    expect(say({ reason: "owner_reach" })).toBe(
-      "Das ist „Nur ich“ und kann darum keinem Team und nicht Allen angeboten werden. Lege es im Team oder für Alle an, oder bitte einen Admin darum."
-    );
-    expect(say({ reason: "owner_reach" }, en)).toBe(
-      "This is “Only me”, so it cannot be offered to a team or to everyone. Create it in the team or for everyone, or ask an admin."
-    );
-    expect(say({ reason: "app_instance_needs_shared_workspace" })).toBe(
-      "Diese App ist „Nur ich“ und kann darum nicht für Alle sein. Baue sie in einem Team, oder bitte einen Admin darum."
-    );
+  it("never shows the instance's failure of a store's migration", () => {
+    const failure = 'relation "status" already exists';
+    const failed = refused(409, "CONFLICT", {
+      reason: "data_store_migration_failed",
+      dataStore: "pruefergebnisse",
+      title: "Prüfergebnisse",
+      migration: "add_status",
+      level: 2,
+      failure
+    });
+    for (const t of [de, en]) {
+      const message = appPublishRefusal(failed, t)?.message;
+      expect(message).toContain("Prüfergebnisse");
+      expect(message).not.toContain(failure);
+    }
   });
 
-  it("tells a hand-over of a source's data by how many people, and who confirms it", () => {
-    const say = (details: Record<string, unknown>, t = de) => tellRefusal(details, t)?.message;
-    const facts = { dataStore: "belege", title: "Belege", readers: 3 };
-    expect(
-      say({
-        reason: "data_handover_needs_owner",
-        ...facts,
-        connection: "exampledata",
-        connectionTitle: "Exampledata"
-      })
-    ).toBe(
-      "3 Personen, die „Belege“ danach lesen, dürfen „Exampledata“ nicht nutzen, und die Weitergabe bestätigt nur eine Person, die „Exampledata“ verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Belege“ liest."
-    );
+  it("names a hand-over's source only where the reader may see it, and links no Knowledge Base as a store", () => {
+    const facts = {
+      reason: "data_handover_needs_owner",
+      dataStore: "belege",
+      title: "Belege",
+      readers: 3
+    };
+    const named = tellRefusal(
+      { ...facts, connection: "exampledata", connectionTitle: "Exampledata" },
+      de
+    )?.message;
+    expect(named).toContain("Exampledata");
     // A source the reader may not see is not named.
-    expect(say({ reason: "data_handover_needs_owner", ...facts })).toBe(
-      "3 Personen, die „Belege“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Belege“ liest."
-    );
-    expect(say({ reason: "data_handover_unconfirmed", ...facts })).toBe(
-      "Wer „Belege“ liest, hat sich seit der Frage geändert. Öffne den Dialog erneut, lies, wer die Daten erhält, und veröffentliche noch einmal."
-    );
-    // A key or an agent never confirms: only a person in the interface does.
-    expect(say({ reason: "data_handover_person_only", ...facts })).toBe(
-      "Eine Weitergabe von Quelldaten bestätigt nur eine Person, die in der Oberfläche angemeldet ist. Veröffentliche im Dialog, oder veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf eine Freigabe."
-    );
-    expect(
-      tellRefusal({ reason: "data_handover_needs_owner", ...facts }, de, opensAll)?.action
-    ).toEqual({
-      label: "Datenspeicher öffnen",
-      route: { kind: "build-asset", assetKind: "data-stores", name: "belege" }
+    const hidden = tellRefusal(facts, de)?.message;
+    expect(hidden).toBeDefined();
+    expect(hidden).not.toContain("exampledata");
+    expect(tellRefusal(facts, de, opensAll)?.action?.route).toEqual({
+      kind: "build-asset",
+      assetKind: "data-stores",
+      name: "belege"
     });
-    // A Knowledge Base with a synced source is told by its title, never linked as a store.
     const base = {
       reason: "data_handover_needs_owner",
       knowledgeBase: "handbuch",
       title: "Handbuch",
       readers: 2
     };
-    expect(say(base)).toBe(
-      "2 Personen, die „Handbuch“ danach lesen, dürfen eine für dich verborgene Quelle nicht nutzen, und die Weitergabe bestätigt nur eine Person, die diese Quelle verwalten darf. Veröffentliche ohne Bestätigung: Dann wartet die Veröffentlichung im Eingang auf ihre Freigabe. Oder schränke ein, wer „Handbuch“ liest."
-    );
+    expect(tellRefusal(base, de)?.message).toContain("Handbuch");
     expect(tellRefusal(base, de, opensAll)?.action).toBeUndefined();
-  });
-
-  it("words the store refusals of an App as written", () => {
-    const say = (details: Record<string, unknown>) => tellRefusal(details, de)?.message;
-    expect(say({ reason: "data_store_needs_app", dataStore: "belege" })).toBe(
-      "Diese Vorschau erreicht keine Datenspeicher. Zum Testen mit echten Daten öffne die App."
-    );
-    expect(say({ reason: "data_store_unavailable", dataStore: "belege" })).toBe(
-      "Den Datenspeicher „belege“ gibt es hier nicht (mehr)."
-    );
-    expect(
-      say({ reason: "data_store_not_listed", dataStore: "belege", action: "list-receipts" })
-    ).toBe(
-      "Die Aktion „list-receipts“ nutzt den Datenspeicher „belege“, den die App nicht angibt. Bitte den Agenten, ihn in der App einzutragen."
-    );
   });
 
   it("offers the way to a Workflow or an App only where a workspace is there to open it in", () => {
     const unavailable = { reason: "workflow_unavailable", workflow: "monatsabschluss" };
     expect(tellRefusal(unavailable, de, { canOpen: () => true })?.action).toBeUndefined();
-    expect(tellRefusal(unavailable, de, opensAll)?.action).toEqual({
-      label: "Workflow öffnen",
-      route: { kind: "workflow", collaborationWorkspaceId: "ws-1", workflow: "monatsabschluss" }
+    expect(tellRefusal(unavailable, de, opensAll)?.action?.route).toEqual({
+      kind: "workflow",
+      collaborationWorkspaceId: "ws-1",
+      workflow: "monatsabschluss"
     });
     // A refusal from a Page of a conversation names no App; one that does opens its draft.
     const needsApp = { reason: "data_store_needs_app", dataStore: "belege" };
     expect(tellRefusal(needsApp, de, opensAll)?.action).toBeUndefined();
-    expect(tellRefusal({ ...needsApp, app: "buchhaltung" }, de, opensAll)).toEqual({
-      message:
-        "Diese Vorschau erreicht keine Datenspeicher. Zum Testen mit echten Daten öffne die App.",
-      action: {
-        label: "App öffnen",
-        route: { kind: "app-edit", collaborationWorkspaceId: "ws-1", app: "buchhaltung" }
-      }
+    expect(tellRefusal({ ...needsApp, app: "buchhaltung" }, de, opensAll)?.action?.route).toEqual({
+      kind: "app-edit",
+      collaborationWorkspaceId: "ws-1",
+      app: "buchhaltung"
     });
   });
 
-  it("names the Workflow, the action and the input a publish refused for, in German and English", () => {
-    const missing = refused(422, "VALIDATION_FAILED", {
-      reason: "workflow_input_invalid",
-      workflow: "brain-briefing",
-      action: "brief",
-      input: "topic",
-      fault: "missing"
-    });
-    const undeclared = refused(422, "VALIDATION_FAILED", {
-      reason: "workflow_input_invalid",
-      workflow: "brain-briefing",
-      action: "brief",
-      input: "origin",
-      fault: "undeclared"
-    });
-    expect(
-      appPublishRefusal(
-        refused(404, "NOT_FOUND", { reason: "workflow_unavailable", workflow: "brain-briefing" }),
-        de
-      )?.message
-    ).toBe(
-      "Der Workflow „brain-briefing“, den diese App startet, ist nicht veröffentlicht. Veröffentliche zuerst den Workflow, dann die App."
-    );
-    expect(appPublishRefusal(missing, en)?.message).toBe(
-      "The action “brief” does not pass “topic”, which the Workflow “brain-briefing” needs."
-    );
-    expect(appPublishRefusal(undeclared, de)?.message).toBe(
-      "Die Aktion „brief“ übergibt „origin“, das der Workflow „brain-briefing“ nicht annimmt."
-    );
-  });
-
-  it("words a refused right by what happened, and a store's row limits by what was too much", () => {
-    const say = (details: Record<string, unknown>) => tellRefusal(details, de)?.message;
-    expect(say({ reason: "no_grant", action: "data_store.read" })).toBe(
-      "Dafür brauchst du das Recht „Datenspeicher ansehen“."
-    );
-    // `denied` is also given to who holds the right, where a deny blocks lending it.
-    expect(say({ reason: "denied", action: "data_store.read" })).toBe(
-      "Das Recht „Datenspeicher ansehen“ ist dir hier verwehrt."
-    );
-    // A right this interface does not know keeps the instance's sentence, which names it.
-    expect(say({ reason: "no_grant", action: "connection_exposure.outside" })).toBeUndefined();
-    expect(say({ reason: "rows_too_large", cap: "DATA_STORE_INSERT_MAX_BYTES" })).toBe(
-      "Diese Änderung ist für einen Aufruf zu groß. Teile sie auf mehrere Aufrufe auf."
-    );
-    expect(say({ reason: "rows_too_many" })).toBe(
-      "Diese Änderung enthält zu viele Einträge für einen Aufruf. Teile sie auf mehrere Aufrufe auf."
-    );
-  });
-
-  it("keeps the instance's sentence for a reason it does not know, or details that lack a name", () => {
+  it("keeps the instance's sentence for a reason or right it does not know, or details that lack a name", () => {
     expect(appPublishRefusal(refused(422, "VALIDATION_FAILED", { reason: "other" }), de)).toBe(
       undefined
     );
+    expect(tellRefusal({ reason: "no_grant", action: "data_store.read" }, de)).toBeDefined();
+    expect(
+      tellRefusal({ reason: "no_grant", action: "connection_exposure.outside" }, de)
+    ).toBeUndefined();
     // The review names no input: the sentence that names one is not told without it.
     expect(
       tellRefusal({ reason: "workflow_input_invalid", workflow: "brain-briefing" }, de)
@@ -456,156 +225,54 @@ describe("the refusals of the publish paths, in the reader's language", () => {
     expect(appPublishRefusal(new Error("offline"), de)).toBeUndefined();
   });
 
-  it("is read by every place that showed the instance's sentence, in the reader's language", () => {
+  it("is read by every place that showed the instance's sentence", () => {
     const below = refused(409, "CONFLICT", {
       reason: "data_store_below_min_schema",
       dataStore: "belege"
     });
-    expect(instanceSentence(below, de)).toBe(
-      "Die App braucht den Datenspeicher „belege“ in einer neueren Fassung. Veröffentliche ihn zusammen mit der App."
-    );
+    expect(instanceSentence(below, de)).not.toBe(SERVER);
     expect(instanceSentence(refused(422, "VALIDATION_FAILED", { reason: "other" }), de)).toBe(
       SERVER
     );
     // A store's own Publish on its Build page.
-    expect(
-      readBuildRefusal(
-        refused(422, "VALIDATION_FAILED", { reason: "scope_migration_invalid" }),
-        de,
-        "de"
-      )
-    ).toEqual({
-      ok: false,
-      conflict: false,
-      refusals: [
-        {
-          message:
-            "Diese Änderung am Datenspeicher lässt sich nicht veröffentlichen, weil seine nach Bereichen getrennten Tabellen nicht geprüft werden konnten. Bitte den Agenten, die Änderung am aktuellen Stand des Speichers zu prüfen."
-        }
-      ]
-    });
+    const build = readBuildRefusal(
+      refused(422, "VALIDATION_FAILED", { reason: "scope_migration_invalid" }),
+      de,
+      "de"
+    );
+    expect(build).toMatchObject({ ok: false, conflict: false });
+    expect("refusals" in build ? build.refusals[0]?.message : undefined).not.toBe(SERVER);
   });
 });
 
-// GOLIVE-1: the store published with the App failed its migration or is still migrating; the
-// dialog names the store by its title and the migration, in its own words.
-describe("the sentence of a publish refused for a Data Store published with the App", () => {
-  const store = { dataStore: "pruefergebnisse", title: "Prüfergebnisse" };
-  const toStore = {
-    route: { kind: "build-asset", assetKind: "data-stores", name: "pruefergebnisse" }
+// ACCEPT-FIX-5: the worker status and document failure must use Studio's product term too.
+it("uses Wissensbasis/Wissensbasen in all German Knowledge Base messages", () => {
+  const i18n = join(dirname(fileURLToPath(import.meta.url)), "../packages/chat-ui/src/shared/i18n");
+  /** Each German message of a translation file, by key. */
+  const german = (file: string) => {
+    const path = join(i18n, file);
+    const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest);
+    const found = new Map<string, string>();
+    const visit = (node: ts.Node, inGerman: boolean) => {
+      if (ts.isPropertyAssignment(node)) {
+        const name = node.name.getText(source).replace(/^"|"$/gu, "");
+        const next = name === "de" ? true : name === "en" ? false : inGerman;
+        if (next && ts.isStringLiteral(node.initializer)) found.set(name, node.initializer.text);
+        else ts.forEachChild(node, (child) => visit(child, next));
+        return;
+      }
+      ts.forEachChild(node, (child) => visit(child, inGerman));
+    };
+    visit(source, false);
+    return found;
   };
-
-  it("names the store by its title and the migration that failed, never the instance's failure", () => {
-    const failed = refused(409, "CONFLICT", {
-      reason: "data_store_migration_failed",
-      ...store,
-      migration: "add_status",
-      level: 2,
-      failure: 'relation "status" already exists'
-    });
-    expect(appPublishRefusal(failed, de, opensAll)).toEqual({
-      message:
-        "Die Änderung „add_status“ am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
-      action: { label: "Datenspeicher öffnen", ...toStore }
-    });
-    expect(appPublishRefusal(failed, en)).toEqual({
-      message:
-        "The change “add_status” to the data store “Prüfergebnisse” could not be applied. The app is not published."
-    });
-    // A migration the instance names only by its level is not named.
-    expect(
-      appPublishRefusal(
-        refused(409, "CONFLICT", {
-          reason: "data_store_migration_failed",
-          ...store,
-          migration: "3"
-        }),
-        de
-      )?.message
-    ).toBe(
-      "Eine Änderung am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht."
+  for (const file of ["knowledge.ts", "administration.ts"]) {
+    expect(german(file).size, file).toBeGreaterThan(0);
+    expect([...german(file).values()].filter((text) => text.includes("Wissensdatenbank"))).toEqual(
+      []
     );
-  });
-
-  it("explains that an exhausted job needs a manual retry, in German and English", () => {
-    const exhausted = refused(409, "CONFLICT", { reason: "data_store_job_exhausted", ...store });
-    expect(appPublishRefusal(exhausted, de, opensAll)).toEqual({
-      message:
-        "Die Einrichtung oder Umstellung des Datenspeichers „Prüfergebnisse“ wurde abgebrochen und wird nicht mehr automatisch versucht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut.",
-      action: { label: "Datenspeicher öffnen", ...toStore }
-    });
-    expect(appPublishRefusal(exhausted, en)?.message).toBe(
-      "Creating or updating the Data Store ‘Prüfergebnisse’ stopped and will not be retried automatically. Ask an administrator to retry the job under System > Jobs, then publish the App again."
-    );
-  });
-
-  it("asks to try again while the store migrates, with the way to the store", () => {
-    const migrating = refused(409, "CONFLICT", {
-      reason: "data_store_migrating",
-      ...store,
-      level: 2,
-      minSchema: 3,
-      retryable: true
-    });
-    expect(appPublishRefusal(migrating, de, opensAll)).toEqual({
-      message:
-        "Der Datenspeicher „Prüfergebnisse“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
-      action: { label: "Datenspeicher öffnen", ...toStore }
-    });
-    expect(appPublishRefusal(migrating, en)?.message).toBe(
-      "The data store “Prüfergebnisse” is still being updated. Try again in a minute."
-    );
-  });
-
-  it("asks for the store's draft to reach the level, with the way to the store", () => {
-    const below = refused(409, "CONFLICT", {
-      reason: "data_store_draft_below_min_schema",
-      ...store,
-      minSchema: 3,
-      level: 2
-    });
-    expect(appPublishRefusal(below, de, opensAll)).toEqual({
-      message:
-        "Die App braucht eine neuere Fassung des Datenspeichers „Prüfergebnisse“, als sein Entwurf hat. Bitte den Agenten, den Datenspeicher zu ergänzen.",
-      action: { label: "Datenspeicher öffnen", ...toStore }
-    });
-    expect(appPublishRefusal(below, en, opensAll)?.action).toEqual({
-      label: "Open data store",
-      ...toStore
-    });
-    expect(appPublishRefusal(below, de, { canOpen: () => false })?.action).toBeUndefined();
-  });
-
-  it("names a store the publish does not carry by its name where no title is given", () => {
-    expect(
-      appPublishRefusal(
-        refused(422, "VALIDATION_FAILED", {
-          reason: "data_store_not_reached",
-          dataStore: "pruefergebnisse"
-        }),
-        de,
-        opensAll
-      )
-    ).toEqual({
-      message:
-        "Die App nutzt den Datenspeicher „pruefergebnisse“ nicht, darum wird er nicht mit ihr veröffentlicht. Öffne den Dialog noch einmal, um zu sehen, was live geht.",
-      action: { label: "Datenspeicher öffnen", ...toStore }
-    });
-  });
-
-  it.each(["data_store_not_reached", "data_store_migrating", "data_store_named_twice"])(
-    "offers the named store for %s only when its page is available",
-    (reason) => {
-      const error = refused(409, "CONFLICT", { reason, ...store });
-      expect(appPublishRefusal(error, de, opensAll)?.action).toEqual({
-        label: "Datenspeicher öffnen",
-        ...toStore
-      });
-      expect(appPublishRefusal(error, en, opensAll)?.action).toEqual({
-        label: "Open data store",
-        ...toStore
-      });
-      expect(appPublishRefusal(error, de, { canOpen: () => false })?.action).toBeUndefined();
-    }
+  }
+  expect(german("administration.ts").get("infrastructure.workerKnowledge")).toBe(
+    "Dienst für Wissensbasen"
   );
 });

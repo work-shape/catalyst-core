@@ -24,6 +24,7 @@ import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspa
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { appsContext as contextWith } from "./chat-ui-build-fixtures";
 import { CONDITION_WAIT_MS } from "./support/assertions";
+import { workspaceQueryKeys } from "./support/chat-ui";
 
 // UI-FIX-1: what the Apps area offers follows the rights the instance names. An App belongs to
 // a workspace, so Build, New and Save as app follow what the reader holds in the open
@@ -55,8 +56,8 @@ function appRow(allowed?: readonly AppVerb[]) {
 }
 
 /** The record of the App as `assets.get` answers it, with what the reader may do to it. */
-function appRecord(allowed: readonly AppVerb[]) {
-  return {
+function appRecord(allowed: readonly AppVerb[], unpublished = false) {
+  const record = {
     id: "asset_1",
     kind: "app",
     name: "fees",
@@ -68,7 +69,23 @@ function appRecord(allowed: readonly AppVerb[]) {
     allowed: [...allowed],
     updatedAt: "2026-10-17T09:00:00.000Z"
   };
+  if (!unpublished) return record;
+  const { publishedRevision: _published, ...draftOnly } = record;
+  return draftOnly;
 }
+
+const API = "https://chat.example.com";
+/** What the instance answers `data_stores.app_sources` for a published App. */
+const SOURCES = {
+  stores: [
+    {
+      name: "kunden",
+      title: "Kunden",
+      fillers: [{ kind: "workflow", name: "import", title: "Nachtimport", connections: ["CRM"] }]
+    }
+  ],
+  truncated: false
+};
 
 const unmounts: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -91,6 +108,12 @@ interface Instance {
   previewIn?: string;
   editWithAgent?: AppsHost["editWithAgent"];
   showRoute?: AppsHost["showRoute"];
+  /** The App was never published: its record names no published revision. */
+  unpublished?: boolean;
+  /** Collects the query of each read of the App's data sources. */
+  sourceReads?: string[];
+  /** The data sources of the App's name are cached, as when it was published and removed. */
+  cachedSources?: boolean;
 }
 
 /**
@@ -115,7 +138,11 @@ async function mount(
       if (instance.recordFails?.() === true) {
         return Response.json({ error: { code: "INTERNAL", message: "down" } }, { status: 500 });
       }
-      return Response.json(appRecord(instance.allowed ?? []));
+      return Response.json(appRecord(instance.allowed ?? [], instance.unpublished));
+    }
+    if (path === apiOperations["data_stores.app_sources"].path) {
+      instance.sourceReads?.push(new URL(request.url).search);
+      if (instance.unpublished !== true) return Response.json(SOURCES);
     }
     if (
       instance.previewIn !== undefined &&
@@ -135,6 +162,12 @@ async function mount(
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (instance.cachedSources === true) {
+    queryClient.setQueryData(
+      [...workspaceQueryKeys.assets(API, "standalone"), "app", "data-sources", "fees"],
+      SOURCES
+    );
+  }
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -154,7 +187,7 @@ async function mount(
         { client: queryClient },
         createElement(
           WorkspaceApiClientProvider,
-          { apiBaseUrl: "https://chat.example.com", children: null },
+          { apiBaseUrl: API, children: null },
           createElement(
             AppsHostProvider,
             { value: host, children: null },
@@ -504,5 +537,42 @@ describe("the Apps list", () => {
     expect(await menuItems(unsaid, t("apps.actionsOf", { name: "Fees" }))).toContain(
       t("apps.delete")
     );
+  });
+});
+
+// DAILY-WINS 7: the draft of an App says where its data comes from. The instance reads the
+// sources of a published App only, so a draft never published asks nothing and shows nothing,
+// not even lines cached for the same name.
+describe("where the data of an App draft comes from", () => {
+  const SOURCES_LABEL = '[aria-label="Where the data comes from"]';
+  const writer = contextWith({ [OPEN]: ["app.read", "app.write", "app.publish"] });
+
+  it("asks nothing of a draft never published, and shows no lines cached for its name", async () => {
+    const sourceReads: string[] = [];
+    const draft = await mount(createElement(AppEdit, { app: "fees" }), writer, {
+      allowed: ["read", "write", "publish"],
+      unpublished: true,
+      cachedSources: true,
+      sourceReads
+    });
+    await vi.waitFor(
+      () => expect(draft.querySelector('[data-testid="app-draft-line"]')).not.toBeNull(),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(sourceReads).toEqual([]);
+    expect(draft.querySelector(SOURCES_LABEL)).toBeNull();
+  });
+
+  it("reads the sources of a published App and offers them in the draft's head", async () => {
+    const sourceReads: string[] = [];
+    const draft = await mount(createElement(AppEdit, { app: "fees" }), writer, {
+      allowed: ["read", "write", "publish"],
+      sourceReads
+    });
+    await vi.waitFor(() => expect(draft.querySelector(SOURCES_LABEL)).not.toBeNull(), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(sourceReads).toEqual(["?app=fees"]);
   });
 });

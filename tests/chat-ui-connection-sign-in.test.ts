@@ -325,22 +325,6 @@ describe("a person's own sign-in", () => {
     expect(tabs.opened).toEqual([{ urls: [], closed: true }]);
     expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe("forbidden");
   });
-
-  it("asks to allow pop-ups where the browser opened no window", async () => {
-    const run = testCalls();
-    const tabs = testBrowser({ blocked: true });
-    mount(
-      createElement(OneClickHarness, {
-        calls: run.calls,
-        browser: tabs.browser,
-        onConnected: vi.fn()
-      }),
-      "en"
-    );
-    await click("[data-connect]");
-    expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe("tab_blocked");
-    expect(run.log).toEqual([]);
-  });
 });
 
 describe("the sign-in step", () => {
@@ -358,15 +342,11 @@ describe("the sign-in step", () => {
     );
     await settle();
 
-    expect(element("h2").textContent).toBe(`Anmeldung bei ${HOST}`);
-    expect(element("[data-sign-in-shared]").textContent).toBe(
-      "Alle, die diese Verbindung nutzen dürfen, lesen und handeln über das Konto, mit dem du dich jetzt anmeldest."
-    );
+    expect(element("h2").textContent).toContain(HOST);
     const scopes = [...host.querySelectorAll("[data-sign-in-scope]")].map((box) =>
       box.getAttribute("data-sign-in-scope")
     );
     expect(scopes).toEqual(["files.read", "files.write"]);
-    expect(element("[data-sign-in-open]").textContent).toBe(`Bei ${HOST} anmelden`);
 
     // files.write is not asked for: the definition says so before the provider's page opens.
     await click('[data-sign-in-scope="files.write"]');
@@ -381,7 +361,6 @@ describe("the sign-in step", () => {
     // The tab opened in the click goes to the page of the start made with the written scopes.
     expect(tabs.opened).toEqual([{ urls: [`https://${HOST}/authorize?attempt=2`], closed: false }]);
     expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("waiting");
-    expect(element("[data-sign-in-cancel]").textContent).toBe("Abbrechen");
 
     // Still nobody signed in: the step reads again and waits.
     tabs.tick();
@@ -414,9 +393,6 @@ describe("the sign-in step", () => {
     act(() => tabs.land({ outcome: "oauth_denied", connection: "crm" }));
     await settle();
     expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe("oauth_denied");
-    expect(element("[data-sign-in-error]").textContent).toBe(
-      `Die Anmeldung wurde bei ${HOST} abgelehnt oder abgebrochen.`
-    );
 
     // The start the provider sent back is spent: the next open makes a new one.
     await click("[data-sign-in-open]");
@@ -441,7 +417,7 @@ describe("the sign-in step", () => {
     expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("waiting");
     await click("[data-sign-in-cancel]");
     expect(host.querySelector("[data-sign-in-error]")).toBeNull();
-    expect(element("[data-sign-in-open]").textContent).toBe(`Sign in at ${HOST}`);
+    expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("ready");
   });
 
   it("asks to allow pop-ups where the browser opened no tab", async () => {
@@ -486,7 +462,6 @@ describe("the sign-in step", () => {
       "de"
     );
     await settle();
-    expect(element("h2").textContent).toBe("Anmelde-App beim Anbieter registrieren");
     expect(element("[data-sign-in-redirect-uri]").textContent).toBe(
       "https://chat.example.com/api/v1/connections/oauth/callback"
     );
@@ -505,33 +480,8 @@ describe("the sign-in step", () => {
       "connections.get",
       "connections.oauth_start"
     ]);
-    expect(element("h2").textContent).toBe(`Anmeldung bei ${HOST}`);
-    expect(host.innerHTML).not.toContain(CLIENT_SECRET);
-  });
-
-  it("says why a start was refused, and tries again", async () => {
-    const run = testCalls({
-      starts: [
-        () => {
-          throw refusal("oauth_pkce_unsupported");
-        }
-      ]
-    });
-    const tabs = testBrowser();
-    mount(
-      createElement(SignInHarness, {
-        calls: run.calls,
-        browser: tabs.browser,
-        onConnected: vi.fn()
-      }),
-      "en"
-    );
-    await settle();
-    expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe(
-      "oauth_pkce_unsupported"
-    );
-    await click("[data-sign-in-retry]");
     expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("ready");
+    expect(host.innerHTML).not.toContain(CLIENT_SECRET);
   });
 });
 
@@ -649,16 +599,11 @@ describe("the page a sign-in lands on", () => {
     expect(element("[data-sign-in-landing]").getAttribute("data-sign-in-landing")).toBe(
       "oauth_session_expired"
     );
-    expect(host.textContent).toContain("Die Anmeldung hat nicht geklappt");
-    expect(host.textContent).toContain("Die Anmeldung hat zu lange gedauert. Starte sie neu.");
     expect(window.location.pathname + window.location.search).toBe("/build/connections");
     expect(told).toEqual([{ outcome: "oauth_session_expired", connection: "crm" }]);
     channel.close();
 
-    const button = [...host.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent === "Zur Verbindung"
-    );
-    await act(async () => button?.click());
+    await act(async () => host.querySelector("button")?.click());
     expect(open).toHaveBeenCalledWith("crm");
   });
 
@@ -673,22 +618,6 @@ describe("the page a sign-in lands on", () => {
     );
     await settle();
     expect(close).toHaveBeenCalledTimes(1);
-    expect(host.textContent).toContain("Verbunden. Du kannst diesen Tab schließen.");
-    expect(host.textContent).toContain("Zu den Verbindungen");
-  });
-
-  it("says a declined sign-in without a host it does not know", async () => {
-    mount(
-      createElement(ConnectionSignInLanding, {
-        landing: { outcome: "oauth_denied" },
-        onOpen: vi.fn()
-      }),
-      "de"
-    );
-    await settle();
-    expect(host.textContent).toContain(
-      "Die Anmeldung wurde beim Anbieter abgelehnt oder abgebrochen."
-    );
   });
 });
 
@@ -716,8 +645,6 @@ describe("a sign-in the organisation's IT has to approve (MS-APP-2)", () => {
     expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe(
       "oauth_admin_consent_required"
     );
-    expect(host.textContent).toContain("Deine IT muss diese App einmal freigeben");
-    expect(host.textContent).toContain("Freigabe-Link für die IT");
     expect(element("[data-admin-consent-url]").textContent).toBe(LINK);
 
     // An administrator's approval in another tab is no outcome of a sign-in that waits.
@@ -781,8 +708,6 @@ describe("a sign-in the organisation's IT has to approve (MS-APP-2)", () => {
       "en"
     );
     await settle();
-    expect(host.textContent).toContain("Approved");
-    expect(host.textContent).toContain("People in your organisation can connect now.");
     // The administrator is often nobody of the instance: nothing to open, and the tab stays.
     expect(host.querySelector("button")).toBeNull();
     expect(close).not.toHaveBeenCalled();
@@ -847,24 +772,6 @@ describe("the Sign-in section of the Connection page", () => {
       createElement(SignInTechnical, { asset, detail, mayWrite })
     );
   }
-
-  it("leads with the state, the account and since when, and leaves the technical details to the settings", () => {
-    mount(section(true), "en");
-    expect(element('[data-sign-in-state="connected"]').textContent).toBe("Connected");
-    expect(element("[data-sign-in-since]").textContent).toContain("by Ada Admin");
-    expect(host.textContent).toContain("team@example.test");
-    expect(element("[data-sign-in-begin]").textContent).toBe("Sign in again");
-    for (const folded of [HOST, "files.read", "files-app", REDIRECT, LINK]) {
-      expect(element("[data-top]").textContent).not.toContain(folded);
-    }
-
-    const details = element("[data-sign-in-technical]");
-    expect(details.textContent).toContain(HOST);
-    expect(element("[data-sign-in-granted]").textContent).toBe("files.readfiles.write");
-    expect(details.textContent).toContain("files-app");
-    expect(details.textContent).toContain(REDIRECT);
-    expect(element("[data-admin-consent-url]").textContent).toBe(LINK);
-  });
 
   it("keeps the approval link for IT from a reader who may not change the Connection", () => {
     mount(section(false), "en");

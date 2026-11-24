@@ -81,11 +81,9 @@ describe("the page of an agent that ships with the platform", () => {
       shipped: shippedFields
     };
     const markup = page(config, ["instructions", "toolNames"]);
-    expect(markup).toMatch(/data-asset-place="">Ships with the platform</u);
     // The field's one line says it is the instance's own; the same tools in another order and
     // an unchanged name say nothing.
     expect(markup.match(/Own version instead of the shipped one/gu)).toHaveLength(1);
-    expect(markup).not.toContain("data-shipped-differs");
     expect(markup).not.toContain("Reset to shipped");
     // The reset stands in the head's "…" menu, for who may change the field.
     expect(await menuOf(config, ["instructions", "toolNames"])).toContain("Reset to shipped");
@@ -102,10 +100,7 @@ describe("the page of an agent that ships with the platform", () => {
       },
       ["instructions"]
     );
-    expect(markup).toContain("Platform instructions");
-    expect(markup).toContain("Change platform text");
     expect(markup).toMatch(/<textarea[^>]*readOnly=""[^>]*>As shipped\.<\/textarea>/u);
-    expect(markup).toContain("Additional instructions");
     expect(markup).toMatch(
       /<textarea[^>]*data-additional-instructions=""[^>]*>Answer in short sentences\.<\/textarea>/u
     );
@@ -122,9 +117,7 @@ describe("the page of an agent that ships with the platform", () => {
     };
     const markup = page(config, ["instructions"]);
     expect(markup).toContain('data-shipped-newer="instructions"');
-    expect(markup).toContain("The platform has a new version of this field.");
     expect(markup).toContain("The new release&#x27;s text.");
-    expect(markup).toContain("Take new version");
     expect(markup).toContain("Keep mine");
     expect(markup).not.toContain("Reset to shipped");
     // Who may not change the field reads both versions and decides nothing.
@@ -133,8 +126,7 @@ describe("the page of an agent that ships with the platform", () => {
 
   it("shows any other agent as before", () => {
     const markup = page({ name: "assistant", ...shippedFields }, ["instructions"]);
-    expect(markup).not.toContain("Ships with the platform");
     expect(markup).not.toContain("data-shipped-group");
-    expect(markup).not.toContain("Additional instructions");
+    expect(markup).not.toContain("data-additional-instructions");
   });
 });

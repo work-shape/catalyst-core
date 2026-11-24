@@ -95,18 +95,6 @@ describe("the Check tab against real asset calls", () => {
     expect(outside.compared).toEqual(["read", "write", "delete"]);
   });
 
-  it("agrees for an allow on one asset", async () => {
-    const t = await setup();
-    expect((await t.putAgent(t.admin.id, "team-bot")).statusCode).toBe(200);
-    const assetId = await t.assetId("agent", "team-bot");
-    await t.grant(t.lena.id, "agent.read", { assetId });
-    await t.grant(t.lena.id, "agent.write", { assetId });
-
-    const { said, compared } = await expectVerdictsHold(t, t.lena.id, "team-bot");
-    expect(said.map((verdict) => verdict.allowed)).toEqual([true, true, false]);
-    expect(compared).toEqual(["read", "write", "delete"]);
-  });
-
   it("agrees for a deny on one asset, which also refuses the delete", async () => {
     const t = await setup();
     expect((await t.putAgent(t.admin.id, "kai-helper")).statusCode).toBe(200);

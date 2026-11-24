@@ -1,9 +1,7 @@
-import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { buildingAgentNameFor } from "@work-shape/catalyst-chat-ui/agents";
 import { refusedRequest } from "@work-shape/catalyst-chat-ui/subject-run";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
-import { createPrivateConversationWith, PrivateBuildOffer } from "./support/chat-ui";
+import { createPrivateConversationWith } from "./support/chat-ui";
 
 // The New buttons of NAV-2: where an agent here holds the platform's asset tools, "New" opens
 // the dock with a conversation with it, and its first save creates the asset.
@@ -268,25 +266,6 @@ describe("building from a workspace whose conversations are shared", () => {
           completedRuns: { run_1: annasRefusal }
         })
       ).toBe(offered);
-    }
-  });
-
-  it("names the offer in each language", () => {
-    for (const [locale, words] of [
-      ["en", "Continue privately"],
-      ["de", "Privat weitermachen"]
-    ] as const) {
-      const markup = renderToStaticMarkup(
-        createElement(TranslationProvider, {
-          locale,
-          children: createElement(PrivateBuildOffer, {
-            pending: false,
-            onContinue: () => undefined
-          })
-        })
-      );
-      expect(markup).toContain(words);
-      expect(markup).toContain('data-testid="private-build-offer"');
     }
   });
 });

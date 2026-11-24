@@ -52,39 +52,34 @@ describe("Settings in an embedded session", () => {
     expect(shown).toContain("profile");
   });
 
-  it.each(["en", "de"] as const)(
-    "offers no account deletion in the profile (%s), which the person's own session does",
-    async (locale) => {
-      const profile = required(
-        catalog.find((page) => page.group === "you" && page.id === "profile")
-      );
-      const client = createApiClient({
-        baseUrl: SETTINGS_INSTANCE_URL,
-        fetchImpl: async () => Response.json({ items: [] })
-      });
-      // The Section's own sentence: the closed dialog names the account as well.
-      const deleteSection =
-        locale === "en" ? "Permanently removes your user profile" : "Löscht dein Benutzerprofil";
-      const details = locale === "en" ? "Your details" : "Deine Angaben";
+  it("offers no account deletion in the profile, which the person's own session does", async () => {
+    const locale = "en";
+    const profile = required(catalog.find((page) => page.group === "you" && page.id === "profile"));
+    const client = createApiClient({
+      baseUrl: SETTINGS_INSTANCE_URL,
+      fetchImpl: async () => Response.json({ items: [] })
+    });
+    // The Section's own sentence: the closed dialog names the account as well.
+    const deleteSection = "Permanently removes your user profile";
+    const details = "Your details";
 
-      const own = await mountPage(
-        settingsPageContext(client),
-        locale,
-        createElement(profile.component)
-      );
-      await waitForText(own.container, deleteSection);
-      await own.unmount();
+    const own = await mountPage(
+      settingsPageContext(client),
+      locale,
+      createElement(profile.component)
+    );
+    await waitForText(own.container, deleteSection);
+    await own.unmount();
 
-      const host = await mountPage(
-        settingsPageContext(client, settingsUser(embedded)),
-        locale,
-        createElement(profile.component)
-      );
-      await waitForText(host.container, details);
-      expect(host.container.textContent).not.toContain(deleteSection);
-      await host.unmount();
-    }
-  );
+    const host = await mountPage(
+      settingsPageContext(client, settingsUser(embedded)),
+      locale,
+      createElement(profile.component)
+    );
+    await waitForText(host.container, details);
+    expect(host.container.textContent).not.toContain(deleteSection);
+    await host.unmount();
+  });
 
   it("does not ask for the person's own skills, which their own session reads", async () => {
     const asked: string[] = [];

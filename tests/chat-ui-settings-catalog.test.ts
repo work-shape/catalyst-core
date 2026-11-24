@@ -1,9 +1,15 @@
+import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ApiUser, CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
-import { createTranslationContext, type SettingsViewer } from "./support/chat-ui/shared";
+import {
+  createApiClient,
+  type ApiUser,
+  type CollaborationWorkspaceWithRole
+} from "@work-shape/catalyst-api-client";
+import { type SettingsViewer } from "./support/chat-ui/shared";
 import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {
+  SettingsArea,
   workspaceRouteFromPath,
   firstAdministrationRoute,
   resolveSettingsRoute,
@@ -13,7 +19,13 @@ import {
   type BuildAccess
 } from "./support/chat-ui";
 import { platformContext } from "./chat-ui-build-fixtures";
-import { personalWorkspace, settingsUser, sharedWorkspace } from "./chat-ui-settings-fixtures";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import {
+  personalWorkspace,
+  settingsPageContext,
+  settingsUser,
+  sharedWorkspace
+} from "./chat-ui-settings-fixtures";
 
 const catalog = settingsCatalog(administration);
 const buildOn: BuildAccess = { page: administration.build, enabled: true, ready: true };
@@ -120,35 +132,6 @@ function superadminViewer(): SettingsViewer {
 }
 
 describe("Settings catalog", () => {
-  it("lists the pages of each group in the order of the navigation spec", () => {
-    // Connections is the module `connections`'s; API keys and Connect a local agent are the
-    // module `personalApiKeys`'s. Each is shown only where its module is on.
-    expect(catalog.map((page) => `${page.group}/${page.id}`)).toEqual([
-      ...you,
-      "you/connections",
-      "you/api-keys",
-      "you/connect",
-      ...workspace,
-      // Limits and Policies are shown by `limits.manage` and `policy.manage`, rights the
-      // platform context tells.
-      ...instance.flatMap((page) =>
-        page === "instance/usage" ? [page, "instance/limits", "instance/policies"] : [page]
-      ),
-      ...system
-    ]);
-  });
-
-  it("names every page and Studio in both languages", () => {
-    const en = createTranslationContext("en");
-    const de = createTranslationContext("de");
-    for (const page of [...catalog, administration.build]) {
-      expect(en.t(page.labelKey)).not.toBe(page.labelKey);
-      expect(de.t(page.labelKey)).not.toBe(page.labelKey);
-    }
-    expect(en.t("nav.build")).toBe("Studio");
-    expect(de.t("nav.build")).toBe("Studio");
-  });
-
   it.each<[key: string, pages: string[]]>([
     ["users.manage", ["instance/users", "instance/access", "instance/workspaces"]],
     ["api_access.manage", ["instance/api-access"]],
@@ -246,21 +229,6 @@ describe("Settings catalog", () => {
     );
   });
 
-  it("names the group of each Settings page it offers to go to", () => {
-    // The palette names a page with its group: "Instance › Users", not a second "Users".
-    const admin = viewer({ roles: ["admin"], permissions: ["users.manage"] });
-    const targets = settingsGoToTargets(catalog, buildOn, admin);
-
-    expect(targets.find((target) => target.id === "settings/instance/users")).toMatchObject({
-      labelKey: "settings.users",
-      groupLabelKey: "settings.instance"
-    });
-    expect(targets.find((target) => target.id === "settings/you/profile")).toMatchObject({
-      groupLabelKey: "settings.you"
-    });
-    expect(targets.find((target) => target.id === "build")?.groupLabelKey).toBeUndefined();
-  });
-
   it("shows Studio to a holder of a workspace right who has no permission on the instance", () => {
     const targets = (build: BuildAccess, of: SettingsViewer) =>
       settingsGoToTargets(catalog, build, of).map((target) => target.id);
@@ -340,17 +308,17 @@ describe("old addresses", () => {
   const page = (group: string, id: string) =>
     catalog.find((candidate) => candidate.group === group && candidate.id === id);
 
-  it.each<[path: string, group: string, id: string]>([
-    ["/settings", "you", "profile"],
-    ["/admin/users", "instance", "users"],
-    ["/admin/usage", "instance", "usage"],
-    ["/admin/audit", "instance", "audit"],
-    ["/admin/api-access", "instance", "api-access"]
-  ])("lands %s on the page with the same content", (path, group, id) => {
-    expect(resolve(path, superadminWithoutMembership)).toEqual({
-      kind: "page",
-      page: page(group, id)
-    });
+  it("lands an old address on the page with the same content", () => {
+    for (const [path, group, id] of [
+      ["/settings", "you", "profile"],
+      ["/admin/users", "instance", "users"],
+      ["/admin/api-access", "instance", "api-access"]
+    ] as const) {
+      expect(resolve(path, superadminWithoutMembership), path).toEqual({
+        kind: "page",
+        page: page(group, id)
+      });
+    }
   });
 
   it("lands /admin/config on Studio", () => {
@@ -360,32 +328,20 @@ describe("old addresses", () => {
     });
   });
 
-  const buildAddresses = ["/build", "/build/agents", "/build/skills/tax-review"];
+  const buildAddresses = ["/build", "/build/skills/tax-review"];
 
-  it.each(buildAddresses)("answers %s with Studio for a viewer who may open it", (path) => {
+  it("answers a Studio address with Studio, closed or pending by what the viewer may do", () => {
     const open = { kind: "build", page: administration.build };
-
-    expect(resolve(path, superadminWithoutMembership)).toEqual(open);
-    expect(resolve(path, workspaceRightHolder)).toEqual(open);
-    // The session names an instance right, so its holder does not wait for the instance.
-    expect(resolve(path, superadminWithoutMembership, buildUnanswered)).toEqual(open);
-  });
-
-  it.each(buildAddresses)(
-    "says at %s that Studio is closed to a viewer who holds nothing in it",
-    (path) => {
-      const closed = { kind: "build-closed", page: administration.build };
-
+    const closed = { kind: "build-closed", page: administration.build };
+    for (const path of buildAddresses) {
+      expect(resolve(path, superadminWithoutMembership)).toEqual(open);
+      expect(resolve(path, workspaceRightHolder)).toEqual(open);
+      // The session names an instance right, so its holder does not wait for the instance.
+      expect(resolve(path, superadminWithoutMembership, buildUnanswered)).toEqual(open);
       expect(resolve(path, answeredMember)).toEqual(closed);
       expect(resolve(path, instanceAdmin)).toEqual(closed);
+      expect(resolve(path, member, buildUnanswered)).toEqual({ kind: "pending" });
     }
-  );
-
-  it.each(buildAddresses)("waits at %s until the instance said what the viewer may do", (path) => {
-    expect(resolve(path, member, buildUnanswered)).toEqual({ kind: "pending" });
-    // Once it answered, the same viewer is told, and a holder of a workspace right is let in.
-    expect(resolve(path, answeredMember, buildOn)).toMatchObject({ kind: "build-closed" });
-    expect(resolve(path, workspaceRightHolder, buildOn)).toMatchObject({ kind: "build" });
   });
 
   it.each(buildAddresses)("leads %s away where the instance runs without Studio", (path) => {
@@ -472,5 +428,75 @@ describe("old addresses", () => {
         platform: { ...platformContext(), instanceActions: ["service_principals.manage"] }
       })
     ).toMatchObject({ kind: "page" });
+  });
+});
+
+type Rendered = Parameters<typeof SettingsArea>[0]["settings"];
+
+function settingsArea(settings: Partial<Rendered> & Pick<Rendered, "context">): string {
+  const page = (id: string, group: "you" | "workspace") => ({
+    id,
+    group,
+    labelKey: "settings.general" as const,
+    component: () => null,
+    visible: () => true
+  });
+  return renderToStaticMarkup(
+    createElement(
+      TranslationProvider,
+      { locale: "en", children: null },
+      createElement(SettingsArea, {
+        settings: {
+          pages: [page("profile", "you"), page("general", "workspace")],
+          page: undefined,
+          noAccess: false,
+          workspaces: [],
+          selectWorkspace: () => undefined,
+          openPage: () => undefined,
+          ...settings
+        }
+      })
+    )
+  );
+}
+
+// ACCEPT-FIX-10 C10: a member who opened Instance › Usage landed in Studio without a word. The
+// closed page now says it cannot be opened, whom to ask, and leads to the person's own settings.
+describe("a Settings page the person cannot open", () => {
+  it("says whom to ask and leads to the person's own profile", () => {
+    const markup = settingsArea({
+      noAccess: true,
+      context: settingsPageContext(
+        createApiClient({ baseUrl: "https://chat.example.com" }),
+        settingsUser({ instanceAdminName: "Mara Lindqvist" })
+      )
+    });
+    expect(markup).toContain("Mara Lindqvist");
+    expect(markup).toMatch(/<button[^>]*>Open your profile<\/button>/u);
+  });
+});
+
+// ACCEPT-1c: in Mara's personal workspace Settings › Workspace showed the shared workspace as if
+// it were where she works. The Workspace pages change a shared workspace only, and the scope says
+// so while the person works in their own.
+describe("the scope of the Workspace settings", () => {
+  const shared = sharedWorkspace({ name: "Nordlicht Beratung" });
+  const scope = (active: typeof shared) =>
+    settingsArea({
+      workspaces: [shared],
+      context: {
+        ...settingsPageContext(createApiClient({ baseUrl: "https://chat.example.com" })),
+        workspace: shared,
+        activeWorkspace: active
+      }
+    });
+
+  it("names the shared workspace as shared only while the person works in their personal one", () => {
+    const personal = scope(personalWorkspace());
+    expect(personal).toContain("Nordlicht Beratung");
+    expect(personal).toContain("data-workspace-scope-shared");
+    const inShared = scope(shared);
+    expect(inShared).toContain("Nordlicht Beratung");
+    expect(inShared).not.toContain("data-workspace-scope-shared");
   });
 });

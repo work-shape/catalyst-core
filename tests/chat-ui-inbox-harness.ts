@@ -6,7 +6,6 @@ import {
   ApprovalRevisionHostProvider,
   EmbeddedSessionProvider,
   approvalActionFailure,
-  formatInboxAge,
   InboxAreaView,
   inboxItemKinds,
   InboxItemKindsProvider,
@@ -31,7 +30,6 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // rendering of an item in a language.
 export {
   approvalActionFailure,
-  formatInboxAge,
   InboxAreaView,
   inboxItemKinds,
   inboxItemSurface,

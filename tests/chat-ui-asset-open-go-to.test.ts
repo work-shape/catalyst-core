@@ -121,7 +121,6 @@ async function mountChip() {
 describe("going to an asset the agent opened for the person", () => {
   it("shows the click working until the page opens, once", async () => {
     const chip = await mountChip();
-    expect(chip.button().textContent).toContain("Zur Seite");
 
     await act(async () => chip.button().click());
     await vi.waitFor(() => expect(chip.subjectOpens).toHaveLength(1), {

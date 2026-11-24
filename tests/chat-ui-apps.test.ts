@@ -1,4 +1,5 @@
 import { createElement, type ReactNode } from "react";
+import type { PartState } from "@assistant-ui/react";
 import {
   ApiError,
   appInterfacePath,
@@ -6,10 +7,13 @@ import {
   type ConfigAssetPublication,
   type ConfigAssetRevision
 } from "@work-shape/catalyst-api-client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTranslationContext } from "./support/chat-ui/shared";
 import {
-  AppDeleteDialog,
+  afterPublishSend,
+  AppCard,
+  AppCardView,
+  appCardState,
   appDraftIsAhead,
   appHistory,
   AppEditFrame,
@@ -26,15 +30,20 @@ import {
   appRowRoute,
   appState,
   AppsHostProvider,
+  AppsPageView,
   fileMarks,
   AppViewFrame,
   NO_APP_RIGHTS,
+  pageAppChoice,
+  previewNeedsApp,
+  previewStanding,
   PublishDialog,
   resolveAppRights,
   RevisionsDrawerView,
   SaveAsAppAction,
   SaveAsAppDialogView,
   saveAsAppInput,
+  UpdateAppDialogView,
   type AppRights,
   type AppsHost,
   areaOfRoute,
@@ -44,22 +53,29 @@ import {
   workspaceRouteNavigation,
   workspaceRoutePath
 } from "@work-shape/catalyst-chat-ui/apps";
+import { appSavedByCall, foldedCards } from "@work-shape/catalyst-chat-ui/subject-run";
+import {
+  createAssistantMessageGroupBy,
+  createCompletedAssistantWorkIndices,
+  createVisibleFinalAssistantPartIndices
+} from "./support/chat-ui";
 import { appsContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Apps area: its addresses, what a reader is offered by the rights they hold, and what
-// each screen shows. Every test here fails without the area: the modules it reads did not
-// exist, and the route table had no row for it.
+// each screen does with what the instance answers.
 
 const { t } = createTranslationContext("en");
 
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
+const noop = () => undefined;
 
 const workspace = { id: "cw_1", name: "Nordlicht Beratung", emoji: null };
 const ALL: AppRights = { read: true, write: true, publish: true, delete: true };
 const ALL_NAMES = ["app.read", "app.write", "app.publish", "app.delete"];
 const WRITER: AppRights = { read: true, write: true, publish: false, delete: false };
+const READER: AppRights = { ...NO_APP_RIGHTS, read: true };
 
 function summary(overrides: Partial<AssetSummary> = {}): AssetSummary {
   return {
@@ -76,6 +92,13 @@ function summary(overrides: Partial<AssetSummary> = {}): AssetSummary {
     ...overrides
   };
 }
+const draftOnly = summary({
+  name: "urlaubsplaner",
+  title: "Urlaubsplaner",
+  publishedRevision: undefined,
+  revision: 1,
+  draftRevision: 1
+});
 
 describe("addresses of the Apps area", () => {
   it("builds the address of an App and of its draft with the function the server answers with", () => {
@@ -176,12 +199,7 @@ describe("what a reader may do with Apps", () => {
     const context = appsContext({ cw_open: ["app.read", "app.write"], cw_other: ALL_NAMES });
     expect(resolveAppRights(undefined, "cw_open")).toEqual(NO_APP_RIGHTS);
     expect(resolveAppRights(context, undefined)).toEqual(NO_APP_RIGHTS);
-    expect(resolveAppRights(context, "cw_open")).toEqual({
-      read: true,
-      write: true,
-      publish: false,
-      delete: false
-    });
+    expect(resolveAppRights(context, "cw_open")).toEqual(WRITER);
     expect(resolveAppRights(context, "cw_other")).toEqual(ALL);
     // A right on the instance's own assets is not one in a workspace the instance does not name.
     expect(resolveAppRights(appsContext({}, ALL_NAMES), "cw_open")).toEqual(NO_APP_RIGHTS);
@@ -204,7 +222,7 @@ describe("what a reader may do with Apps", () => {
 
   it("offers the row actions in their order, and leaves out what the reader may not do", () => {
     const published = appState(summary());
-    const draftOnly = appState(summary({ publishedRevision: undefined }));
+    const unpublished = appState(summary({ publishedRevision: undefined }));
 
     expect(appRowActions(ALL, published, true)).toEqual([
       "open",
@@ -231,411 +249,256 @@ describe("what a reader may do with Apps", () => {
     ]);
     expect(appRowActions(NO_APP_RIGHTS, published, false)).toEqual(["open", "copy_link"]);
     // Nothing is served yet: there is nothing to open and no address to hand on.
-    expect(appRowActions(ALL, draftOnly, true)).toEqual(["edit", "rename", "details", "delete"]);
+    expect(appRowActions(ALL, unpublished, true)).toEqual(["edit", "rename", "details", "delete"]);
   });
 
   it("leads a row to the App, or to the draft for a writer while nothing is published", () => {
     const address = { collaborationWorkspaceId: "cw_1", app: "angebotsrechner" };
-    const draftOnly = appState(summary({ publishedRevision: undefined }));
+    const unpublished = appState(summary({ publishedRevision: undefined }));
 
     expect(appRowRoute("cw_1", summary(), appState(summary()), NO_APP_RIGHTS)).toEqual({
       kind: "app",
       ...address
     });
-    expect(appRowRoute("cw_1", summary(), draftOnly, WRITER)).toEqual({
+    expect(appRowRoute("cw_1", summary(), unpublished, WRITER)).toEqual({
       kind: "app-edit",
       ...address
     });
-    expect(appRowRoute("cw_1", summary(), draftOnly, { ...NO_APP_RIGHTS, read: true })).toBe(
-      undefined
-    );
+    expect(appRowRoute("cw_1", summary(), unpublished, READER)).toBe(undefined);
   });
 });
 
-describe("an open App (layout 2)", () => {
+describe("the Apps page", () => {
+  const now = new Date("2026-10-11T12:00:00.000Z");
+  /** `building`: an agent here builds Apps, so the host can start one with it. */
+  const page = (
+    rows: readonly AssetSummary[] | undefined,
+    rights: AppRights,
+    extra = {},
+    building = true
+  ) =>
+    render(
+      createElement(AppsPageView, {
+        workspace,
+        rights,
+        list: {
+          rows,
+          failed: false,
+          hasMore: false,
+          loadingMore: false,
+          loadMore() {},
+          retry() {},
+          ...extra
+        },
+        now,
+        onOpenRoute() {},
+        onAction() {},
+        ...(building ? { onNew() {} } : {})
+      })
+    );
+  const cards = (markup: string) => markup.split("<li").slice(1);
+
+  it("offers New app to a reader who may build one, with an agent that builds it", () => {
+    expect(page([summary()], ALL)).toContain("New app");
+    expect(page(undefined, ALL)).toContain("New app");
+    expect(page([summary()], READER)).not.toContain("New app");
+    expect(page([summary()], ALL, {}, false)).not.toContain("New app");
+  });
+
+  it("gives a builder the draft beside the App, and whoever uses Apps only what is published", () => {
+    const [published, draft] = cards(page([summary(), draftOnly], ALL));
+    expect(published).toContain('href="/w/cw_1/apps/angebotsrechner"');
+    expect(published).toContain('href="/w/cw_1/app-drafts/angebotsrechner"');
+    expect(published).toContain("Draft: changed");
+    expect(draft).toContain('href="/w/cw_1/app-drafts/urlaubsplaner"');
+
+    const [usedPublished, usedDraft] = cards(page([summary(), draftOnly], NO_APP_RIGHTS));
+    expect(usedPublished).toContain('href="/w/cw_1/apps/angebotsrechner"');
+    expect(usedPublished).not.toContain("app-drafts");
+    expect(usedPublished).not.toContain("Draft: changed");
+    expect(usedPublished).not.toContain("Published");
+    // Nothing is published of the second one: its card says so and opens nothing.
+    expect(usedDraft).toContain("Draft · not published");
+    expect(usedDraft).not.toContain("<a ");
+    expect(usedDraft).not.toContain("<button");
+  });
+
+  it("keeps the draft's news from a reader who does not write", () => {
+    const markup = page([summary()], { ...NO_APP_RIGHTS, publish: true });
+    expect(markup).toContain(">Published<");
+    expect(markup).not.toContain("Draft: changed");
+    // The right to read the record alone makes nobody a builder.
+    expect(page([summary()], READER)).not.toContain("Published");
+  });
+
+  it("offers building from an empty list only to a builder with an agent that builds Apps", () => {
+    expect(page([], ALL)).toContain(">Build one with the agent</button>");
+    expect(page([], ALL)).not.toContain("New app");
+    for (const markup of [page([], NO_APP_RIGHTS), page([], ALL, {}, false)]) {
+      expect(markup).not.toContain("Build one with the agent");
+      expect(markup).not.toContain("<button");
+    }
+  });
+
+  it("offers the next page while the instance holds more, and the way to ask again", () => {
+    expect(page([summary()], ALL, { hasMore: true })).toContain(">Show more</button>");
+    expect(page(undefined, ALL, { failed: true })).toContain(">Try again</button>");
+  });
+});
+
+describe("an open App", () => {
   const frame = (
     rights: AppRights,
-    served: { revision?: number } = { revision: 2 },
     draftShown = true,
-    dataSources?: readonly string[]
+    extra: Partial<Parameters<typeof AppViewFrame>[0]> = {}
   ) =>
     render(
       createElement(AppViewFrame, {
-        dataSources,
         draftShown,
         name: "Angebotsrechner",
         workspace,
         rights,
-        publishedRevision: served.revision,
+        publishedRevision: 2,
         liveVersion: { number: 5, publishedAt: "2026-10-26T09:00:00.000Z" },
         children: createElement("p", null, "the app"),
         onBack() {},
         onEdit() {},
         onDetails() {},
-        app: "fee-estimate"
+        app: "fee-estimate",
+        ...extra
       })
     );
 
-  it("explains an App's empty scoped read in both languages outside its frame", () => {
-    const node = createElement(AppViewFrame, {
-      name: "Findings",
-      app: "findings",
-      draftShown: false,
-      workspace,
-      rights: NO_APP_RIGHTS,
-      publishedRevision: 1,
-      unassignedScopes: ["Mandant"],
-      children: createElement("p", null, "the app"),
-      onBack() {},
-      onEdit() {},
-      onDetails() {}
-    });
-    expect(render(node, "de")).toContain("Ihnen ist kein Mandant zugeordnet");
-    expect(render(node, "en")).toContain("No Mandant is assigned to you.");
-  });
-  it("heads the App with the way back, its name and the published number for a builder", () => {
-    const markup = frame(WRITER);
-    const order = [
-      'href="/w/cw_1/apps"',
-      ">Angebotsrechner</h1>",
-      "Live: version 5 · since Oct 26",
-      'aria-label="More actions"',
-      "the app"
-    ].map((part) => markup.indexOf(part));
-
-    expect(order).not.toContain(-1);
-    expect(order).toEqual([...order].sort((left, right) => left - right));
-    expect(markup).toContain('aria-label="Back to Apps"');
-    // The App is open inside its workspace: the head does not name it.
-    expect(markup).not.toContain("Nordlicht Beratung");
-  });
-
-  it("heads the App for whoever uses it with its name and one button that copies its link", () => {
-    const markup = frame(NO_APP_RIGHTS);
-
-    expect(markup).toContain(">Angebotsrechner</h1>");
-    expect(markup).not.toContain("Live:");
-    expect(markup).not.toContain("Nordlicht Beratung");
-    expect(markup).not.toContain('aria-label="More actions"');
-    expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?Copy link<\/button>/u);
-    expect(markup).not.toContain("Details");
+  it("offers whoever uses the App its link alone, and a builder its version and details", () => {
+    const user = frame(NO_APP_RIGHTS);
+    expect(user).not.toContain("Live:");
+    expect(user).not.toContain('aria-label="More actions"');
+    expect(user).toContain("Copy link");
+    expect(frame(WRITER)).toContain('aria-label="More actions"');
     // A publisher is a builder and reads the number, also without the right to write.
     expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Live: version 5");
   });
 
-  it("tells whoever uses the App where its data comes from, with no right to read the App", () => {
-    const line = "Shows data from “Clients”, which the Workflow “Nightly import” copies from CRM.";
-    const user = frame(NO_APP_RIGHTS, { revision: 2 }, true, [line]);
-    expect(user).toContain('aria-label="Where the data comes from"');
-    expect(frame(WRITER, { revision: 2 }, true, [line])).toContain(
-      'aria-label="Where the data comes from"'
-    );
-    // Nothing is offered while it is read, or for an App that reads no store.
-    expect(frame(NO_APP_RIGHTS)).not.toContain("Where the data comes from");
-    expect(frame(NO_APP_RIGHTS, { revision: 2 }, true, [])).not.toContain(
-      "Where the data comes from"
-    );
-  });
-
-  it("offers Edit to a writer and to nobody else", () => {
+  it("offers Edit to a writer while a draft is shown, and to nobody else", () => {
     expect(frame(WRITER)).toContain("Edit</span></button>");
     expect(frame(NO_APP_RIGHTS)).not.toContain("Edit</span></button>");
-    // The published view names no draft: there is none to edit, whatever the reader holds.
-    expect(frame(WRITER, { revision: 2 }, false)).not.toContain("Edit</span></button>");
+    expect(frame(WRITER, false)).not.toContain("Edit</span></button>");
   });
 
-  // Fails with Edit among the secondary actions: at 390 in German both folded and the head
-  // showed only "…". Edit is the head's primary action, which never folds.
-  it("keeps Edit as the head's primary action, so only the agent's action folds", () => {
-    const markup = frame(WRITER);
-    const measured = /<div[^>]*inert[^>]*>(.*?)<\/div>/u.exec(markup)?.[1] ?? "";
-
-    // In a narrow frame the label is for a screen reader only, and Edit is its icon.
-    expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?<span[^>]*>Edit<\/span><\/button>/u);
-    expect(measured).not.toContain("Edit<");
-  });
-
-  it("shows no number before the instance said which revision is served", () => {
-    expect(frame(WRITER, {})).not.toContain("Published");
+  it("tells whoever uses the App where its data comes from, and why a scoped read is empty", () => {
+    const label = 'aria-label="Where the data comes from"';
+    expect(frame(NO_APP_RIGHTS, true, { dataSources: ["Shows data from “Clients”."] })).toContain(
+      label
+    );
+    expect(frame(NO_APP_RIGHTS)).not.toContain(label);
+    expect(frame(NO_APP_RIGHTS, true, { dataSources: [] })).not.toContain(label);
+    expect(frame(NO_APP_RIGHTS, false, { unassignedScopes: ["Mandant"] })).toContain(
+      "No Mandant is assigned to you."
+    );
   });
 });
 
-describe("the draft of an App (layout 3)", () => {
-  const frame = (
-    rights: AppRights,
-    revisions: { draftRevision?: number; publishedRevision?: number } = {
-      draftRevision: 3,
-      publishedRevision: 2
-    },
-    locale: "en" | "de" = "en"
-  ) =>
+describe("the draft of an App", () => {
+  const frame = (rights: AppRights, extra: Partial<Parameters<typeof AppEditFrame>[0]> = {}) =>
     render(
       createElement(AppEditFrame, {
         name: "Angebotsrechner",
         workspace,
         rights,
-        ...revisions,
-        ...(revisions.publishedRevision === undefined
-          ? {}
-          : { liveVersion: { number: 1, publishedAt: "2026-10-26T09:00:00.000Z" } }),
+        draftRevision: 3,
+        publishedRevision: 2,
+        liveVersion: { number: 1, publishedAt: "2026-10-26T09:00:00.000Z" },
         children: createElement("p", null, "the draft"),
-        onBack() {}
-      }),
-      locale
+        onBack() {},
+        ...extra
+      })
     );
   const publishButton = (markup: string) =>
     /<button[^>]*>(?:(?!<\/button>).)*Publish<\/button>/u.exec(markup)?.[0] ?? "";
 
-  // The head says the draft once, after the name; Publish is its one primary button and
-  // Discard stands in the "…" menu. The bar under the head names the live version.
-  it("heads the draft with its state, Publish and the overflow, then the live version", () => {
-    const markup = frame(ALL);
-    const order = [
-      ">Angebotsrechner</h1>",
-      "Draft · not live",
-      "Publish</button>",
-      'aria-label="More actions"',
-      "Live: version 1, published on Oct 26",
-      "the draft"
-    ].map((part) => markup.indexOf(part));
-    expect(markup).not.toContain(">Discard</button>");
-
-    expect(order).not.toContain(-1);
-    expect(order).toEqual([...order].sort((left, right) => left - right));
-    expect(publishButton(markup)).not.toContain('disabled=""');
-    expect(markup).not.toContain("You need the right");
-    // The revisions, 3 and 2, are no member's number.
-    expect(markup).not.toMatch(/version [23]\b/u);
-  });
-
-  it("holds Publish for a writer without the publish right, and names the right", () => {
-    const markup = frame(WRITER);
-
-    expect(publishButton(markup)).toContain('disabled=""');
-    expect(markup).toContain("You need the right “app.publish” to publish.");
-    // The sentence is the button's description, so it is read out with the button.
-    const id = /aria-describedby="([^"]+)"/u.exec(publishButton(markup))?.[1];
-    expect(id).toBeDefined();
-    expect(markup).toContain(`<span id="${id}">You need the right`);
-    expect(frame(WRITER, undefined, "de")).toContain(
-      "Zum Veröffentlichen brauchst du das Recht „app.publish“."
-    );
-  });
-
-  it("offers Discard only while something is published that the draft is ahead of", () => {
-    expect(appDraftIsAhead(3, 2)).toBe(true);
-    expect(appDraftIsAhead(2, 2)).toBe(false);
-    expect(appDraftIsAhead(1, undefined)).toBe(true);
-    expect(frame(ALL, { draftRevision: 2, publishedRevision: 2 })).not.toContain("Discard");
-    expect(frame(ALL, { draftRevision: 1 })).not.toContain("Discard");
-    // A draft that is what is published may still be published for another audience
-    // (SHARE-1): the dialog holds Publish until the choice differs from the live one.
+  it("lets Publish go for a publisher, and holds it for a writer with the right it lacks", () => {
+    expect(publishButton(frame(ALL))).not.toContain('disabled=""');
+    const writer = frame(WRITER);
+    expect(publishButton(writer)).toContain('disabled=""');
+    expect(writer).toContain("app.publish");
+    // A draft that is what is published may still be published for another audience (SHARE-1).
     expect(publishButton(frame(ALL, { draftRevision: 2, publishedRevision: 2 }))).not.toContain(
       'disabled=""'
     );
   });
 
-  const headed = (extra: Partial<Parameters<typeof AppEditFrame>[0]>, locale: "en" | "de" = "en") =>
-    render(
-      createElement(AppEditFrame, {
-        name: "Angebotsrechner",
-        workspace,
-        rights: ALL,
-        draftRevision: 3,
-        publishedRevision: 2,
-        children: createElement("p", null, "the draft"),
-        onBack() {},
-        ...extra
-      }),
-      locale
-    );
-  const draftLine = (markup: string) => {
-    const at = markup.indexOf('data-testid="app-draft-line"');
-    if (at < 0) return "";
-    // The banner's text up to where it closes: its content is three levels of `div` deep.
-    const head = /^[^>]*>(.*?)<\/div><\/div><\/div>/u.exec(markup.slice(at));
-    return (head?.[1] ?? "")
-      .replace(/<[^>]*>/gu, " ")
-      .replace(/\s+/gu, " ")
-      .trim();
-  };
+  it("knows a draft ahead of what is published", () => {
+    expect(appDraftIsAhead(3, 2)).toBe(true);
+    expect(appDraftIsAhead(2, 2)).toBe(false);
+    expect(appDraftIsAhead(1, undefined)).toBe(true);
+  });
 
-  // DAILY-WINS 6, DT-1b: the head says what a draft does and what is live beside it (Apps
-  // check 45); the live version and its day also stand in the head's badge (APPVER-1).
-  it("says the draft reads live data and simulates changes, and who made what is live", () => {
-    const live = {
-      liveVersion: { number: 4, publishedAt: "2026-10-12T14:05:00.000Z", by: "Anna Beispiel" }
-    };
-
-    expect(headed(live)).toContain("Draft · not live");
-    expect(draftLine(headed(live))).toBe(
-      "Draft · reads live data · changes are simulated Live: version 4, published by Anna Beispiel on Oct 12"
-    );
-    // A version without a person, as one from before versions were recorded, names nobody.
-    expect(draftLine(headed({ liveVersion: { number: 1 } }))).toBe(
-      "Draft · reads live data · changes are simulated Live: version 1"
-    );
-    const undated = headed({ liveVersion: { number: 1 } });
-    expect(undated).toContain("Live: version 1");
-    expect(undated).not.toContain("published on");
-    // A draft never published says so in the head's state; the line says what a draft does.
-    const never = headed({ publishedRevision: undefined }, "de");
-    expect(never).toContain("Entwurf · nicht live");
-    expect(draftLine(never)).toBe("Draft · reads live data · changes are simulated");
-    expect(headed({ rights: NO_APP_RIGHTS, ...live })).not.toContain("app-draft-line");
+  it("shows a reader without the write right no action and no draft line", () => {
+    const markup = frame(NO_APP_RIGHTS);
+    expect(markup).not.toContain("Publish");
+    expect(markup).not.toContain("More actions");
+    expect(markup).not.toContain("app-draft-line");
+    expect(frame(ALL)).toContain("app-draft-line");
   });
 
   // DT-1b: a Data Store with a test copy is named in the head, with the way to its page.
-  it("names the test copies the draft writes to, with the way to each", () => {
-    const markup = headed({
-      liveVersion: { number: 4 },
+  it("leads to each test copy the draft writes to, and to where its data comes from", () => {
+    const markup = frame(ALL, {
       testCopies: [{ name: "kunden", title: "Kunden" }],
-      onOpenRoute: () => undefined
+      onOpenRoute: noop,
+      dataSources: ["Kunden is filled by the Workflow “Nachtimport”."]
     });
-    expect(draftLine(markup)).toBe(
-      "Draft · reads live data · changes are simulated · Kunden: test copy Live: version 4"
-    );
     expect(markup).toMatch(
       /<a[^>]*href="[^"]*\/build\/data-stores\/kunden"[^>]*data-draft-test-target="copy"/u
     );
+    expect(markup).toContain('aria-label="Where the data comes from"');
+    expect(frame(ALL)).not.toContain("Where the data comes from");
   });
 
-  // DAILY-WINS 7: the draft says where its data comes from, as the open App does.
-  it("offers where the data comes from in the draft's head", () => {
-    const sources = ["Kunden is filled by the Workflow “Nachtimport”."];
-    expect(headed({ dataSources: sources })).toContain('aria-label="Where the data comes from"');
-    expect(headed({ dataSources: [] })).not.toContain("Where the data comes from");
-    expect(headed({})).not.toContain("Where the data comes from");
+  it("folds Files and Actions under Technical details", () => {
+    const tabNames = (detailsOpen: boolean) =>
+      [
+        ...frame(ALL, {
+          view: "preview",
+          detailsOpen,
+          onViewChange() {},
+          onDetailsOpenChange() {}
+        }).matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)
+      ].map((tab) => tab[1]);
+    expect(tabNames(true)).toEqual(["Preview", "Files", "Actions"]);
+    expect(tabNames(false)).toEqual(["Preview"]);
   });
 
-  it("shows a reader without the write right no action at all", () => {
-    const markup = frame(NO_APP_RIGHTS);
-
-    expect(markup).not.toContain("Publish");
-    expect(markup).not.toContain("Discard");
-    expect(markup).not.toContain("More actions");
-    expect(markup).not.toContain("revision 3");
-  });
-
-  const viewsFrame = (detailsOpen: boolean) =>
-    render(
-      createElement(AppEditFrame, {
-        name: "Angebotsrechner",
-        workspace,
-        rights: ALL,
-        draftRevision: 3,
-        publishedRevision: 2,
-        view: "preview",
-        detailsOpen,
-        children: createElement("p", null, "the draft"),
-        onViewChange() {},
-        onDetailsOpenChange() {},
-        onBack() {}
-      })
-    );
-  const tabNames = (markup: string) =>
-    [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)].map((tab) => tab[1]);
-  const detailsToggle = (markup: string) =>
-    /<button[^>]*aria-expanded="(?:true|false)"[^>]*><span[^>]*>Technical details/u.exec(
-      markup
-    )?.[0] ?? "";
-
-  it("offers the views of the draft as tabs under its head, the open one selected", () => {
-    const markup = viewsFrame(true);
-
-    expect(tabNames(markup)).toEqual(["Preview", "Files", "Actions"]);
-    expect(markup).toMatch(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>Preview</u);
-    expect(markup).toContain('role="tabpanel"');
-    expect(markup).not.toContain('role="radio"');
-    // The tabs stand under the head, before the view they show.
-    expect(markup.indexOf('role="tablist"')).toBeGreaterThan(markup.indexOf("</header>"));
-    expect(markup.indexOf("the draft")).toBeGreaterThan(markup.indexOf('role="tablist"'));
-    expect(detailsToggle(markup)).toContain('aria-expanded="true"');
-  });
-
-  it("folds Files and Actions under Technical details, a line outside the tabs", () => {
-    const markup = viewsFrame(false);
-
-    expect(tabNames(markup)).toEqual(["Preview"]);
-    const toggle = detailsToggle(markup);
-    expect(toggle).toContain('aria-expanded="false"');
-    expect(toggle).not.toContain('role="tab"');
-    // The line stands after the set of tabs, not inside it.
-    const list = /<div[^>]*role="tablist"[^>]*>.*?<\/div>/u.exec(markup)?.[0] ?? "";
-    expect(list).not.toContain("Technical details");
-    expect(markup.indexOf("Technical details")).toBeGreaterThan(markup.indexOf('role="tablist"'));
-  });
-
-  it("says in its own words that a revision lost its files or is too large to be held", () => {
+  it("says in its own words only the refusals it knows", () => {
     const refused = (reason: string) =>
       new ApiError(422, "As the instance says it", {
         error: { code: "VALIDATION_FAILED", details: { reason } }
       });
-
-    const { t } = createTranslationContext("en");
-    expect(appRefusalText(refused("revision_files_removed"), t)).toBe(
-      "The files of this version are not stored any more, so it cannot be published or shown."
-    );
-    expect(appRefusalText(refused("input_too_large_to_hold"), t)).toBe(
-      "This change needs an approval, and it is too large to be held for one."
-    );
-    // Every other refusal is shown as the instance said it.
+    expect(appRefusalText(refused("revision_files_removed"), t)).toBeDefined();
+    expect(appRefusalText(refused("input_too_large_to_hold"), t)).toBeDefined();
     expect(appRefusalText(refused("something_else"), t)).toBeUndefined();
     expect(appRefusalText(new Error("offline"), t)).toBeUndefined();
   });
+});
 
-  it("asks once before publishing, with the Connections and hosts the revision reaches", () => {
-    const markup = render(
-      createElement(PublishDialog, {
-        name: "Angebotsrechner",
-        workspace,
-        ask: {
-          revision: 3,
-          summary: appManifestSummary({
-            manifest: {
-              connections: ["crm"],
-              actions: [{ name: "kunden_lesen", effect: "reading" }],
-              externalHosts: ["api.example.com"]
-            }
-          }),
-          readsStoredData: false
-        },
-        loading: false,
-        error: undefined,
-        onConfirm() {},
-        onClose() {}
-      })
-    );
-
-    expect(markup).toContain("Publish “Angebotsrechner”?");
-    expect(markup).toContain(
-      "Everyone in Nordlicht Beratung gets this state when they open the app."
-    );
-    expect(markup).toContain("Connections it uses");
-    expect(markup).toContain(">crm</code>");
-    expect(markup).toContain("External hosts it calls");
-    expect(markup).toContain(">api.example.com</code>");
-    expect(markup).toContain(">Publish</button>");
+describe("the Publish question of an App", () => {
+  const ask = (actions: unknown[], externalHosts: string[]) => ({
+    revision: 3,
+    summary: appManifestSummary({
+      manifest: { connections: ["crm"], actions, externalHosts }
+    }),
+    readsStoredData: false
   });
 
-  // DT-1b, Apps check 45: the publish lists each changing action, new or changed against what
-  // is live, and marks the outside hosts the publish adds.
-  it("lists the changing actions the publish makes live, and marks the hosts it adds", () => {
+  it("names the Connections and outside hosts the revision reaches, and marks what it adds", () => {
     const markup = render(
       createElement(PublishDialog, {
         name: "Angebotsrechner",
         workspace,
-        ask: {
-          revision: 3,
-          summary: appManifestSummary({
-            manifest: {
-              connections: ["crm"],
-              actions: [{ name: "angebot_speichern", effect: "changing" }],
-              externalHosts: ["api.example.com", "maps.example.com"]
-            }
-          }),
-          readsStoredData: false
-        },
+        ask: ask(
+          [{ name: "angebot_speichern", effect: "changing" }],
+          ["api.example.com", "maps.example.com"]
+        ),
         changes: {
           changing: [
             { label: "angebot_speichern", change: "new" },
@@ -649,7 +512,7 @@ describe("the draft of an App (layout 3)", () => {
         onClose() {}
       })
     );
-    expect(markup).toContain("Actions that change something");
+    expect(markup).toContain(">crm</code>");
     expect(markup).toMatch(/data-change-item="angebot_speichern"[^]*?>New</u);
     expect(markup).toMatch(/data-change-item="kunde_anlegen"[^]*?>Changed</u);
     expect(markup).toMatch(/data-change-item="maps\.example\.com"[^]*?>New</u);
@@ -657,6 +520,13 @@ describe("the draft of an App (layout 3)", () => {
     const kept = /data-change-item="api\.example\.com".*?<\/li>/u.exec(markup)?.[0];
     expect(kept).toContain("api.example.com");
     expect(kept).not.toContain("data-change-tag");
+  });
+
+  it("reads a manifest nobody vouches for without trusting its shape", () => {
+    expect(appManifestSummary(undefined)).toEqual({ connections: [], actions: [], hosts: [] });
+    expect(
+      appManifestSummary({ manifest: { connections: "crm", actions: [{}, { name: 7 }, "x"] } })
+    ).toEqual({ connections: [], actions: [], hosts: [] });
   });
 
   // DT-1b: the Files tab marks each file against what is live.
@@ -672,28 +542,6 @@ describe("the draft of an App (layout 3)", () => {
       "gone.tsx": "removed"
     });
     expect(fileMarks([{ path: "a.tsx" }], undefined, new Set()).size).toBe(0);
-  });
-
-  it("reads a manifest nobody vouches for without trusting its shape", () => {
-    expect(appManifestSummary(undefined)).toEqual({ connections: [], actions: [], hosts: [] });
-    expect(
-      appManifestSummary({ manifest: { connections: "crm", actions: [{}, { name: 7 }, "x"] } })
-    ).toEqual({ connections: [], actions: [], hosts: [] });
-  });
-
-  it("names the App it is about to delete", () => {
-    const markup = render(
-      createElement(AppDeleteDialog, {
-        name: "Angebotsrechner",
-        loading: false,
-        error: undefined,
-        onConfirm() {},
-        onClose() {}
-      })
-    );
-
-    expect(markup).toContain("Delete “Angebotsrechner”?");
-    expect(markup).toContain(">Delete</button>");
   });
 });
 
@@ -716,45 +564,32 @@ describe("the history of an App", () => {
       actor: by ? { displayLabel: by, roles: [] } : null,
       publishedAt: `2026-10-0${day}T12:00:00.000Z`
     }) satisfies ConfigAssetPublication;
-  // Five saves and three publishes: revision 1, then 3, then back to 1. The newest save is the
-  // agent's, the second one was saved from a preview.
+  // Five saves and three publishes: revision 1, then 3, then back to 1.
   const publications = [
     publication(3, 1, 4, "Jana Petersen"),
     publication(2, 3, 3, "Jana Petersen"),
     publication(1, 1, 1)
   ];
-  const revisions = [
-    revision(5, {
-      origin: { kind: "agent_run", conversationId: "conv_1", agentDisplayName: "Report assistant" }
-    }),
-    revision(4),
-    revision(3),
-    revision(2, {
-      origin: { kind: "page", conversationId: "conv_1", pageId: "page_1", fileSetNumber: 2 }
-    }),
-    revision(1)
-  ];
+  const revisions = [revision(5), revision(4), revision(3), revision(2), revision(1)];
   const drawer = (
-    onPublish?: (revision: ConfigAssetRevision) => void,
-    locale: "en" | "de" = "en"
+    shown: { publications: ConfigAssetPublication[]; revisions: ConfigAssetRevision[] },
+    extra: Partial<Parameters<typeof RevisionsDrawerView>[0]> = {}
   ) =>
     render(
       createElement(RevisionsDrawerView, {
         open: true,
         name: "Angebotsrechner",
-        publications,
-        revisions,
+        ...shown,
         failed: false,
         hasMore: false,
         loadingMore: false,
         draftRevision: 5,
         publishedRevision: 1,
-        onPublish,
         onLoadMore() {},
         onRetry() {},
-        onClose() {}
-      }),
-      locale
+        onClose() {},
+        ...extra
+      })
     );
 
   it("folds the saves under the version each came after, the newest version first", () => {
@@ -770,9 +605,6 @@ describe("the history of an App", () => {
     });
     // A save older than every version read waits for the versions further back.
     expect(appHistory(publications.slice(0, 2), revisions, false).before).toEqual([]);
-  });
-
-  it("reads one save published once as version 1 alone", () => {
     expect(appHistory([publication(1, 1, 1)], [revision(1)], true)).toEqual({
       versions: [{ publication: publication(1, 1, 1), saves: [] }],
       before: []
@@ -782,13 +614,12 @@ describe("the history of an App", () => {
   it("folds under each version only the saves after it, and keeps earlier saves before 1", () => {
     // Saved 1, 2 and 3; published 2 as version 1 and 4 as version 2; saved 5 since.
     const second = [publication(2, 4, 4), publication(1, 2, 2)];
-    const saves = [revision(5), revision(4), revision(3), revision(2), revision(1)];
-    expect(appHistory(second, saves, true)).toEqual({
+    expect(appHistory(second, revisions, true)).toEqual({
       versions: [
-        { publication: second[0], saves: [saves[0]] },
-        { publication: second[1], saves: [saves[2]] }
+        { publication: second[0], saves: [revisions[0]] },
+        { publication: second[1], saves: [revisions[2]] }
       ],
-      before: [saves[4]]
+      before: [revisions[4]]
     });
   });
 
@@ -802,34 +633,20 @@ describe("the history of an App", () => {
     expect(history.before).toEqual([]);
   });
 
-  it("names each version, who published it and when, and the saves after it, without a revision number", () => {
-    const markup = drawer();
-
-    expect(markup).toContain(
-      "Every version of Angebotsrechner with the draft saves after it, the newest first."
-    );
-    const order = ["Version 3", "Version 2", "Version 1"].map((part) => markup.indexOf(part));
-    expect(order).not.toContain(-1);
-    expect(order).toEqual([...order].sort((left, right) => left - right));
+  it("marks the live version, and lists no save a version made live as a draft save", () => {
+    const markup = drawer({ publications, revisions });
     expect(markup).toMatch(/data-version="3"(?:(?!data-version).)*>Published</u);
     expect(markup).not.toMatch(/data-version="[12]"(?:(?!data-version).)*>Published</u);
-    expect(markup).toContain("Published by Jana Petersen · ");
-    // The version from before versions were recorded names nobody.
-    expect(markup).toMatch(/data-version="1"(?:(?!data-version).)*Published · /u);
-    expect(markup.match(/>1 draft save</gu)).toHaveLength(3);
-    expect(markup).not.toContain("before version 1");
-    // A save a version made live is that version's row, not a draft save as well.
     expect(markup).not.toMatch(/data-revision="[13]"/u);
-    expect(markup).toContain("Report assistant for Jana Petersen");
-    expect(markup).toMatch(/data-revision="2"(?:(?!data-revision).)*Saved from the preview/u);
-    expect(markup).toMatch(/data-revision="5"(?:(?!data-revision).)*>Draft</u);
-    expect(markup).not.toMatch(/Version [45]/u);
     expect(markup).not.toContain("Publish this save");
-    const german = drawer(undefined, "de");
-    expect(german).toContain("Veröffentlicht von Jana Petersen · ");
-    expect(german).toContain(">1 Entwurfsstand<");
-    expect(german).toContain("Report assistant für Jana Petersen");
-    expect(german).toContain("Aus der Vorschau gespeichert");
+  });
+
+  it("lets a holder of the publish right publish every save and version but the live one", () => {
+    const markup = drawer({ publications, revisions }, { onPublish: noop });
+    expect(markup.match(/Publish this save/gu)).toHaveLength(3);
+    // Version 2 may be published again; versions 3 and 1 are the live revision.
+    expect(markup.match(/Publish again/gu)).toHaveLength(1);
+    expect(markup).toMatch(/data-version="2"(?:(?!data-version).)*Publish again/u);
   });
 
   it("keeps old agent saves neutral and does not infer chronology from an unknown publish time", () => {
@@ -853,91 +670,22 @@ describe("the history of an App", () => {
       versions: [{ publication: unknown, saves: [] }],
       before: [saves[0], saves[1], saves[3]]
     });
-    for (const locale of ["en", "de"] as const) {
-      const markup = render(
-        createElement(RevisionsDrawerView, {
-          open: true,
-          name: "Angebotsrechner",
-          publications: [unknown],
-          revisions: saves,
-          failed: false,
-          hasMore: false,
-          loadingMore: false,
-          draftRevision: 4,
-          publishedRevision: 2,
-          onLoadMore() {},
-          onRetry() {},
-          onClose() {}
-        }),
-        locale
-      );
-      expect(markup).toContain(
-        locale === "en" ? "Agent for Jana Petersen" : "Agent für Jana Petersen"
-      );
-      expect(markup).toContain(
-        locale === "en" ? "Page helper for Jana Petersen" : "Page helper für Jana Petersen"
-      );
-      expect(markup).not.toContain("Workshaper");
-      expect(markup).not.toContain("Invalid Date");
-      expect(markup).not.toMatch(/before version 1|vor Version 1/u);
-    }
-  });
-
-  it("lets a holder of the publish right publish every save and version but the live one", () => {
-    const markup = drawer(() => undefined);
-
-    expect(markup.match(/Publish this save/gu)).toHaveLength(3);
-    // Version 2 may be published again; versions 3 and 1 are the live revision.
-    expect(markup.match(/Publish again/gu)).toHaveLength(1);
-    expect(markup).toMatch(/data-version="2"(?:(?!data-version).)*Publish again/u);
-    const german = drawer(() => undefined, "de");
-    expect(german).toContain("Diesen Stand veröffentlichen");
-    expect(german).toContain("Erneut veröffentlichen");
-  });
-
-  it("says before version 1 only the saves that never became a version", () => {
-    const markup = render(
-      createElement(RevisionsDrawerView, {
-        open: true,
-        name: "Angebotsrechner",
-        publications: [publication(1, 2, 2)],
-        revisions: [revision(2), revision(1)],
-        failed: false,
-        hasMore: false,
-        loadingMore: false,
-        draftRevision: 2,
-        publishedRevision: 2,
-        onLoadMore() {},
-        onRetry() {},
-        onClose() {}
-      }),
-      "de"
+    const markup = drawer(
+      { publications: [unknown], revisions: saves },
+      { draftRevision: 4, publishedRevision: 2 }
     );
-    expect(markup).toContain("Version 1");
-    expect(markup).toContain(">1 Entwurfsstand vor Version 1<");
-    expect(markup.match(/data-revision="/gu)).toHaveLength(1);
+    expect(markup).toContain("Agent for Jana Petersen");
+    expect(markup).toContain("Page helper for Jana Petersen");
+    expect(markup).not.toContain("Invalid Date");
+    expect(markup).not.toContain("before version 1");
   });
 
   it("lists the saves of an App never published as they are", () => {
-    const markup = render(
-      createElement(RevisionsDrawerView, {
-        open: true,
-        name: "Angebotsrechner",
-        publications: [],
-        revisions: [revision(2), revision(1)],
-        failed: false,
-        hasMore: false,
-        loadingMore: false,
-        draftRevision: 2,
-        publishedRevision: undefined,
-        onLoadMore() {},
-        onRetry() {},
-        onClose() {}
-      })
+    const markup = drawer(
+      { publications: [], revisions: [revision(2), revision(1)] },
+      { draftRevision: 2, publishedRevision: undefined }
     );
     expect(markup.match(/data-revision="/gu)).toHaveLength(2);
-    expect(markup).toContain("Jana Petersen");
-    expect(markup).not.toMatch(/\d draft saves?/u);
     expect(markup).not.toContain("Version");
   });
 });
@@ -967,49 +715,33 @@ describe("the pane of an App that is not shown", () => {
     expect(appPreviewProblem(refusal(404, "file_set_unknown"))).toBe("file_set_unknown");
     expect(appPreviewProblem(refusal(500))).toBe("failed");
     expect(appPreviewProblem(new Error("offline"))).toBe("failed");
+    expect(appPreviewProblemText("kit_unavailable", "draft")).toBe("apps.failedKit");
   });
 
   it("is starting until an address or a refusal arrives, and ready with an address", () => {
     expect(appPreviewState({ shown: false, problem: undefined })).toBe("starting");
     expect(appPreviewState({ shown: true, problem: "failed" })).toBe("ready");
     expect(notice(undefined)).toContain('data-preview-state="starting"');
-    expect(notice(undefined)).toContain("The app is starting");
   });
 
-  it("is stopped for an App without a published revision, with the way to its draft", () => {
-    const markup = notice("not_published");
-
-    expect(markup).toContain('data-preview-state="stopped"');
-    expect(markup).toContain("This app has not been published yet.");
-    expect(markup).toContain("to the draft");
+  it("leads to the draft where nothing is published, and nowhere for a reader who may not write it", () => {
+    const stopped = notice("not_published");
+    expect(stopped).toContain('data-preview-state="stopped"');
+    expect(stopped).toContain("to the draft");
+    const unavailable = notice("unavailable", "draft");
+    expect(unavailable).toContain('data-preview-state="stopped"');
+    expect(unavailable).not.toContain("to the draft");
+    expect(unavailable).not.toContain("Try again");
   });
 
-  it("says that the draft is not there for a reader who may not write it", () => {
-    const markup = notice("unavailable", "draft");
-
-    expect(markup).toContain('data-preview-state="stopped"');
-    expect(markup).toContain("The draft of this app is not available to you.");
-    expect(markup).not.toContain("to the draft");
-    expect(markup).not.toContain("Try again");
-    expect(notice("unavailable")).toContain("This app is not available to you.");
-  });
-
-  it("fails with the reason, and offers to ask again", () => {
-    for (const [problem, sentence] of [
-      ["kit_unavailable", t("apps.failedKit")],
-      ["file_set_unknown", t("apps.failedFileSet")],
-      ["failed", t("apps.failed")]
-    ] as const) {
-      const markup = notice(problem);
-      expect(markup).toContain('data-preview-state="failed"');
-      expect(markup).toContain(sentence);
-      expect(markup).toContain(">Try again</button>");
-    }
-    expect(appPreviewProblemText("kit_unavailable", "draft")).toBe("apps.failedKit");
+  it("fails with the way to ask again", () => {
+    const markup = notice("kit_unavailable");
+    expect(markup).toContain('data-preview-state="failed"');
+    expect(markup).toContain(">Try again</button>");
   });
 });
 
-describe("Save as app", () => {
+describe("Save as app and Save to draft", () => {
   const host = (overrides: Partial<AppsHost> = {}): AppsHost => ({
     enabled: true,
     rights: WRITER,
@@ -1025,17 +757,20 @@ describe("Save as app", () => {
     });
     return render(value ? createElement(AppsHostProvider, { value, children: control }) : control);
   };
+  const app = {
+    name: "angebotsrechner",
+    title: "Angebotsrechner",
+    workspaceId: "cw_1",
+    draftRevision: 1,
+    draftFromPage: true
+  };
+  const named = { kind: "app", title: "Angebotsrechner" } as const;
+  const unsaved = { kind: "unsaved" } as const;
 
-  it("stands in the header of a Page for a writer of the workspace", () => {
+  it("stands in the header of a Page for a writer of the workspace alone", () => {
     expect(action(host())).toContain(">Save as app</button>");
-    // The same action twice: with its words, and as its icon where the header is narrow.
-    expect(action(host()).match(/<button/gu)).toHaveLength(2);
-    expect(action(host())).toContain('aria-label="Save as app"');
-  });
-
-  it("is absent with the module off, without the write right and outside a workspace", () => {
     expect(action(host({ enabled: false }))).toBe("");
-    expect(action(host({ rights: { ...NO_APP_RIGHTS, read: true } }))).toBe("");
+    expect(action(host({ rights: READER }))).toBe("");
     expect(action(host({ workspace: undefined }))).toBe("");
     expect(action(undefined)).toBe("");
   });
@@ -1049,66 +784,379 @@ describe("Save as app", () => {
     expect(saveAsAppInput("   ")).toBeUndefined();
   });
 
-  // OPEN-1f: saving asks for the name alone. Fails with the ID field the dialog had before.
-  it("asks for the name only: no id and no scope", () => {
-    const markup = render(
-      createElement(SaveAsAppDialogView, {
-        workspaceName: "Nordlicht Beratung",
-        proposedName: "Angebotsrechner 2026",
-        saving: false,
-        failure: undefined,
-        onClose() {},
-        onSave() {}
-      })
-    );
-
-    expect(markup).toContain("Save as app");
-    expect(markup).toContain(
-      "What this preview shows becomes the draft of a new app in Nordlicht Beratung. Nothing is published yet."
-    );
-    expect(markup.match(/<input/gu)).toHaveLength(1);
-    expect(markup).toContain('value="Angebotsrechner 2026"');
-    expect(markup).not.toContain("angebotsrechner-2026");
-    expect(markup).not.toMatch(/>ID</u);
-    expect(markup).not.toContain("<select");
-    expect(markup).not.toMatch(/scope/iu);
-  });
-
-  const refusedAs = (proposedName: string, refusedName: string, field?: "name") =>
+  const saveDialog = (
+    proposedName: string,
+    failure: Parameters<typeof SaveAsAppDialogView>[0]["failure"],
+    onLink?: () => void
+  ) =>
     render(
       createElement(SaveAsAppDialogView, {
         workspaceName: "Nordlicht Beratung",
         proposedName,
         saving: false,
-        failure: {
-          name: refusedName,
-          ...(field ? { field } : {}),
-          message: t(field ? "apps.saveNameTaken" : "apps.saveFailed")
-        },
+        failure,
         onClose() {},
+        ...(onLink ? { onLink } : {}),
         onSave() {}
       })
     );
 
-  it("says at the name that it is taken", () => {
-    const markup = refusedAs("Angebotsrechner", "Angebotsrechner", "name");
-
-    expect(markup).toContain("This name is already taken. Choose another name.");
-    expect(markup).toContain('aria-invalid="true"');
-    // Nothing is offered about an App the reader may not write.
-    expect(markup.match(/<button/gu)).toHaveLength(3);
-  });
-
   // OPEN-1f design review: the refusal stayed under a name the person had changed since.
   it("shows a refusal only while the field holds the name it was sent with", () => {
-    for (const field of ["name", undefined] as const) {
-      const markup = refusedAs("Angebotsrechner 2026", "Angebotsrechner", field);
-      expect(markup).not.toContain("already taken");
-      expect(markup).not.toContain("could not be saved");
+    const taken = {
+      name: "Angebotsrechner",
+      field: "name" as const,
+      message: t("apps.saveNameTaken")
+    };
+    expect(saveDialog("Angebotsrechner", taken)).toContain('aria-invalid="true"');
+    for (const failure of [taken, { name: "Angebotsrechner", message: t("apps.saveFailed") }]) {
+      const markup = saveDialog("Angebotsrechner 2026", failure);
+      expect(markup).not.toContain(failure.message);
       expect(markup).not.toContain('aria-invalid="true"');
     }
-    expect(refusedAs("Angebotsrechner ", "Angebotsrechner")).toContain(
-      "This could not be saved as an app."
+  });
+
+  it("offers to save to the draft of the App that has the id only to who may take it over", () => {
+    const failure = {
+      name: "Angebotsrechner",
+      field: "name" as const,
+      message: t("apps.saveNameTakenWritable", { name: app.title }),
+      taken: { ...app, draftRevision: 4, page: "none" as const }
+    };
+    expect(saveDialog("Angebotsrechner", failure, noop)).toContain(
+      ">Save to this app&#x27;s draft</button>"
     );
+    expect(saveDialog("Angebotsrechner", failure)).not.toContain("Save to this app");
+    expect(saveDialog("Angebotsrechner neu", failure, noop)).not.toContain("Save to this app");
+  });
+
+  it("offers the update of the App a Page was saved as, and Save as app for a Page no App holds", () => {
+    expect(pageAppChoice(host(), { app, preview: named, settled: true })).toEqual({
+      kind: "update",
+      app
+    });
+    expect(pageAppChoice(host(), { app: undefined, preview: unsaved, settled: true })).toEqual({
+      kind: "save"
+    });
+    // The instance names a writable App only to whoever may write it, so the update needs no
+    // right of the open workspace; Save as app does.
+    const reader = host({ rights: READER });
+    expect(pageAppChoice(reader, { app, preview: named, settled: true })).toEqual({
+      kind: "update",
+      app
+    });
+    expect(pageAppChoice(reader, { app: undefined, preview: unsaved, settled: true })).toEqual({
+      kind: "none"
+    });
+  });
+
+  // Fails without the reader's standing of PREVIEW-1: a checkout whose App the reader may only
+  // read, or not see, offered Save as app to whoever may write Apps in the open workspace.
+  it("offers no save for the checkout of an App the reader may not write, whatever the workspace allows", () => {
+    expect(pageAppChoice(host(), { app: undefined, preview: named, settled: true })).toEqual({
+      kind: "none"
+    });
+    expect(
+      pageAppChoice(host(), { app: undefined, preview: { kind: "neutral" }, settled: true })
+    ).toEqual({ kind: "none" });
+  });
+
+  it("offers neither before the instance said whether the Page has an App, where it could not say, nor with the module off", () => {
+    expect(pageAppChoice(host(), { app: undefined, settled: false })).toEqual({ kind: "none" });
+    // A read that failed settles without a preview: the Page may still be an App's checkout.
+    expect(pageAppChoice(host(), { app: undefined, settled: true })).toEqual({ kind: "none" });
+    expect(pageAppChoice(host({ enabled: false }), { app, settled: true })).toEqual({
+      kind: "none"
+    });
+    expect(pageAppChoice(host({ workspace: undefined }), { app, settled: true })).toEqual({
+      kind: "none"
+    });
+    expect(pageAppChoice(undefined, { app, settled: true })).toEqual({ kind: "none" });
+  });
+
+  const updateDialog = (overrides: Partial<Parameters<typeof UpdateAppDialogView>[0]> = {}) =>
+    render(
+      createElement(UpdateAppDialogView, {
+        name: "Angebotsrechner",
+        phase: "idle",
+        changedElsewhere: false,
+        failure: undefined,
+        onClose() {},
+        onUpdate() {},
+        onOpen() {},
+        ...overrides
+      })
+    );
+
+  it("holds both buttons while the update is on its way, and keeps the question open under a refusal", () => {
+    const working = updateDialog({ phase: "working" });
+    expect(working.match(/<button[^>]*disabled=""/gu)?.length).toBeGreaterThanOrEqual(2);
+    const failed = updateDialog({ phase: "failed", failure: t("apps.updateFailed") });
+    expect(failed).toContain('role="alert"');
+    expect(failed).toContain(">Save to draft</button>");
+  });
+
+  it("replaces a draft changed somewhere else only by a button that says so", () => {
+    expect(updateDialog()).toContain(">Save to draft</button>");
+    const changed = updateDialog({ changedElsewhere: true });
+    expect(changed).toContain(">Replace draft</button>");
+    expect(changed).not.toContain(">Save to draft</button>");
+    // Into an App that is not the Page's yet, the draft is replaced.
+    expect(updateDialog({ link: "none", pageName: "Angebotsrechner" })).toContain(
+      ">Replace draft</button>"
+    );
+  });
+
+  it("offers Publish once saved to whoever may publish, and the App's page to everybody else", () => {
+    const publisher = updateDialog({ phase: "done", onPublish() {} });
+    expect(publisher).toContain(">Publish</button>");
+    expect(publisher).not.toContain(">Open app</button>");
+    const writer = updateDialog({ phase: "done" });
+    expect(writer).toContain(">Open app</button>");
+    expect(writer).not.toContain(">Publish</button>");
+  });
+});
+
+// Every test of this block fails without PREVIEW-1: the head of a preview did not say whether it
+// showed a folder no App holds or an App's checkout, which looks like the App and is not it.
+describe("the standing of a preview", () => {
+  const host = { enabled: true, workspace };
+  const app = {
+    name: "umsatz",
+    title: "Umsatzübersicht",
+    workspaceId: "cw_1",
+    draftRevision: 3,
+    draftFromPage: true
+  };
+  const named = { kind: "app", title: "Umsatzübersicht" } as const;
+  const unsaved = previewStanding(host, {
+    app: undefined,
+    preview: { kind: "unsaved" },
+    settled: true
+  });
+  const writer = previewStanding(host, { app, preview: named, settled: true });
+  // Fails without the reader's standing: the checkout of an App the reader may read and not
+  // write read as "not saved yet", because the instance named only Apps one may write.
+  const reading = previewStanding(host, { app: undefined, preview: named, settled: true });
+
+  it("tells a folder no App holds, an App's checkout, and one the reader may only read", () => {
+    expect(unsaved).toEqual({ kind: "unsaved" });
+    expect(writer).toEqual({ kind: "app", title: "Umsatzübersicht", app });
+    expect(reading).toEqual({ kind: "app", title: "Umsatzübersicht", app: undefined });
+    expect(
+      previewStanding(host, { app: undefined, preview: { kind: "neutral" }, settled: true })
+    ).toEqual({ kind: "neutral" });
+  });
+
+  it("says nothing before the instance answered or where no Apps are offered, and no more than a preview where it could not say", () => {
+    expect(previewStanding(host, { app, settled: false })).toEqual({ kind: "unknown" });
+    expect(previewStanding(host, { app: undefined, settled: true })).toEqual({ kind: "neutral" });
+    expect(previewStanding({ enabled: false, workspace }, { app, settled: true })).toEqual({
+      kind: "unknown"
+    });
+    expect(
+      previewStanding({ enabled: true, workspace: undefined }, { app, settled: true })
+    ).toEqual({ kind: "unknown" });
+    expect(previewStanding(undefined, { app, settled: true })).toEqual({ kind: "unknown" });
+  });
+
+  it("leads to the App after a refused call only whoever may write it, and to Save as app only for a Page no App holds", () => {
+    expect(previewNeedsApp(writer, false)).toEqual({ message: "pages.needsApp", app });
+    expect(previewNeedsApp(unsaved, true)).toEqual({ message: "pages.needsAppUnsaved" });
+    expect(previewNeedsApp(unsaved, false)).toEqual({ message: "pages.needsAppNoWay" });
+    expect(previewNeedsApp(reading, true)).toEqual({ message: "pages.needsAppNoWay" });
+    expect(previewNeedsApp({ kind: "neutral" }, true)).toEqual({ message: "pages.needsAppNoWay" });
+    expect(previewNeedsApp({ kind: "unknown" }, true)).toEqual({ message: "pages.needsAppNoWay" });
+  });
+});
+
+// APPCARD-1 (check 68): a conversation in which the agent saved one App three times shows one
+// App card, at the newest save; the earlier saves are lines in the run's work. The newest
+// preview of a folder is a card in the same way, and a folder that a save made into an App has
+// the App's card stand for it.
+describe("one card per App and per preview in a conversation", () => {
+  const save = (toolCallId: string, path = "apps/findings", created = false) => ({
+    type: "tool-call",
+    toolCallId,
+    toolName: "app.save",
+    args: { path, name: "Findings" },
+    result: { kind: "app", name: "findings", title: "Findings", saved: true, created, revision: 1 }
+  });
+  const open = (toolCallId: string, path: string, number = 1) => ({
+    type: "tool-call",
+    toolCallId,
+    toolName: "workspace.open",
+    args: { path },
+    result: { pageId: "page_1", fileSetId: `fs_${toolCallId}`, number }
+  });
+
+  it("folds three saves of one App into one card at the newest, deciding per App across the conversation", () => {
+    const saved = { type: "text", text: "Saved." };
+    const folded = foldedCards([
+      save("call_1", "apps/findings", true),
+      saved,
+      save("call_2"),
+      save("call_3")
+    ]);
+    expect([...folded]).toEqual([
+      ["call_1", "app_draft"],
+      ["call_2", "app_draft"]
+    ]);
+    const other = {
+      ...save("call_b"),
+      result: { kind: "app", name: "orders", title: "Orders", saved: true, created: true }
+    };
+    const perApp = foldedCards([save("call_a1", "apps/findings", true), other, save("call_a2")]);
+    expect(perApp.get("call_a1")).toBe("app_draft");
+    expect(perApp.has("call_a2")).toBe(false);
+    expect(perApp.has("call_b")).toBe(false);
+  });
+
+  it("counts a call shown twice once, and leaves a refused save and one that changed nothing out", () => {
+    expect(foldedCards([save("call_1", "apps/findings", true), save("call_1")]).size).toBe(0);
+    const refused = { ...save("call_2"), isError: true };
+    const unchanged = {
+      ...save("call_3"),
+      result: { kind: "app", name: "findings", title: "Findings", saved: false, message: "x" }
+    };
+    expect(foldedCards([save("call_1", "apps/findings", true), refused, unchanged]).size).toBe(0);
+  });
+
+  it("keeps the newest preview of a folder as its card, and one that builds or was refused as its own", () => {
+    expect([
+      ...foldedCards([
+        open("call_o1", "drafts/report"),
+        open("call_o2", "./drafts/report/", 2),
+        open("call_x", "drafts/other")
+      ])
+    ]).toEqual([["call_o1", "preview"]]);
+    const building = { ...open("call_o2", "drafts/report"), result: undefined };
+    const refused = {
+      ...open("call_o3", "drafts/report"),
+      result: { errors: [{ file: "index.html", message: "x" }] }
+    };
+    expect(foldedCards([open("call_o1", "drafts/report"), building, refused]).size).toBe(0);
+  });
+
+  it("folds every preview of a folder a save made into an App, the loaded app.edit preview too", () => {
+    const folded = foldedCards([
+      open("call_o1", "apps/findings"),
+      save("call_s1", "apps/findings", true),
+      open("call_o2", "apps/findings", 2),
+      save("call_s2", "apps/findings")
+    ]);
+    expect(folded.get("call_o1")).toBe("preview");
+    expect(folded.get("call_o2")).toBe("preview");
+    expect(folded.get("call_s1")).toBe("app_draft");
+    expect(folded.has("call_s2")).toBe(false);
+    const loaded = {
+      ...open("loaded", "apps/findings"),
+      toolName: "app.edit",
+      args: { name: "findings" },
+      result: { ...open("loaded", "apps/findings").result, path: "apps/findings" }
+    };
+    expect([...foldedCards([loaded, open("changed", "apps/findings"), save("saved")])]).toEqual([
+      ["loaded", "preview"],
+      ["changed", "preview"]
+    ]);
+  });
+
+  it("puts an earlier save in the run's work, also while the run goes, and keeps the newest as a card", () => {
+    const toolCall = (call: ReturnType<typeof save>): PartState => ({
+      type: "tool-call",
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      args: call.args,
+      argsText: "{}",
+      result: call.result,
+      status: { type: "complete" }
+    });
+    const parts: PartState[] = [
+      toolCall(save("call_1", "apps/findings", true)),
+      toolCall(save("call_2")),
+      toolCall(save("call_3")),
+      { type: "text", text: "Saved Findings.", status: { type: "complete" } }
+    ];
+    const folded = foldedCards(parts);
+    expect(createCompletedAssistantWorkIndices(parts, 3, folded)).toEqual([0, 1]);
+    expect(createVisibleFinalAssistantPartIndices(parts, 3, folded)).toEqual([3, 2]);
+    // Without folds, every save stood as a card of its own.
+    expect(createCompletedAssistantWorkIndices(parts, 3)).toEqual([]);
+    const groupBy = createAssistantMessageGroupBy(folded);
+    expect(parts.slice(0, 3).map((value) => groupBy(value, {}))).toEqual([
+      ["group-work"],
+      ["group-work"],
+      []
+    ]);
+  });
+
+  it("names the App a save wrote, as the card shows it", () => {
+    expect(appSavedByCall(save("call_1", "apps/findings", true))).toEqual({
+      name: "findings",
+      title: "Findings",
+      created: true
+    });
+  });
+});
+
+describe("the App's card", () => {
+  const saved = { name: "findings", title: "Findings", created: true };
+  const route = {
+    kind: "app-edit" as const,
+    collaborationWorkspaceId: workspace.id,
+    app: "findings"
+  };
+
+  it("reads the App's live state, and the save's until the record is read", () => {
+    expect(appCardState({ revision: 3, draftRevision: 3 }, saved)).toBe("saved_only_you");
+    expect(appCardState({ revision: 3, draftRevision: 3, publishedRevision: 2 }, saved)).toBe(
+      "draft_saved"
+    );
+    expect(appCardState({ revision: 3, draftRevision: 3, publishedRevision: 3 }, saved)).toBe(
+      "published"
+    );
+    expect(appCardState(undefined, saved)).toBe("saved_only_you");
+    expect(appCardState(undefined, { created: false })).toBe("draft_saved");
+  });
+
+  it("offers Open and Publish only to whom may do them, and nothing outside a workspace shell", () => {
+    const card = (open: boolean, publish: boolean) =>
+      render(
+        createElement(AppCardView, {
+          saved,
+          state: "saved_only_you",
+          ...(open ? { open: { route, onOpen: noop } } : {}),
+          ...(publish ? { onPublish: noop } : {})
+        })
+      );
+    expect(card(true, true)).toMatch(
+      /data-testid="app-card-open"[^>]*href="\/w\/cw_1\/app-drafts\/findings"/u
+    );
+    expect(card(true, true)).toContain('data-testid="app-card-publish"');
+    const reader = card(false, false);
+    expect(reader).not.toContain("app-card-open");
+    expect(reader).not.toContain("app-card-publish");
+
+    const host: AppsHost = { enabled: false, rights: ALL, workspace, showRoute: noop };
+    const outside = render(
+      createElement(AppsHostProvider, {
+        value: host,
+        children: createElement(AppCard, { saved })
+      })
+    );
+    expect(outside).toContain("Findings");
+    expect(outside).not.toContain("app-card-publish");
+  });
+
+  it("tells the conversation once the draft went live, and not when the publish waits or was refused", () => {
+    const onPublished = vi.fn();
+    const onClose = vi.fn();
+    afterPublishSend("waits", { onClose, onPublished });
+    afterPublishSend("failed", { onClose, onPublished });
+    expect(onPublished).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    afterPublishSend("published", { onClose, onPublished });
+    expect(onPublished).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

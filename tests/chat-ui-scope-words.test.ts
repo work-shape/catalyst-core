@@ -7,177 +7,141 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import {
-  AgentSkills,
+  AgentKnowledge,
   agentAudience,
+  assetAudience,
   assetPlace,
   createTranslationContext,
   NewAssetAvailability,
   refusalPlaceOf,
+  shareUpTo,
   tellRefusal,
-  TranslationProvider
+  TranslationProvider,
+  unreachablePlaces
 } from "./support/chat-ui";
 
 // SCOPE-WORDS: one ladder of words for where an asset sits ("Nur ich", a workspace by its name,
 // "Alle"), the same on every screen of Studio; a picker shows what cannot be used there greyed
-// with its reason; and a cross-place refusal says in plain words why, and what to do next.
+// with its reason and the share step, as the one owner check decides; a cross-place refusal says
+// in plain words why, and what to do next; a Knowledge Base and a Connection of everyone say who
+// uses them.
 
 const en = createTranslationContext("en").t;
-const de = createTranslationContext("de").t;
 
 const MINE = "cws_mine";
 const TEAM = "cws_team";
+const OTHER = "cws_other";
 const workspaces = [
   { id: MINE, name: "Kai's workspace", member: true, personal: true as const },
-  { id: TEAM, name: "Controlling", member: true }
+  { id: TEAM, name: "Controlling", member: true },
+  // A team the reader is shown but not a member of: its assets are offered nowhere here.
+  { id: OTHER, name: "Vertrieb", member: false }
 ];
+const everyone = { kind: "instance" } as const;
+const mine = { kind: "workspace", workspaceId: MINE } as const;
+const team = { kind: "workspace", workspaceId: TEAM } as const;
 
 describe("the place ladder", () => {
-  it("names the instance Everyone, the reader's own Only me, and a team by its name", () => {
-    expect(assetPlace({ kind: "instance" }, workspaces, de)).toEqual({
-      rung: "all",
-      name: "Alle"
-    });
-    expect(assetPlace({ kind: "workspace", workspaceId: MINE }, workspaces, de)).toEqual({
-      rung: "mine",
-      name: "Nur ich"
-    });
-    expect(assetPlace({ kind: "workspace", workspaceId: TEAM }, workspaces, en)).toEqual({
-      rung: "workspace",
-      name: "Controlling"
-    });
-    // A workspace the reader is not shown is named by no name, never by its id.
-    expect(assetPlace({ kind: "workspace", workspaceId: "cws_x" }, workspaces, en)).toEqual({
-      rung: "workspace",
-      name: "Another workspace"
-    });
+  it("names the rung of each place, and a workspace the reader is not shown never by its id", () => {
+    expect(assetPlace(everyone, workspaces, en).rung).toBe("all");
+    expect(assetPlace(mine, workspaces, en).rung).toBe("mine");
+    expect(assetPlace(team, workspaces, en)).toEqual({ rung: "workspace", name: "Controlling" });
+    expect(assetPlace({ kind: "workspace", workspaceId: "cws_x" }, workspaces, en).name).not.toBe(
+      "cws_x"
+    );
   });
 
-  it("says where a chat can choose an agent for everyone, and when no chat can", () => {
+  it("says when no chat can choose an agent for everyone", () => {
     const agent = (availability?: {
       mode: "all" | "selected" | "all_except";
       collaborationWorkspaceIds: string[];
       personalWorkspaces: boolean;
-    }) => ({ scope: { kind: "instance" as const }, ...(availability ? { availability } : {}) });
+    }) => ({ scope: everyone, ...(availability ? { availability } : {}) });
+    expect(
+      agentAudience(
+        agent({ mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: false }),
+        workspaces,
+        en,
+        "en"
+      )
+    ).toMatchObject({ nowhere: true });
     expect(
       agentAudience(
         agent({ mode: "all", collaborationWorkspaceIds: [], personalWorkspaces: false }),
         workspaces,
-        de,
-        "de"
-      )
-    ).toEqual({ text: "Wählbar in: Alle Arbeitsbereiche" });
-    expect(
-      agentAudience(
-        agent({ mode: "selected", collaborationWorkspaceIds: [TEAM], personalWorkspaces: true }),
-        workspaces,
-        de,
-        "de"
-      )
-    ).toEqual({ text: "Wählbar in: Controlling und Persönliche Arbeitsbereiche" });
-    // All but some: how many are left out, in either language.
-    expect(
-      agentAudience(
-        agent({ mode: "all_except", collaborationWorkspaceIds: [TEAM], personalWorkspaces: true }),
-        workspaces,
-        de,
-        "de"
-      )
-    ).toEqual({ text: "Wählbar in: Alle außer 1" });
-    expect(
-      agentAudience(
-        agent({ mode: "all_except", collaborationWorkspaceIds: [TEAM], personalWorkspaces: true }),
-        workspaces,
         en,
         "en"
       )
-    ).toEqual({ text: "Can be chosen in: All except 1" });
-    // Offered nowhere: the outcome in plain words, which the page links to "Verfügbar in".
-    expect(
-      agentAudience(
-        agent({ mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: false }),
-        workspaces,
-        de,
-        "de"
-      )
-    ).toEqual({ text: "In keinem Chat wählbar", nowhere: true });
-    expect(
-      agentAudience(
-        agent({ mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: false }),
-        workspaces,
-        en,
-        "en"
-      )
-    ).toEqual({ text: "Cannot be chosen in any chat", nowhere: true });
-    expect(agentAudience({ ...agent(), agentUse: "granted" }, workspaces, en, "en")).toEqual({
-      text: "Only people with the right to use it"
-    });
+    ).not.toHaveProperty("nowhere");
     // An agent of a workspace is used there: its place says so already.
-    expect(
-      agentAudience({ scope: { kind: "workspace", workspaceId: TEAM } }, workspaces, en, "en")
-    ).toBeUndefined();
+    expect(agentAudience({ scope: team }, workspaces, en, "en")).toBeUndefined();
+  });
+});
+
+describe("what an agent's chooser greys", () => {
+  const ids = (owner: Parameters<typeof unreachablePlaces>[0]) =>
+    unreachablePlaces(owner, workspaces).map((workspace) => workspace.id);
+
+  it("is every other place of the reader's that the owner check refuses", () => {
+    // An agent of everyone names nothing of a workspace: the reader's own and their team grey.
+    expect(ids(everyone)).toEqual([MINE, TEAM]);
+    // An agent of a team names its own and everyone's: the reader's own greys.
+    expect(ids(team)).toEqual([MINE]);
+    // An agent of the reader's own: their team greys.
+    expect(ids(mine)).toEqual([TEAM]);
+  });
+
+  it("offers to share up to the agent's place, never down or sideways", () => {
+    expect(shareUpTo(mine, everyone, workspaces, en)?.to).toEqual({ kind: "instance" });
+    expect(shareUpTo(mine, team, workspaces, en)?.to).toEqual({
+      kind: "workspace",
+      workspaceId: TEAM,
+      name: "Controlling"
+    });
+    // A team's asset does not go down to the reader alone.
+    expect(shareUpTo(team, mine, workspaces, en)).toBeUndefined();
   });
 });
 
 describe("a refusal for something of another place", () => {
-  const place = refusalPlaceOf(workspaces);
-  const refusal = (owner: unknown, usedOwner: unknown) => ({
-    reason: "invalid_scope",
-    reference: { kind: "skill", name: "steuer", owner: usedOwner },
-    owner
-  });
-
-  it("says, for an agent for everyone using the reader's own skill, why and what to do", () => {
-    const details = refusal({ kind: "instance" }, { kind: "workspace", workspaceId: MINE });
-    expect(tellRefusal(details, de, place)?.message).toBe(
-      "Das ist für alle, verwendet aber etwas, das nur dir gehört. Was für alle ist, kann nur verwenden, was auch für alle ist. Lege es unter „Alle“ an oder bitte einen Admin darum."
-    );
-    expect(tellRefusal(details, en, place)?.message).toBe(
-      "This is for everyone, but it uses something only you have. Something for everyone can only use what is for everyone too. Make that item under “Everyone”, or ask an admin to."
-    );
-  });
-
-  it("names the team and the reader's own place, and never sends to the CLI", () => {
-    const team = tellRefusal(
-      refusal({ kind: "workspace", workspaceId: TEAM }, { kind: "workspace", workspaceId: MINE }),
-      de,
-      place
-    )?.message;
-    expect(team).toBe(
-      "Das gehört zu Controlling und verwendet etwas, das nur dir gehört. Es kann nur verwenden, was zu Controlling gehört oder für alle ist. Lege es in Controlling an oder bitte einen Admin darum."
-    );
-    const mine = tellRefusal(
-      refusal({ kind: "workspace", workspaceId: MINE }, { kind: "workspace", workspaceId: TEAM }),
-      en,
-      place
-    )?.message;
-    expect(mine).toBe(
-      "This is yours alone and uses something of Controlling. It can only use what is yours or for everyone. Make that item under “Only me”."
-    );
-    // Without names to tell, the sentence still says why and what to do.
-    const unnamed = tellRefusal(
-      refusal({ kind: "workspace", workspaceId: "cws_x" }, { kind: "workspace", workspaceId: "y" }),
-      en
-    )?.message;
-    expect(unnamed).toBe(
-      "This uses something from another workspace. It can only use what belongs to its own workspace or is for everyone. Make that item there, or ask an admin to."
-    );
-    for (const message of [team, mine, unnamed]) expect(message).not.toMatch(/CLI|scope/iu);
+  it("says why and what to do, and never sends to the CLI", () => {
+    const place = refusalPlaceOf(workspaces);
+    const refusal = (owner: unknown, usedOwner: unknown) => ({
+      reason: "invalid_scope",
+      reference: { kind: "skill", name: "steuer", owner: usedOwner },
+      owner
+    });
+    const messages = [
+      tellRefusal(refusal(everyone, mine), en, place)?.message,
+      tellRefusal(refusal(team, mine), en, place)?.message,
+      tellRefusal(
+        refusal(
+          { kind: "workspace", workspaceId: "cws_x" },
+          { kind: "workspace", workspaceId: "y" }
+        ),
+        en
+      )?.message
+    ];
+    for (const message of messages) {
+      expect(message).toBeDefined();
+      expect(message).not.toMatch(/CLI|scope|cws_x/iu);
+    }
   });
 });
 
 describe("a new agent made under Only me", () => {
-  it("offers an admin no availability everywhere, greyed with the reason", () => {
+  it("offers an admin no availability everywhere", () => {
     const markup = (onlyMine: boolean) =>
       renderToStaticMarkup(
         createElement(
           TranslationProvider,
-          { locale: "de", children: null },
+          { locale: "en", children: null },
           createElement(
             UiRoot,
             { mode: "light", labels: uiLabelsEn },
             createElement(NewAssetAvailability, {
               startsIn: {
-                workspace: { id: MINE, name: "Nur ich" },
+                workspace: { id: MINE, name: "Only me" },
                 mayChooseAll: true,
                 ...(onlyMine ? { onlyMine } : {})
               },
@@ -187,27 +151,24 @@ describe("a new agent made under Only me", () => {
           )
         )
       );
-    const mine = markup(true);
-    expect(mine).toMatch(/<option value="all" disabled="">Alle Arbeitsbereiche<\/option>/u);
-    expect(mine).toContain(
-      "Das ist „Nur ich“ und kann darum keinem Team und nicht allen angeboten werden."
-    );
+    expect(markup(true)).toMatch(/<option value="all" disabled="">/u);
     expect(markup(false)).toMatch(/<option value="all">/u);
   });
 });
 
-describe("the skill chooser of an agent", () => {
+describe("the Knowledge Base chooser of an agent", () => {
   const unmounts: (() => Promise<void>)[] = [];
   afterEach(async () => {
     for (const unmount of unmounts.splice(0)) await unmount();
   });
 
-  it("shows the reader's own skill greyed, with the reason it cannot be chosen here", async () => {
+  it("shows one of another place greyed with the reason and the share step", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
     const chosen: string[][] = [];
+    const shared: string[] = [];
     await act(async () => {
       root.render(
         createElement(
@@ -216,15 +177,25 @@ describe("the skill chooser of an agent", () => {
           createElement(
             UiRoot,
             { mode: "light", labels: uiLabelsEn },
-            createElement(AgentSkills, {
+            createElement(AgentKnowledge, {
               choice: {
-                options: [{ name: "offers", title: "Check offers" }],
+                options: [{ name: "policies", title: "Policies" }],
                 onSearch: () => undefined,
+                workspaceOwned: false,
                 unusable: [
                   {
-                    name: "my-tax",
-                    title: "My tax steps",
-                    reason: "Only yours. An agent for everyone cannot use it."
+                    name: "my-notes",
+                    title: "My notes",
+                    reason: "Only yours. An agent for everyone cannot use it.",
+                    share: {
+                      label: "Share with everyone…",
+                      onSelect: () => shared.push("my-notes")
+                    }
+                  },
+                  {
+                    name: "monthly",
+                    title: "Monthly figures",
+                    reason: "In Controlling. An agent for everyone cannot use it."
                   }
                 ]
               },
@@ -241,14 +212,44 @@ describe("the skill chooser of an agent", () => {
       container.remove();
       vi.unstubAllGlobals();
     });
-    const opener = required(container.querySelector<HTMLElement>('button[aria-label^="Skills"]'));
+    const opener = required(
+      container.querySelector<HTMLElement>(`button[aria-label^="${en("knowledge.agentSection")}"]`)
+    );
     await act(async () => opener.click());
     const rows = () => [...document.querySelectorAll<HTMLElement>("[cmdk-item]")];
-    await vi.waitFor(() => expect(rows()).toHaveLength(2), { timeout: CONDITION_WAIT_MS });
-    const greyed = required(rows().find((row) => row.textContent?.startsWith("My tax steps")));
-    expect(greyed.getAttribute("aria-disabled")).toBe("true");
-    expect(greyed.textContent).toContain("Only yours. An agent for everyone cannot use it.");
-    await act(async () => greyed.click());
+    await vi.waitFor(() => expect(rows()).toHaveLength(3), { timeout: CONDITION_WAIT_MS });
+    const row = (title: string) =>
+      required(rows().find((candidate) => candidate.textContent?.startsWith(title)));
+    // Without a step of its own, a greyed row cannot be chosen.
+    const team = row("Monthly figures");
+    expect(team.getAttribute("aria-disabled")).toBe("true");
+    expect(team.textContent).toContain("In Controlling. An agent for everyone cannot use it.");
+    await act(async () => team.click());
+    // With one, choosing it starts the share and never chooses the Knowledge Base.
+    const own = row("My notes");
+    expect(own.hasAttribute("data-picker-action")).toBe(true);
+    expect(own.textContent).toContain("Share with everyone…");
+    await act(async () => own.click());
+    expect(shared).toEqual(["my-notes"]);
     expect(chosen).toEqual([]);
+  });
+});
+
+describe("who uses a Knowledge Base or a Connection", () => {
+  const all = { mode: "all" as const, collaborationWorkspaceIds: [], personalWorkspaces: false };
+
+  it("says when no agent may use one of everyone, and nothing for one of a workspace", () => {
+    expect(assetAudience("connection", { scope: everyone }, workspaces, en, "en")).toMatchObject({
+      nowhere: true
+    });
+    expect(
+      assetAudience("knowledge_base", { scope: everyone, availability: all }, workspaces, en, "en")
+    ).not.toHaveProperty("nowhere");
+    expect(
+      assetAudience("knowledge_base", { scope: team, availability: all }, workspaces, en, "en")
+    ).toBeUndefined();
+    expect(
+      assetAudience("skill", { scope: everyone, availability: all }, workspaces, en, "en")
+    ).toBeUndefined();
   });
 });

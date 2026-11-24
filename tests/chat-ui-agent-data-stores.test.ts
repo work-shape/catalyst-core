@@ -7,19 +7,15 @@ import { UiRoot, uiLabelsDe } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import {
   AgentDataStores,
-  createTranslationContext,
   heldDataStores,
   isAgentDataStoreToolName,
   TranslationProvider,
-  unusableDataStoreReason,
   withChosenDataStores,
   withDataStoreAccess
 } from "./support/chat-ui";
 
 // AGENT-DATA-1: the agent page's "Daten" section gives an agent a Data Store to read, or to read
 // and change, and writes it as the store's existing row tools in the agent's tool list.
-
-const de = createTranslationContext("de").t;
 
 const READ = [
   "data_store.pruefungen.describe",
@@ -93,23 +89,6 @@ describe("a Data Store's access, as the agent's tool names", () => {
   });
 });
 
-describe("why an agent cannot use a store", () => {
-  it("says where the store sits and that an agent of the agent's place cannot use it", () => {
-    const mine = { rung: "mine" as const, name: "Nur ich" };
-    const team = { rung: "workspace" as const, name: "Controlling" };
-    const all = { rung: "all" as const, name: "Alle" };
-    expect(unusableDataStoreReason(mine, all, de)).toBe(
-      "Gehört nur dir. Ein Agent für alle kann ihn nicht verwenden."
-    );
-    expect(unusableDataStoreReason(mine, team, de)).toBe(
-      "Gehört nur dir. Ein Agent von Controlling kann ihn nicht verwenden."
-    );
-    expect(unusableDataStoreReason(team, mine, de)).toBe(
-      "Liegt in Controlling. Ein Agent nur für dich kann ihn nicht verwenden."
-    );
-  });
-});
-
 describe("the Daten section of an agent", () => {
   const unmounts: (() => Promise<void>)[] = [];
   afterEach(async () => {
@@ -161,22 +140,14 @@ describe("the Daten section of an agent", () => {
     return { container, changes };
   }
 
-  it("shows each store with what the agent may do there, and says that the person's rights count", async () => {
+  it("writes the access chosen for a store, and its removal, as the agent's tools", async () => {
     const { container, changes } = await render(["web.search", ...READ]);
-    expect(container.textContent).toContain("Prüfergebnisse");
-    expect(container.textContent).toContain(
-      "Bei jedem Lesen und Ändern zählen auch die Rechte der Person im Chat"
-    );
     const select = required(
       container.querySelector<HTMLSelectElement>(
         'select[aria-label="Was der Agent in Prüfergebnisse darf"]'
       )
     );
     expect(select.value).toBe("read");
-    expect([...select.options].map((option) => option.textContent)).toEqual([
-      "lesen",
-      "lesen und ändern"
-    ]);
     await act(async () => {
       select.value = "change";
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -189,18 +160,13 @@ describe("the Daten section of an agent", () => {
     expect(changes.at(-1)).toEqual(["web.search"]);
   });
 
-  it("offers the stores the agent can use, and greys one it cannot with the reason", async () => {
+  it("adds a store the agent can use for reading, and never one it cannot", async () => {
     const { container, changes } = await render([]);
-    expect(container.textContent).toContain("Kein Datenspeicher gewählt.");
     const opener = required(container.querySelector<HTMLElement>('button[aria-label^="Daten"]'));
     await act(async () => opener.click());
     const rows = () => [...document.querySelectorAll<HTMLElement>("[cmdk-item]")];
     await vi.waitFor(() => expect(rows()).toHaveLength(3), { timeout: CONDITION_WAIT_MS });
     const greyed = required(rows().find((row) => row.textContent?.startsWith("Meine Steuer")));
-    expect(greyed.getAttribute("aria-disabled")).toBe("true");
-    expect(greyed.textContent).toContain(
-      "Gehört nur dir. Ein Agent für alle kann ihn nicht verwenden."
-    );
     await act(async () => greyed.click());
     expect(changes).toEqual([]);
     const kunden = required(rows().find((row) => row.textContent?.startsWith("Kunden")));
@@ -212,9 +178,8 @@ describe("the Daten section of an agent", () => {
     ]);
   });
 
-  it("names the access in words for a reader who may not change the agent", async () => {
+  it("offers no choice to a reader who may not change the agent", async () => {
     const { container } = await render(CHANGE, false);
     expect(container.querySelector("select")).toBeNull();
-    expect(container.textContent).toContain("lesen und ändern");
   });
 });

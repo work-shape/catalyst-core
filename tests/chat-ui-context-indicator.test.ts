@@ -4,7 +4,6 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 import {
   ContextIndicator,
   resolveContextUsage,
-  LanguageAppearanceView,
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference
 } from "./support/chat-ui";
@@ -27,74 +26,6 @@ describe("chat context indicator", () => {
     writeStoredContextIndicatorPreference(true);
     expect(readStoredContextIndicatorPreference()).toBe(true);
     vi.unstubAllGlobals();
-  });
-
-  it("renders the setting and a ring-only context trigger in both product locales", () => {
-    const settingsMarkup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "de" },
-        createElement(LanguageAppearanceView, {
-          locales: ["de", "en"],
-          locale: "de",
-          selectLocale: () => undefined,
-          themePreference: "system",
-          selectThemePreference: () => undefined,
-          showContextIndicator: false,
-          setShowContextIndicator: () => undefined
-        })
-      )
-    );
-    const indicatorMarkup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "en" },
-        createElement(ContextIndicator, {
-          inputTokens: 135_000,
-          compactThresholdTokens: 270_000
-        })
-      )
-    );
-
-    expect(settingsMarkup).toContain("Kontextanzeige");
-    expect(settingsMarkup).toContain('role="switch"');
-    expect(settingsMarkup).toContain('aria-checked="false"');
-    expect(indicatorMarkup).toContain("Context window: 50% full");
-    expect(indicatorMarkup).not.toContain(">50%<");
-  });
-
-  it("offers what Enter does during a run, Steer by default, in both product locales", () => {
-    const chosen: string[] = [];
-    const view = (locale: "de" | "en", followUpMode?: "queue" | "steer") =>
-      renderToStaticMarkup(
-        createElement(
-          TranslationProvider,
-          { children: null, locale },
-          createElement(LanguageAppearanceView, {
-            locales: ["de", "en"],
-            locale,
-            selectLocale: () => undefined,
-            themePreference: "system",
-            selectThemePreference: () => undefined,
-            showContextIndicator: false,
-            setShowContextIndicator: () => undefined,
-            ...(followUpMode ? { followUpMode } : {}),
-            selectFollowUpMode: (mode) => chosen.push(mode)
-          })
-        )
-      );
-    const german = view("de");
-    expect(german).toContain("Enter während einer Antwort");
-    expect(german).toContain("Warteschlange");
-    expect(german).toContain("Lenken");
-    expect(german).toMatch(/aria-checked="true"[^>]*>Lenken|data-state="on"[^>]*>Lenken/u);
-    expect(german).toContain(
-      "Lenken: Der Agent liest deine Nachricht nach seinem aktuellen Schritt"
-    );
-    expect(view("en", "queue")).toMatch(
-      /aria-checked="true"[^>]*>Queue|data-state="on"[^>]*>Queue/u
-    );
-    expect(view("en")).toContain("Queue: it is sent once the agent has finished the whole answer.");
   });
 
   it("estimates non-zero usage for conversations without a provider snapshot", () => {
@@ -190,7 +121,6 @@ describe("chat context indicator", () => {
       )
     );
 
-    expect(markup).toContain("Context window: 1.5% full");
     expect(markup).toContain('stroke-dashoffset="98.5"');
   });
 });

@@ -6,10 +6,7 @@ export {
   useOfferAgentTry,
   type AgentTryTarget
 } from "../../../packages/chat-ui/src/chat/dock/agent-try";
-export {
-  BuildUnoffered,
-  TryOpening
-} from "../../../packages/chat-ui/src/chat/dock/dock-conversation-pane";
+export { BuildUnoffered } from "../../../packages/chat-ui/src/chat/dock/dock-conversation-pane";
 export {
   acceptStartedRun,
   isTryRun,
@@ -18,7 +15,7 @@ export {
   tryOnPage,
   tryTurnOf
 } from "../../../packages/chat-ui/src/chat/dock/dock-try";
-export { tryRunLines, TryRunsLine } from "../../../packages/chat-ui/src/chat/dock/try-run-lines";
+export { tryRunLines } from "../../../packages/chat-ui/src/chat/dock/try-run-lines";
 export {
   conversationStart,
   dockBuildKind,

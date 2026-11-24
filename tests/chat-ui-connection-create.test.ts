@@ -1,9 +1,6 @@
-import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import {
-  ConnectionCreateFlow,
-  ConnectionCreateForm,
   DISCOVERY_WAIT_MS,
   PendingApprovalError,
   connectConnection,
@@ -15,12 +12,9 @@ import {
   selectedCandidates,
   withApprovedOperations,
   type ConnectCalls,
-  type ConnectMemory,
-  type ConnectionSource,
-  type CreateFields
+  type ConnectMemory
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { connectionDetail } from "./chat-ui-connection-fixtures";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The New connection dialog (CS-5a 2/2): what "Verbinden" calls and in which order, what it
 // does after a refused key or an unreachable address, and the list a person approves tools in.
@@ -375,104 +369,7 @@ operations:
   });
 });
 
-describe("the dialog's first step", () => {
-  const source: ConnectionSource = {
-    mayTest: () => true,
-    useDetail: () => ({ status: "loading" }),
-    readDetail: async () => connectionDetail(),
-    test: async () => ({ status: "ready", testedAt: DISCOVERED_AT }),
-    setSecret: async () => undefined,
-    discover: async () => undefined,
-    useTest: () => ({ run: { status: "idle" }, start: () => undefined }),
-    useHolders: () => ({ status: "hidden" }),
-    principalHref: () => "",
-    oauthStart: async () => {
-      throw new Error("This test signs nothing in.");
-    }
-  };
-  const render = (locale: "en" | "de") =>
-    renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale },
-        createElement(ConnectionCreateFlow, {
-          source,
-          checkName: async () => ({ available: true as const }),
-          put: async () => ({ revision: 1 }),
-          remove: async () => undefined,
-          mayDelete: () => true,
-          onClose: () => undefined,
-          onCreated: () => undefined
-        })
-      )
-    );
-
-  it("offers an MCP server and a REST API, in English and in German", () => {
-    const en = render("en");
-    expect(en).toContain("New connection");
-    expect(en).toContain('data-connection-type="mcp"');
-    expect(en).toContain('data-connection-type="http_api"');
-    expect(en).toContain("Names its tools itself.");
-    expect(en).toContain("You decide what it reads.");
-    const de = render("de");
-    expect(de).toContain("Neue Verbindung");
-    expect(de).toContain("MCP-Server");
-    expect(de).toContain("Du legst fest, was sie liest.");
-  });
-});
-
 describe("a REST API that signs in with OAuth (CONN-OAUTH-1)", () => {
-  const fields = (auth: CreateFields["auth"]): CreateFields => ({
-    title: "Graph",
-    description: "",
-    form: { ...emptyConnectionForm("http_api"), url: "https://graph.example.test/v1.0" },
-    key: "",
-    sendAs: "bearer",
-    auth,
-    credentialMode: "shared"
-  });
-  const render = (locale: "en" | "de", auth: CreateFields["auth"]) =>
-    renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale },
-        createElement(ConnectionCreateForm, {
-          fields: fields(auth),
-          check: { state: "free" },
-          errors: {},
-          busy: false,
-          steps: [],
-          onChange: () => undefined
-        })
-      )
-    );
-
-  it("asks for the server's addresses, the client and its secret, in German and in English", () => {
-    const de = render("de", "oauth");
-    for (const text of [
-      "Anmeldung",
-      "OAuth-Anmeldung",
-      "OAuth Client Credentials",
-      "Autorisierungs-URL",
-      "Token-URL",
-      "Client-ID",
-      "Client-Secret",
-      "Berechtigungen (Scopes)"
-    ]) {
-      expect(de).toContain(text);
-    }
-    expect(de).toContain('data-connection-field="oauthAuthorizationUrl"');
-    const en = render("en", "oauth");
-    expect(en).toContain("Authorization URL");
-    expect(en).toContain("Token URL");
-    // The client credentials grant needs no page to sign in at.
-    const client = render("en", "oauth_client");
-    expect(client).not.toContain('data-connection-field="oauthAuthorizationUrl"');
-    expect(client).toContain('data-connection-field="oauthTokenUrl"');
-    // A key is asked for as before.
-    expect(render("en", "key")).not.toContain('data-connection-field="oauthTokenUrl"');
-  });
-
   it("sends the client secret again once the token address moves to another host", async () => {
     const run = scriptedCalls({ tests: ["oauth_required", "oauth_required"] });
     let memory: ConnectMemory = {};

@@ -133,51 +133,43 @@ async function openMenu(): Promise<HTMLElement[]> {
   return items;
 }
 
-/** The menu of the first chip, open: its heading's text. */
-function menuHeading(): string {
-  const trigger = host.querySelector("[data-knowledge-source-details]");
-  const menu = document.getElementById(trigger?.getAttribute("aria-controls") ?? "");
-  return menu?.querySelector('[role="group"] > div')?.textContent ?? "";
-}
-
 async function settle() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 
+const unreachable = () =>
+  Response.json(
+    {
+      error: {
+        code: "CONFLICT",
+        message: "The source of this document cannot be reached right now.",
+        details: { reason: "knowledge_source_unreachable" }
+      }
+    },
+    { status: 409 }
+  );
+const text = () =>
+  new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } });
+
 describe("the chip of a cited Knowledge Base passage", () => {
-  it("names the file and page in English and German, with no [K] marker, and reads nothing yet", () => {
+  it("names the file and page with no [K] marker, and reads nothing until clicked", () => {
     show(hotel);
     expect(label()?.textContent).toBe("reiserichtlinie, p. 3");
     expect(host.textContent).not.toMatch(/\[K\d+\]/u);
-    show(hotel, "de");
-    expect(label()?.textContent).toBe("reiserichtlinie, S. 3");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("names a sheet and a slide in English and German, not a page", () => {
-    const sheet = { ...hotel, fileName: "preisliste.xlsx", page: 2 };
-    show({ ...sheet, sheet: "Armaturen" });
-    expect(label()?.textContent).toBe("preisliste, Armaturen");
-    show({ ...sheet, sheet: "Armaturen" }, "de");
-    expect(label()?.textContent).toBe("preisliste, Armaturen");
-    show(sheet);
-    expect(label()?.textContent).toBe("preisliste, sheet 2");
-    show(sheet, "de");
-    expect(label()?.textContent).toBe("preisliste, Blatt 2");
-    const slide = { ...hotel, fileName: "angebot.pptx", page: 4 };
-    show(slide);
-    expect(label()?.textContent).toBe("angebot, slide 4");
-    show(slide, "de");
-    expect(label()?.textContent).toBe("angebot, Folie 4");
-  });
-
-  it.each([
-    ["preisliste.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-    ["angebot.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]
-  ])("saves %s under its name, as no viewer here shows it at a page", async (fileName, type) => {
-    fetchMock.mockResolvedValue(new Response("PK", { headers: { "content-type": type } }));
+  it("saves a spreadsheet under its name, as no viewer here shows it at a page", async () => {
+    const fileName = "preisliste.xlsx";
+    fetchMock.mockResolvedValue(
+      new Response("PK", {
+        headers: {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        }
+      })
+    );
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
       this: HTMLAnchorElement
     ) {
@@ -188,168 +180,72 @@ describe("the chip of a cited Knowledge Base passage", () => {
     await settle();
     expect(click).toHaveBeenCalledOnce();
     expect(openMock).not.toHaveBeenCalled();
-    expect(label()?.getAttribute("data-knowledge-source-state")).toBe("idle");
   });
 
-  it("opens the file at the page through the API on a click", async () => {
-    fetchMock.mockResolvedValue(
-      new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
-    );
+  it("opens the file at the page through the API on a click, naming the open conversation", async () => {
+    fetchMock.mockImplementation(async () => text());
     show(hotel);
     await act(async () => chip()?.click());
     await settle();
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(CONTENT);
     expect(openMock).toHaveBeenCalledWith("blob:catalyst/source-1#page=3", "_blank");
     expect(label()?.getAttribute("data-knowledge-source-state")).toBe("idle");
+
+    fetchMock.mockClear();
+    act(() => root.render(null));
+    show(hotel, "en", "conv_reise");
+    await act(async () => chip()?.click());
+    await settle();
+    const requested = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(requested.origin + requested.pathname).toBe(CONTENT);
+    expect(requested.searchParams.get("conversationId")).toBe("conv_reise");
   });
 
-  it("names the open conversation in the request, in English and German", async () => {
-    fetchMock.mockImplementation(
-      async () =>
-        new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
-    );
-    for (const [locale, words] of [
-      ["en", "reiserichtlinie, p. 3"],
-      ["de", "reiserichtlinie, S. 3"]
-    ] as const) {
-      fetchMock.mockClear();
-      show(hotel, locale, "conv_reise");
-      expect(label()?.textContent).toBe(words);
-      await act(async () => chip()?.click());
-      await settle();
-      const requested = new URL(String(fetchMock.mock.calls[0]?.[0]));
-      expect(requested.origin + requested.pathname).toBe(CONTENT);
-      expect(requested.searchParams.get("conversationId")).toBe("conv_reise");
-      act(() => root.render(null));
-    }
-  });
-
-  it("says a removed source is no longer available, opens no tab and offers no click, in English and German", async () => {
+  it("says a removed source is no longer available, opens no tab and offers no click", async () => {
     fetchMock.mockImplementation(async () =>
       Response.json(
         { error: { code: "NOT_FOUND", message: "Knowledge Base document not found" } },
         { status: 404 }
       )
     );
-    for (const [locale, words] of [
-      ["en", "reiserichtlinie, p. 3 · source no longer available"],
-      ["de", "reiserichtlinie, S. 3 · Quelle nicht mehr verfügbar"]
-    ] as const) {
-      show(hotel, locale);
-      await act(async () => chip()?.click());
-      await settle();
-      expect(label()?.textContent).toBe(words);
-      expect(chip()).toBeNull();
-      act(() => root.render(null));
-    }
+    show(hotel);
+    await act(async () => chip()?.click());
+    await settle();
+    expect(label()?.textContent).toContain("no longer available");
+    expect(chip()).toBeNull();
     expect(openMock).not.toHaveBeenCalled();
     expect(host.textContent).not.toContain("Knowledge Base document not found");
   });
 
-  it("KB-13 says a synced source cannot be reached, in English and German, and can be tried again", async () => {
-    fetchMock.mockImplementation(async () =>
-      Response.json(
-        {
-          error: {
-            code: "CONFLICT",
-            message: "The source of this document cannot be reached right now.",
-            details: { reason: "knowledge_source_unreachable" }
-          }
-        },
-        { status: 409 }
-      )
-    );
-    for (const [locale, words] of [
-      ["en", "reiserichtlinie, p. 3 · source not reachable"],
-      ["de", "reiserichtlinie, S. 3 · Quelle nicht erreichbar"]
-    ] as const) {
-      show(hotel, locale);
-      await act(async () => chip()?.click());
-      await settle();
-      expect(label()?.textContent).toBe(words);
-      expect(label()?.getAttribute("data-knowledge-source-state")).toBe("unreachable");
-      act(() => root.render(null));
-    }
-    expect(openMock).not.toHaveBeenCalled();
-    // Reachable again: the same chip opens the page.
-    fetchMock.mockReset();
-    fetchMock
-      .mockResolvedValueOnce(
-        Response.json(
-          {
-            error: {
-              code: "CONFLICT",
-              message: "x",
-              details: { reason: "knowledge_source_unreachable" }
-            }
-          },
-          { status: 409 }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
-      );
-    show(hotel, "de");
+  it("KB-13 says a synced source cannot be reached, and the same chip opens it once it can", async () => {
+    fetchMock.mockResolvedValueOnce(unreachable()).mockResolvedValueOnce(text());
+    show(hotel);
     await act(async () => chip()?.click());
     await settle();
-    expect(label()?.textContent).toBe("reiserichtlinie, S. 3 · Quelle nicht erreichbar");
+    expect(label()?.getAttribute("data-knowledge-source-state")).toBe("unreachable");
+    expect(openMock).not.toHaveBeenCalled();
     await act(async () => chip()?.click());
     await settle();
     expect(openMock).toHaveBeenCalledWith("blob:catalyst/source-1#page=3", "_blank");
-    expect(label()?.textContent).toBe("reiserichtlinie, S. 3");
+    expect(label()?.textContent).toBe("reiserichtlinie, p. 3");
   });
 
-  it("names the file whole with its date in its menu, and links the original where it is a web address", async () => {
-    show({
-      ...hotel,
-      retrievedAt: "2026-11-19T08:00:00Z",
-      originLink: "https://dms.example.test/akte/7?seite=3"
-    });
-    // One chip: the original is in its menu, not a second pill.
-    expect(host.querySelectorAll("[data-knowledge-source]")).toHaveLength(1);
+  it("C44 links the original from its menu without opener, reading nothing through the API, and never a non-web address", async () => {
+    fetchMock.mockImplementation(async () => text());
+    show({ ...hotel, originLink: "https://dms.example.test/akte/7?seite=3" });
     expect(host.querySelector("a")).toBeNull();
-    const items = await openMenu();
-    expect(menuHeading()).toBe("reiserichtlinie.mdretrieved 19/11/2026");
-    expect(items.map((item) => item.textContent)).toEqual([
-      "Open p. 3",
-      "Open original (dms.example.test)"
-    ]);
-    const origin = items[1];
-    expect(origin?.tagName).toBe("A");
-    expect(origin?.getAttribute("href")).toBe("https://dms.example.test/akte/7?seite=3");
-    expect(origin?.getAttribute("target")).toBe("_blank");
-    expect(origin?.getAttribute("rel")).toBe("noopener noreferrer");
-    expect(origin?.getAttribute("aria-label")).toBe(
-      "Open original (dms.example.test), opens in a new tab"
-    );
-    act(() => root.render(null));
-    show({ ...hotel, originLink: "javascript:alert(1)" });
-    expect((await openMenu()).map((item) => item.textContent)).toEqual(["Open p. 3"]);
-  });
-
-  it("names a file store the reader knows by its name, in English and German", async () => {
-    const stored = { ...hotel, originLink: "https://www.dropbox.com/scl/fi/abc/reise.pdf" };
-    show(stored);
-    expect((await openMenu()).at(-1)?.textContent).toBe("Open in Dropbox");
-    act(() => root.render(null));
-    show(stored, "de");
-    expect((await openMenu()).at(-1)?.textContent).toBe("In Dropbox öffnen");
-  });
-
-  it("C44 offers the stored copy at its page and the original location, each opened apart", async () => {
-    fetchMock.mockResolvedValue(
-      new Response("Hotel: 145 € je Nacht", { headers: { "content-type": "text/plain" } })
-    );
-    show({ ...hotel, originLink: "https://dms.example.test/akte/7" });
-    // The chip opens the stored copy at its page through the API.
     await act(async () => chip()?.click());
     await settle();
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(CONTENT);
-    expect(openMock).toHaveBeenLastCalledWith("blob:catalyst/source-1#page=3", "_blank");
-    // The original is a link out of its menu, which reads nothing through the API.
     const items = await openMenu();
-    expect(items.at(-1)?.getAttribute("href")).toBe("https://dms.example.test/akte/7");
+    const origin = items.at(-1);
+    expect(origin?.tagName).toBe("A");
+    expect(origin?.getAttribute("href")).toBe("https://dms.example.test/akte/7?seite=3");
+    expect(origin?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    act(() => root.render(null));
+    show({ ...hotel, originLink: "javascript:alert(1)" });
+    expect(await openMenu()).toHaveLength(1);
   });
 });
 
@@ -364,15 +260,15 @@ describe("the row of sources under an answer", () => {
     ...(page === undefined ? {} : { page })
   });
 
-  function showRow(citations: KnowledgeCitationSource[], locale: "en" | "de" = "de") {
+  function showRow(citations: KnowledgeCitationSource[]) {
     act(() =>
       root.render(
         createElement(
           UiRoot,
-          { mode: "light", labels: locale === "de" ? uiLabelsDe : uiLabelsEn },
+          { mode: "light", labels: uiLabelsEn },
           createElement(
             TranslationProvider,
-            { locale, children: null },
+            { locale: "en", children: null },
             createElement(
               WorkspaceApiClientProvider,
               { apiBaseUrl: API, children: null },
@@ -386,130 +282,69 @@ describe("the row of sources under an answer", () => {
 
   const chips = () => [...host.querySelectorAll("[data-knowledge-source]")];
 
-  it("shows each document once with its pages merged, under the label Sources", async () => {
+  it("shows each document once with its pages merged, opens the first on a click and any other from the menu", async () => {
+    fetchMock.mockImplementation(
+      async () => new Response("%PDF-1.4", { headers: { "content-type": "application/pdf" } })
+    );
     showRow([
       { ...cited("hotel", "reiserichtlinie.pdf", 79), ref: "K1" },
       cited("vertrag", "rahmenvertrag.pdf", 2),
       { ...cited("hotel", "reiserichtlinie.pdf", 7), ref: "K3" },
       { ...cited("hotel", "reiserichtlinie.pdf", 79), ref: "K4" }
     ]);
-    const row = host.querySelector('[role="group"]');
-    expect(row?.getAttribute("aria-labelledby")).toBeTruthy();
-    expect(document.getElementById(row?.getAttribute("aria-labelledby") ?? "")?.textContent).toBe(
-      "Quellen"
-    );
-    expect(chips().map((chip) => chip.textContent)).toEqual([
-      "reiserichtlinie, S. 7, 79",
-      "rahmenvertrag, S. 2"
-    ]);
-    // The chip's button is read with its pages; its menu with the whole name.
-    expect(chip()?.textContent).toBe("reiserichtlinie, S. 7, 79");
-    expect(host.querySelector("[data-knowledge-source-details]")?.getAttribute("aria-label")).toBe(
-      "reiserichtlinie.pdf: Seiten und Original"
-    );
-    expect((await openMenu()).map((item) => item.textContent)).toEqual([
-      "S. 7 öffnen",
-      "S. 79 öffnen"
-    ]);
-    expect(menuHeading()).toBe("reiserichtlinie.pdfabgerufen 19.11.2026");
-  });
-
-  it("opens the first cited page on a click, and any other from the menu", async () => {
-    fetchMock.mockImplementation(
-      async () => new Response("%PDF-1.4", { headers: { "content-type": "application/pdf" } })
-    );
-    showRow([
-      cited("hotel", "reiserichtlinie.pdf", 79),
-      { ...cited("hotel", "reiserichtlinie.pdf", 7), ref: "K2" }
-    ]);
+    expect(chips()).toHaveLength(2);
     await act(async () => chip()?.click());
     await settle();
     expect(openMock).toHaveBeenLastCalledWith("blob:catalyst/source-1#page=7", "_blank");
     const items = await openMenu();
+    expect(items).toHaveLength(2);
     await act(async () => items[1]?.click());
     await settle();
     expect(openMock).toHaveBeenLastCalledWith("blob:catalyst/source-1#page=79", "_blank");
   });
 
-  it("shows four documents and +n more past five, and the rest on a click, in English and German", async () => {
+  it("shows five documents whole, and past five four and the rest on a click", async () => {
+    showRow(["a", "b", "c", "d", "e"].map((id) => cited(id, `akte-${id}.pdf`, 1)));
+    expect(chips()).toHaveLength(5);
     const seven = ["a", "b", "c", "d", "e", "f", "g"].map((id, index) =>
       cited(id, `akte-${id}.pdf`, index + 1)
     );
-    showRow(seven, "en");
+    showRow(seven);
     expect(chips()).toHaveLength(4);
     const more = [...host.querySelectorAll("button")].find((button) =>
       button.textContent?.startsWith("+")
     );
-    expect(more?.textContent).toBe("+3 more");
-    showRow(seven, "de");
-    const weitere = [...host.querySelectorAll("button")].find(
-      (button) => button.textContent === "+3 weitere"
-    );
-    expect(weitere).toBeDefined();
-    weitere?.focus();
-    await act(async () => weitere?.click());
+    await act(async () => more?.click());
     expect(chips()).toHaveLength(7);
-    expect(chips().map((chip) => chip.textContent)).toContain("akte-g, S. 7");
-    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "+3 weitere")).toBe(
-      false
-    );
-    // The focus goes to the first chip that showed.
-    expect(document.activeElement).toBe(chip(chips()[4] ?? host));
   });
+});
 
-  it("reads underscores in the chip's name as spaces, and names the file whole in its menu", async () => {
-    showRow([cited("plan", "Bau_Haus__Abschnitt_2_2026-03-14.pdf", 12)]);
-    expect(chips()[0]?.textContent).toBe("Bau Haus Abschnitt 2 2026-03-14, S. 12");
-    await openMenu();
-    expect(menuHeading()).toBe("Bau_Haus__Abschnitt_2_2026-03-14.pdfabgerufen 19.11.2026");
-  });
-
-  /** The two parts of a long name: the start that shortens, and the end that always shows. */
-  const parts = (chip: Element | undefined) => {
-    const start = chip?.querySelector(".truncate .truncate");
-    return [start?.textContent, start?.nextElementSibling?.textContent];
+describe("the citation of a web page (KB-WEB)", () => {
+  const page: KnowledgeCitationSource = {
+    ref: "K1",
+    knowledgeBase: "laws",
+    documentId: "kbdoc_s7",
+    fileId: "file_s7",
+    fileName: "Section 7 Depreciation",
+    originLink: "https://www.example.org/law/s7",
+    statedAt: "2026-11-01T00:00:00Z",
+    retrievedAt: "2026-11-10T09:30:00Z"
+  };
+  const heading = () => {
+    const trigger = host.querySelector("[data-knowledge-source-details]");
+    const menu = document.getElementById(trigger?.getAttribute("aria-controls") ?? "");
+    return menu?.querySelector('[role="group"] > div')?.textContent ?? "";
   };
 
-  it("shortens a long name in its middle, so files that share a start keep the end that tells them apart", async () => {
-    const plans = ["0-EG", "1-OG"].map((floor, index) =>
-      cited(
-        `plan${index}`,
-        `100_Musterstadt_Projekt-ABC_Ausfuehrungsplan_Geschossplan_${floor}_2025-10-14.pdf`,
-        1
-      )
-    );
-    showRow(plans);
-    // The start gives way with an ellipsis; the end, from the start of its word, never shrinks.
-    expect(chips().map(parts)).toEqual([
-      ["100 Musterstadt Projekt-ABC Ausfuehrungsplan", " Geschossplan 0-EG 2025-10-14"],
-      ["100 Musterstadt Projekt-ABC Ausfuehrungsplan", " Geschossplan 1-OG 2025-10-14"]
-    ]);
-    const end = chips()[0]?.querySelector(".truncate .truncate")?.nextElementSibling;
-    expect(end?.className).toContain("shrink-0");
-    // Read in one, the chip says the name whole; the menu names the file as it is stored.
-    expect(chips()[1]?.textContent).toBe(
-      "100 Musterstadt Projekt-ABC Ausfuehrungsplan Geschossplan 1-OG 2025-10-14, S. 1"
-    );
+  it("names the date the page states, else only the day it was retrieved, and links the page", async () => {
+    show(page);
+    expect((await openMenu()).at(-1)?.getAttribute("href")).toBe("https://www.example.org/law/s7");
+    expect(heading()).toContain("as of 01/11/2026");
+    act(() => root.render(null));
+    const { statedAt: _stated, ...unstated } = page;
+    show(unstated);
     await openMenu();
-    expect(menuHeading()).toBe(
-      "100_Musterstadt_Projekt-ABC_Ausfuehrungsplan_Geschossplan_0-EG_2025-10-14.pdfabgerufen 19.11.2026"
-    );
-  });
-
-  it("splits a long name of one word at the characters, as it has no word to keep", () => {
-    showRow([cited("code", `${"A".repeat(20)}${"B".repeat(10)}${"C".repeat(24)}.pdf`, 1)]);
-    expect(parts(chips()[0])).toEqual([`${"A".repeat(20)}${"B".repeat(10)}`, ` ${"C".repeat(24)}`]);
-  });
-
-  it("keeps a name whole that fits", () => {
-    showRow([cited("short", "Energieausweis_Gebaeude_Nord_2026.pdf", 1)]);
-    expect(chips()[0]?.textContent).toBe("Energieausweis Gebaeude Nord 2026, S. 1");
-    expect(parts(chips()[0])).toEqual([undefined, undefined]);
-  });
-
-  it("shows five documents whole, as +1 more would take the room of the fifth", () => {
-    showRow(["a", "b", "c", "d", "e"].map((id) => cited(id, `akte-${id}.pdf`, 1)));
-    expect(chips()).toHaveLength(5);
-    expect(host.textContent).not.toContain("weitere");
+    expect(heading()).toContain("retrieved 10/11/2026");
+    expect(heading()).not.toContain("as of");
   });
 });

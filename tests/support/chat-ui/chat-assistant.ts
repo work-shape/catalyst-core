@@ -1,9 +1,6 @@
 export { agentChangeLines } from "../../../packages/chat-ui/src/chat/assistant/agent-change-line";
 export { AssistantActivityStatus } from "../../../packages/chat-ui/src/chat/assistant/assistant-activity-status";
-export {
-  AssistantComposer,
-  shouldExpandComposer
-} from "../../../packages/chat-ui/src/chat/assistant/assistant-composer";
+export { AssistantComposer } from "../../../packages/chat-ui/src/chat/assistant/assistant-composer";
 export {
   acknowledgeRecentlyActiveAssistantRunId,
   isRecentlyActiveAssistantRunId,
@@ -70,8 +67,6 @@ export {
   createThreadTimes,
   dayMarkerLabel,
   dayOpeningMessages,
-  formatElapsedSeconds,
-  formatWorkHistoryLabel,
   msUntilNextMidnight,
   transcriptMessageTimes
 } from "../../../packages/chat-ui/src/chat/assistant/thread-time";

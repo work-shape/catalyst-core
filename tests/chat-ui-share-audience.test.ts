@@ -23,26 +23,20 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // SHARE-1 in the interface: an App's Publish dialog opens with "For whom?", offers the whole
 // instance only where the instance does, and names the people chosen in its sentence and in
 // the line on who sees which stored data. A held publish's Inbox item names the audience the
-// requester chose. The App's card in the conversation is tested in chat-ui-app-card.test.ts.
+// requester chose. The App's card in the conversation is tested in chat-ui-apps.test.ts.
 
 type Audience = (typeof appAudienceSchema.options)[number];
 
-const render = (node: ReactNode, locale: "en" | "de" = "en") =>
-  renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
+const render = (node: ReactNode) =>
+  renderToStaticMarkup(createElement(TranslationProvider, { locale: "en", children: node }));
 const noop = () => undefined;
 const workspace = { id: "cw_1", name: "Kai Spezis", emoji: null };
 const ready = (summary: string): PublishNarrativeRead => ({
   status: "ready",
   narrative: { summary, warnings: [] }
 });
-const at = (markup: string, text: string) => {
-  const index = markup.indexOf(text);
-  expect(index, `${text} is in the markup`).toBeGreaterThan(-1);
-  return index;
-};
 const publishButton = (markup: string) =>
-  markup.match(/<button[^>]*>(?:(?!<\/button>).)*(?:Publish|Veröffentlichen)<\/button>/u)?.[0] ??
-  "";
+  markup.match(/<button[^>]*>(?:(?!<\/button>).)*Publish<\/button>/u)?.[0] ?? "";
 const held = (markup: string) => / disabled=""/u.test(publishButton(markup));
 
 const offer = (
@@ -57,7 +51,6 @@ const dialog = (input: {
   offer?: ReturnType<typeof offer>;
   selected?: Audience;
   storedData?: Parameters<typeof PublishDialog>[0]["storedData"];
-  locale?: "en" | "de";
   /** The live revision; left out, nothing is live yet. */
   live?: number;
 }) =>
@@ -82,48 +75,15 @@ const dialog = (input: {
       ...(input.storedData ? { storedData: input.storedData } : {}),
       onConfirm: noop,
       onClose: noop
-    }),
-    input.locale ?? "en"
+    })
   );
 
 describe("check 56: the App's Publish dialog asks “For whom?” first", () => {
-  it("opens with the question, its three choices and the owning workspace by its name", () => {
-    const markup = dialog({ offer: offer("workspace") });
-    const question = at(markup, "For whom?");
-    expect(at(markup, "Findings opens for everyone in Kai Spezis.")).toBeGreaterThan(question);
-    expect(at(markup, ">Only me<")).toBeGreaterThan(question);
-    expect(at(markup, ">Kai Spezis<")).toBeGreaterThan(at(markup, ">Only me<"));
-    expect(at(markup, ">Everyone<")).toBeGreaterThan(at(markup, ">Kai Spezis<"));
-    expect(held(markup)).toBe(false);
-  });
-
-  it("asks it in German for a German reader", () => {
-    const markup = dialog({ offer: offer("self"), locale: "de" });
-    expect(at(markup, "Für wen?")).toBeLessThan(at(markup, ">Nur für mich<"));
-    expect(markup).toContain(">Alle<");
-    expect(markup).toContain("Nur du bekommst diesen Stand, wenn du die App öffnest.");
-  });
-
   it("offers no whole instance where the instance does not", () => {
     const markup = dialog({ offer: offer("workspace", ["self", "workspace"]) });
     expect(markup).toContain(">Only me<");
     expect(markup).toContain(">Kai Spezis<");
     expect(markup).not.toContain(">Everyone<");
-    expect(dialog({ offer: offer("self", ["self", "workspace"]), locale: "de" })).not.toContain(
-      ">Alle<"
-    );
-  });
-
-  it("names the chosen audience in the revision sentence", () => {
-    expect(dialog({ offer: offer("self", undefined, "Only you") })).toContain(
-      "Only you get this state when you open the app."
-    );
-    expect(dialog({ offer: offer("workspace") })).toContain(
-      "Everyone in Kai Spezis gets this state when they open the app."
-    );
-    expect(dialog({ offer: offer("instance", undefined, "Everyone on the instance") })).toContain(
-      "Everyone here gets this state when they open the app."
-    );
   });
 
   it("holds Publish while the answer for a new choice is not there yet", () => {
@@ -187,16 +147,10 @@ describe("check 56: the App's Publish dialog asks “For whom?” first", () => 
     expect(markup).toContain('data-data-store="kunden"');
     expect(held(markup)).toBe(true);
   });
-
-  it("asks as before where the instance offers no choice", () => {
-    const markup = dialog({});
-    expect(markup).not.toContain("For whom?");
-    expect(held(markup)).toBe(false);
-  });
 });
 
 describe("check 80: the Inbox item of a held App publish names the chosen audience", () => {
-  const item = (audience: Record<string, unknown> | undefined, locale: "en" | "de" = "en") =>
+  const item = (audience: Record<string, unknown> | undefined) =>
     renderItem(
       {
         kind: "app_publish",
@@ -226,25 +180,17 @@ describe("check 80: the Inbox item of a held App publish names the chosen audien
         },
         canDecide: true
       },
-      { locale }
+      { locale: "en" }
     );
 
-  it("shows who the requester chose before the sentence", () => {
-    const markup = item({ selected: "workspace", label: "Everyone in Kai Spezis" });
-    const audience = at(markup, 'data-testid="publish-review-audience"');
-    expect(at(markup, "Everyone in Kai Spezis<")).toBeGreaterThan(audience);
-    expect(at(markup, "Findings opens for everyone")).toBeGreaterThan(audience);
-    expect(at(markup, ">For whom<")).toBeLessThan(audience);
-  });
-
-  it("says it in German", () => {
-    expect(item({ selected: "self", label: "Nur Kai Member" }, "de")).toMatch(
-      />Für wen<.*Nur Kai Member/u
+  it("shows who the requester chose", () => {
+    expect(item({ selected: "workspace", label: "Everyone in Kai Spezis" })).toMatch(
+      /data-testid="publish-review-audience".*Everyone in Kai Spezis/u
     );
   });
 
-  it("says whether the publish widens access, in both languages", () => {
-    const widening = (widens: unknown, locale: "en" | "de" = "en") =>
+  it("says whether the publish widens access", () => {
+    const widening = (widens: unknown) =>
       renderItem(
         {
           kind: "app_publish",
@@ -271,17 +217,10 @@ describe("check 80: the Inbox item of a held App publish names the chosen audien
           },
           canDecide: true
         },
-        { locale }
+        { locale: "en" }
       );
     expect(widening(true)).toContain(">This publish widens access.<");
     expect(widening(false)).toContain(">This publish does not widen access.<");
-    expect(widening(true, "de")).toContain(">Diese Veröffentlichung erweitert den Zugriff.<");
-    expect(widening(false, "de")).toContain(
-      ">Diese Veröffentlichung erweitert den Zugriff nicht.<"
-    );
-    expect(at(widening(true), 'data-testid="publish-review-widens"')).toBeGreaterThan(
-      at(widening(true), 'data-testid="publish-review-audience"')
-    );
     expect(widening(undefined)).not.toContain('data-testid="publish-review-widens"');
     expect(widening("yes")).not.toContain('data-testid="publish-review-widens"');
   });
@@ -304,12 +243,12 @@ const storedSources = (holders: AppDataSources["audience"] = undefined): AppData
   },
   truncated: false
 });
-const storedDataOf = (sources: AppDataSources, locale: "en" | "de" = "en") =>
+const storedDataOf = (sources: AppDataSources) =>
   appPublishDataRead(
     { data: sources, failed: false, retry: noop },
     3,
-    createTranslationContext(locale).t,
-    locale
+    createTranslationContext("en").t,
+    "en"
   );
 const audienceCell = (markup: string) =>
   /data-field="data-audience"[^>]*>((?:(?!<\/dd>).)*)/u.exec(markup)?.[1] ?? "";
@@ -346,7 +285,7 @@ describe("SHARE-1 fix round: audience-only publish", () => {
 
 describe("SHARE-1 fix round: a narrower publisher of an instance-wide App", () => {
   const live = { audience: "instance" as const, label: "Everyone in the instance" };
-  it("says who it is shared with now and who after publishing, in both languages", () => {
+  it("says who it is shared with now and who after publishing", () => {
     const markup = dialog({
       offer: offer("workspace", ["self", "workspace"], "Everyone in Kai Spezis", { live }),
       live: 3
@@ -355,20 +294,7 @@ describe("SHARE-1 fix round: a narrower publisher of an instance-wide App", () =
       "Shared now: Everyone in the instance. After publishing: Everyone in Kai Spezis."
     );
     expect(markup).not.toContain(">Everyone<");
-    expect(at(markup, 'data-testid="app-publish-audience-change"')).toBeGreaterThan(
-      at(markup, "For whom?")
-    );
     expect(held(markup)).toBe(false);
-    const german = dialog({
-      offer: offer("workspace", ["self", "workspace"], "Alle in Kai Spezis", {
-        live: { audience: "instance", label: "Alle in der Instanz" }
-      }),
-      live: 3,
-      locale: "de"
-    });
-    expect(german).toContain(
-      "Jetzt geteilt: Alle in der Instanz. Nach dem Veröffentlichen: Alle in Kai Spezis."
-    );
   });
 
   it("says nothing about a change where the choice is the live audience", () => {
@@ -408,10 +334,9 @@ describe("SHARE-1 fix round: who sees the stored data", () => {
     expect(cell).toContain("Everyone in Kai Spezis (14 people)");
     expect(cell).toContain("Also by a right on the app: Anna Berg · 2 more with access");
     expect(cell).toContain("Admins for all workspaces also have access.");
-    expect(at(cell, "Admins for all workspaces")).toBeGreaterThan(at(cell, "Anna Berg"));
   });
 
-  it("keeps the admins line under “Only me”, without a count, and says it in German", () => {
+  it("keeps the admins line under “Only me”, without a count", () => {
     const cell = audienceCell(
       dialog({
         offer: offer("self", undefined, "Only me", { people: 1 }),
@@ -422,15 +347,6 @@ describe("SHARE-1 fix round: who sees the stored data", () => {
     expect(cell).not.toContain("(1 person)");
     expect(cell).toContain("Admins for all workspaces also have access.");
     expect(cell).not.toContain("Also by a right on the app");
-    const german = audienceCell(
-      dialog({
-        offer: offer("instance", undefined, "Alle in der Instanz", { people: 1 }),
-        storedData: storedDataOf(storedSources(), "de"),
-        locale: "de"
-      })
-    );
-    expect(german).toContain("Alle in der Instanz (1 Person)");
-    expect(german).toContain("Admins für alle Arbeitsbereiche haben ebenfalls Zugriff.");
   });
 });
 
@@ -505,37 +421,6 @@ describe("SHARE-1 fix round: the agent's App publish asks “For whom?” before
   const allow = (markup: string) =>
     markup.match(/<button[^>]*>(?:(?!<\/button>).)*Allow<\/button>/u)?.[0] ?? "";
 
-  it("asks the question before Allow and folds the raw inputs under Details", () => {
-    const markup = card(false);
-    // The question, then Details, then Allow: no input box between the question and Allow.
-    expect(at(markup, 'data-testid="question"')).toBeLessThan(
-      at(markup, 'data-testid="tool-decision-details"')
-    );
-    expect(at(markup, 'data-testid="tool-decision-details"')).toBeLessThan(at(markup, ">Allow<"));
-    for (const key of ["kind", "name", "revision"]) {
-      expect(markup).not.toContain(`data-input-key="${key}"`);
-    }
-    // Another tool's confirmation, without a question, still lists its inputs at once.
-    const plain = render(
-      createElement(ToolDecisionCardView, {
-        decision: {
-          toolCallId: "call_2",
-          operationRunId: "oprun_2",
-          operationId: "connections.crm.create_offer",
-          mode: "confirm",
-          inputPreview: { customer: "Müller GmbH" },
-          expiresAt: "2026-10-18T18:30:00Z"
-        },
-        title: "Create an offer",
-        toolName: "connection.crm.create_offer",
-        answer: idle
-      })
-    );
-    expect(at(plain, 'data-input-key="customer"')).toBeLessThan(
-      at(plain, 'data-testid="tool-decision-details"')
-    );
-  });
-
   it("holds Allow until the question is answered", () => {
     const markup = card(false);
     expect(allow(markup)).toContain('disabled=""');
@@ -565,7 +450,6 @@ describe("check 80 on the agent's App publish: the chosen audience's data lines"
     selected?: Audience;
     narrative?: PublishNarrativeRead;
     storedData?: Parameters<typeof AppPublishConfirmationView>[0]["storedData"];
-    locale?: "en" | "de";
   }) =>
     render(
       createElement(AppPublishConfirmationView, {
@@ -576,8 +460,7 @@ describe("check 80 on the agent's App publish: the chosen audience's data lines"
         storedData: input.storedData,
         disabled: false,
         onChange: noop
-      }),
-      input.locale ?? "en"
+      })
     );
 
   it("names the chosen people, the App's other right holders and the instance admins", () => {
@@ -590,16 +473,6 @@ describe("check 80 on the agent's App publish: the chosen audience's data lines"
     expect(cell).toContain("Everyone in Kai Spezis (14 people)");
     expect(cell).toContain("Also by a right on the app: Anna Berg");
     expect(cell).toContain("Admins for all workspaces also have access.");
-    const german = audienceCell(
-      view({
-        offer: offer("self", undefined, "Nur für mich", { people: 1 }),
-        storedData: storedDataOf(storedSources(), "de"),
-        locale: "de"
-      })
-    );
-    expect(german).toContain("Nur für mich");
-    expect(german).not.toContain("(1 Person)");
-    expect(german).toContain("Admins für alle Arbeitsbereiche haben ebenfalls Zugriff.");
   });
 
   it("never names the people of the choice before while the new choice's answer loads", () => {

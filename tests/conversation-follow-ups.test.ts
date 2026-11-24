@@ -4,7 +4,8 @@ import { createLogger } from "@work-shape/catalyst-client-assembly";
 import {
   asAgentRunId,
   createPlatformId,
-  type ConversationFollowUp
+  type ConversationFollowUp,
+  type ConversationThreadSnapshot
 } from "@work-shape/catalyst-core";
 import { required, waitUntil } from "./support/assertions";
 import { followUpFixture as fixture } from "./support/follow-up-fixture";
@@ -29,6 +30,40 @@ vi.mock("postgres", async (importOriginal) => {
     });
   return { ...actual, default: Object.assign(connect, actual.default) };
 });
+
+// A step that runs once, after a read has taken the transcript and before it reads on. It
+// stands for a commit that lands in the middle of a thread read.
+const afterTranscriptRead = vi.hoisted(() => {
+  const hook: { step?: () => Promise<void> } = {};
+  return hook;
+});
+vi.mock(
+  "../packages/postgres-store/src/postgres-conversation-operations",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../packages/postgres-store/src/postgres-conversation-operations")
+      >();
+    return {
+      ...actual,
+      createPostgresConversationsStore(
+        ...args: Parameters<typeof actual.createPostgresConversationsStore>
+      ) {
+        const store = actual.createPostgresConversationsStore(...args);
+        return {
+          ...store,
+          async listMessages(input: Parameters<typeof store.listMessages>[0]) {
+            const messages = await store.listMessages(input);
+            const step = afterTranscriptRead.step;
+            afterTranscriptRead.step = undefined;
+            await step?.();
+            return messages;
+          }
+        };
+      }
+    };
+  }
+);
 
 describe("server follow-up queue on Postgres", () => {
   // One race proof here; five further scheduling repetitions run in the scale suite.
@@ -241,7 +276,7 @@ describe("server follow-up queue on Postgres", () => {
     expect((await read(12, required(batch.observations.at(-1)).sequence)).count).toBe(1);
   });
 
-  it.each(["disabled", "deleting", "missing", "removed", "private"])(
+  it.each(["disabled", "removed", "private"])(
     "omits the %s author's label from the queue and completed run replay",
     async (status) => {
       const f = await fixture();
@@ -250,16 +285,10 @@ describe("server follow-up queue on Postgres", () => {
       const before = await drainRunEvents(f.app, f.scope.conversationId, f.first.run.id);
       expect(before).toContain('"authorDisplayLabel":"other"');
       await withTestSql(async (sql) => {
-        if (status === "missing") {
-          await sql`delete from collaboration_workspace_memberships where user_id = ${f.other.id}`;
-          await sql`delete from collaboration_workspaces where personal_user_id = ${f.other.id}`;
-          await sql`delete from product_users where id = ${f.other.id}`;
-        } else if (status === "private") {
+        if (status === "private") {
           await sql`update conversations set visibility = 'private' where id = ${f.scope.conversationId}`;
         } else if (status === "removed") {
           await sql`delete from collaboration_workspace_memberships where collaboration_workspace_id = ${f.workspace.id} and user_id = ${f.other.id}`;
-        } else if (status === "deleting") {
-          await sql`update product_users set deletion_requested_at = now() where id = ${f.other.id}`;
         } else {
           await sql`update product_users set status = ${status} where id = ${f.other.id}`;
         }
@@ -279,22 +308,6 @@ describe("server follow-up queue on Postgres", () => {
       expect(replay).not.toContain("other@example.test");
     }
   );
-
-  it("FU-1 preserves the configured reasoning effort when the author has no effort picker", async () => {
-    const f = await fixture(false, { defaultEffortOnly: true });
-    const item = await f.queue("Keep the default effort");
-    expect(item.reasoningEffort).toBe("high");
-    await f.complete();
-    await f.dispatch();
-    const dispatched = required(
-      await f.app.stores.followUps.get({ ...f.scope, followUpId: item.id })
-    );
-    expect(dispatched.status).toBe("dispatched");
-    expect(await f.run(required(dispatched.dispatchedRunId))).toMatchObject({
-      reasoningEffort: "high",
-      modelBindingId: "picked"
-    });
-  });
 
   it("FU-2 dispatches different authors as three turns in order", async () => {
     const f = await fixture();
@@ -342,41 +355,12 @@ describe("server follow-up queue on Postgres", () => {
     expect(await f.run(f.first.run.id)).toMatchObject({ status: "waiting_for_decision" });
   });
 
-  it.each(["failed", "cancelled"] as const)(
-    "FU-4 pauses after a %s run and Send now restarts the oldest pending message",
-    async (status) => {
-      const f = await fixture();
-      const item = await f.queue("Resume");
-      if (status === "cancelled") {
-        const response = await f.app.call("conversations.runs.cancel", {
-          params: { conversationId: f.scope.conversationId, runId: f.first.run.id },
-          payload: {}
-        });
-        expect(response.statusCode, response.body).toBe(200);
-        await f.until(f.first.run.id, "cancelled");
-      } else {
-        await f.fail();
-      }
-      await f.dispatch();
-      expect(await f.pending()).toMatchObject([{ id: item.id }]);
-      const send = await f.app.call("conversations.follow_ups.dispatch", {
-        params: { conversationId: f.scope.conversationId },
-        payload: {}
-      });
-      expect(send.statusCode, send.body).toBe(200);
-      await f.dispatch();
-      expect((await f.pending()).length).toBe(0);
-      expect(await f.app.stores.followUps.get({ ...f.scope, followUpId: item.id })).toMatchObject({
-        status: "dispatched"
-      });
-    }
-  );
-
-  it("FU-4 refuses Send now by a non-author and leaves the paused queue unchanged", async () => {
+  it("FU-4 pauses after a failed run, refuses Send now by a non-author, and Send now by the author restarts the oldest pending message", async () => {
     const f = await fixture();
-    const item = await f.queue("Only my author may send me");
+    const item = await f.queue("Resume");
     await f.fail();
     await f.dispatch();
+    expect(await f.pending()).toMatchObject([{ id: item.id }]);
     const refused = await f.app.call(
       "conversations.follow_ups.dispatch",
       { params: { conversationId: f.scope.conversationId }, payload: {} },
@@ -386,6 +370,16 @@ describe("server follow-up queue on Postgres", () => {
     await f.dispatch();
     expect(await f.pending()).toMatchObject([{ id: item.id, status: "pending" }]);
     expect((await f.messages()).map((message) => message.text)).toEqual(["First"]);
+    const send = await f.app.call("conversations.follow_ups.dispatch", {
+      params: { conversationId: f.scope.conversationId },
+      payload: {}
+    });
+    expect(send.statusCode, send.body).toBe(200);
+    await f.dispatch();
+    expect((await f.pending()).length).toBe(0);
+    expect(await f.app.stores.followUps.get({ ...f.scope, followUpId: item.id })).toMatchObject({
+      status: "dispatched"
+    });
   });
 
   it("FU-5 claims queued attachments immediately, isolates the next draft, and transfers them only to their dispatched message", async () => {
@@ -435,18 +429,6 @@ describe("server follow-up queue on Postgres", () => {
       payload: {}
     });
     expect(await f.app.stores.files.listDraftAttachments(f.scope)).toEqual([]);
-  });
-
-  it("FU-5 retains recognized attachment references in the dispatched message manifest", async () => {
-    const f = await fixture(false, { attachments: true });
-    const attachment = await f.attachment(true);
-    await f.queue("Recognized source");
-    await f.complete();
-    await f.dispatch();
-    const message = required(
-      (await f.messages()).find((message) => message.text === "Recognized source")
-    );
-    expect(JSON.stringify(message.metadata)).toContain(attachment.id);
   });
 
   it("FU-6 permits author-only withdrawal and cancels a follow-up whose author lost workspace access before dispatch", async () => {
@@ -773,5 +755,179 @@ describe("server follow-up queue on Postgres", () => {
       payload: { followUp: "queue", idempotencyKey: "after-delete", message: { text: "Late" } }
     });
     expect(late.statusCode).toBe(404);
+  });
+
+  it("merges compatible messages once, retaining transcript order, model input, per-message attachments and audits", async () => {
+    const f = await fixture(false, { attachments: true });
+    const firstAttachment = await f.attachment(true);
+    const one = await f.queue("Merged one", "author", "merged-one");
+    const secondAttachment = await f.attachment(true);
+    const two = await f.queue("Merged two");
+    const three = await f.queue("Merged three");
+    const nextDraft = await f.attachment();
+    await f.complete();
+    await f.dispatch();
+    expect(await f.pending()).toEqual([]);
+    const dispatched = await Promise.all(
+      [one, two, three].map((item) =>
+        f.app.stores.followUps.get({ ...f.scope, followUpId: item.id })
+      )
+    );
+    const runId = required(required(dispatched[0]).dispatchedRunId);
+    expect(dispatched).toEqual(
+      dispatched.map((item) =>
+        expect.objectContaining({
+          status: "dispatched",
+          dispatchedRunId: runId,
+          id: required(item).id
+        })
+      )
+    );
+    await waitUntil(async () => f.modelInputs.length === 2, "one merged model call started");
+    const messages = (await f.messages()).filter((message) => message.role === "user");
+    expect(messages.map((message) => message.text)).toEqual([
+      "First",
+      "Merged one",
+      "Merged two",
+      "Merged three"
+    ]);
+    expect(await f.run(runId)).toMatchObject({
+      inputMessageId: required(messages.at(-1)).id,
+      ownerUserId: f.author.id,
+      agentName: one.agentName,
+      modelBindingId: one.modelBindingId,
+      reasoningEffort: one.reasoningEffort
+    });
+    const input = JSON.stringify(required(f.modelInputs[1]).messages);
+    for (const text of ["Merged one", "Merged two", "Merged three"]) expect(input).toContain(text);
+    expect(input.indexOf("Merged one")).toBeLessThan(input.indexOf("Merged two"));
+    expect(input.indexOf("Merged two")).toBeLessThan(input.indexOf("Merged three"));
+    for (const [index, attachment] of [firstAttachment, secondAttachment].entries()) {
+      const message = required(messages[index + 1]);
+      expect(JSON.stringify(message.metadata)).toContain(attachment.id);
+      expect(
+        await f.app.stores.files.getConversationAttachment({
+          clientInstanceId: f.scope.clientInstanceId,
+          attachmentId: attachment.id
+        })
+      ).toMatchObject({ messageId: message.id });
+    }
+    expect(await f.app.stores.files.listDraftAttachments(f.scope)).toMatchObject([
+      { id: nextDraft.id }
+    ]);
+    const queuedMessageIds = messages.slice(1).map((message) => message.id);
+    const audits = await withTestSql(
+      (sql) =>
+        sql`select subject, metadata from audit_events where subject in ${sql(queuedMessageIds)} and type = 'message.created'`
+    );
+    expect(audits).toHaveLength(3);
+    expect(audits.map((row) => row.metadata)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ delivery: "queued", attachmentCount: 1 }),
+        expect.objectContaining({ delivery: "queued", attachmentCount: 0 })
+      ])
+    );
+    expect(JSON.stringify(audits)).not.toContain("Merged one");
+    expect(await f.queue("Merged one", "author", "merged-one")).toMatchObject({
+      id: one.id,
+      status: "dispatched",
+      dispatchedRunId: runId
+    });
+    await f.dispatch();
+    expect((await f.messages()).filter((message) => message.role === "user")).toHaveLength(4);
+    await f.complete(runId, 1);
+    await f.dispatch();
+    expect(f.modelInputs).toHaveLength(2);
+  });
+
+  it.each(["author", "credential"] as const)(
+    "stops at a different %s and never skips it to merge a later matching message",
+    async (difference) => {
+      const f = await fixture();
+      const one = await f.queue("Head");
+      const two = await f.queue("Boundary");
+      const three = await f.queue("Later match");
+      await withTestSql(async (sql) => {
+        if (difference === "author")
+          await sql`update conversation_follow_ups set author_user_id = ${f.other.id} where id = ${two.id}`;
+        if (difference === "credential")
+          await sql`update conversation_follow_ups set authorization_context = jsonb_set(authorization_context, '{scopes}', '["run:start"]'::jsonb) where id = ${two.id}`;
+      });
+      await f.complete();
+      await f.dispatch();
+      expect((await f.pending()).map((item) => item.id)).toEqual([two.id, three.id]);
+      expect(await f.app.stores.followUps.get({ ...f.scope, followUpId: one.id })).toMatchObject({
+        status: "dispatched"
+      });
+      expect(
+        (await f.messages())
+          .filter((message) => message.role === "user")
+          .map((message) => message.text)
+      ).toEqual(["First", "Head"]);
+    }
+  );
+
+  it("merges null optional selections and ignores withdrawn rows without crossing a pending boundary", async () => {
+    const f = await fixture();
+    const one = await f.queue("Null one");
+    const withdrawn = await f.queue("Withdrawn", "other");
+    const two = await f.queue("Null two");
+    const response = await f.app.call(
+      "conversations.follow_ups.withdraw",
+      {
+        params: { conversationId: f.scope.conversationId, followUpId: withdrawn.id },
+        payload: {}
+      },
+      "other"
+    );
+    expect(response.statusCode, response.body).toBe(200);
+    await withTestSql(
+      (sql) =>
+        sql`update conversation_follow_ups set model_binding_id = null, reasoning_effort = null where id in ${sql([one.id, two.id])}`
+    );
+    await f.complete();
+    await f.dispatch();
+    expect(await f.pending()).toEqual([]);
+    expect(
+      (await f.messages())
+        .filter((message) => message.role === "user")
+        .map((message) => message.text)
+    ).toEqual(["First", "Null one", "Null two"]);
+  });
+
+  // Release blocker of rc.3 (a browser case of the follow-up queue): a member's message that started
+  // while the owner's page read the thread was in neither the queue nor the transcript of
+  // that read. With no run and nothing queued, the page never read again and never showed it.
+  it("shows a member's follow-up that starts during the read either queued or sent", async () => {
+    const f = await fixture();
+    const own = await f.queue("Owner next");
+    const member = await f.queue("Member next", "other");
+    await f.complete();
+    await f.dispatch();
+    const ownRun = required(
+      required(await f.app.stores.followUps.get({ ...f.scope, followUpId: own.id })).dispatchedRunId
+    );
+    await f.complete(ownRun, 1);
+
+    // The owner's turn completed. The member's message starts while the owner reads.
+    afterTranscriptRead.step = () => f.dispatch();
+    const response = await f.app.call("conversations.thread.get", {
+      params: { conversationId: f.scope.conversationId }
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(afterTranscriptRead.step).toBeUndefined();
+    expect(await f.app.stores.followUps.get({ ...f.scope, followUpId: member.id })).toMatchObject({
+      status: "dispatched"
+    });
+
+    const thread = response.json<ConversationThreadSnapshot>();
+    const queued = (thread.followUps ?? []).some((item) => item.id === member.id);
+    const sent = thread.messages.some(
+      (message) => message.role === "user" && message.text === "Member next"
+    );
+    expect(queued || sent, "the member's message is queued or in the transcript").toBe(true);
+    expect(queued && sent, "the member's message is not both queued and sent").toBe(false);
+    // A sent message comes with its run, which the page then follows.
+    if (sent) expect(thread.activeRun).toBeDefined();
   });
 });

@@ -8,26 +8,30 @@ import {
 } from "./support/chat-ui";
 
 describe("chat UI domain UI widgets", () => {
-  it("declines rendering on version mismatch", () => {
+  it("declines rendering on a version mismatch, failed validation or an async validator", () => {
     const widget = defineToolDisplayWidget({
       kind: "demo.count",
       version: 1,
       dataSchema: z.object({ count: z.number() }),
       render: () => "rendered"
     });
-
     expect(widget(createRenderInput({ version: 2, data: { count: 1 } }))).toBeUndefined();
-  });
-
-  it("declines rendering when data validation fails", () => {
-    const widget = defineToolDisplayWidget({
-      kind: "demo.count",
-      version: 1,
-      dataSchema: z.object({ count: z.number() }),
-      render: () => "rendered"
-    });
-
     expect(widget(createRenderInput({ data: { count: "1" } }))).toBeUndefined();
+
+    const asyncSchema = {
+      "~standard": {
+        version: 1,
+        vendor: "test",
+        validate: () => Promise.resolve({ value: "ok" })
+      }
+    } satisfies StandardSchemaV1<unknown, string>;
+    const asyncWidget = defineToolDisplayWidget({
+      kind: "demo.async",
+      version: 1,
+      dataSchema: asyncSchema,
+      render: ({ data }) => data
+    });
+    expect(asyncWidget(createRenderInput({ data: "ok" }))).toBeUndefined();
   });
 
   it("passes parsed data to the render function", () => {
@@ -44,24 +48,6 @@ describe("chat UI domain UI widgets", () => {
 
     expect(widget(createRenderInput({ data: { count: "7" } }))).toBe("count:7");
     expect(renderedData).toEqual([{ count: 7 }]);
-  });
-
-  it("declines rendering for async Standard Schema validators", () => {
-    const asyncSchema = {
-      "~standard": {
-        version: 1,
-        vendor: "test",
-        validate: () => Promise.resolve({ value: "ok" })
-      }
-    } satisfies StandardSchemaV1<unknown, string>;
-    const widget = defineToolDisplayWidget({
-      kind: "demo.async",
-      version: 1,
-      dataSchema: asyncSchema,
-      render: ({ data }) => data
-    });
-
-    expect(widget(createRenderInput({ data: "ok" }))).toBeUndefined();
   });
 
   it("throws when registry builder receives duplicate widget kinds", () => {

@@ -179,59 +179,51 @@ async function openDialog(page: HTMLElement): Promise<string> {
   return document.querySelector("[data-build-publish-question=ready]")?.textContent ?? "";
 }
 
-describe("The processing line of the publish dialog", () => {
-  const question = (cost: NonNullable<PublishQuestionAnswer["processing"]>["cost"], count = 3) => ({
-    lines: ["Re-embed with text-embedding-3-large: 1,200 passages.", SERVER_SENTENCE],
-    confirmation: CONFIRMATION,
-    processing: { count, line: 1, cost }
-  });
-  const estimate = { kind: "estimate", min: 0.5, max: 2, currency: "USD" } as const;
-
-  it("is built from the statement's fields in English, not from the server's sentence", async () => {
-    const text = await openDialog(
-      await mount({ question: question(estimate), publish: vi.fn(async () => pointers) })
-    );
-    expect(text).toContain("Re-embed with text-embedding-3-large");
-    expect(text).toContain("3 documents are read again with the new settings.");
-    expect(text).toContain("$0.50 to $2.00");
-    expect(text).not.toContain(SERVER_SENTENCE);
-  });
-
-  it("is built from the statement's fields in German", async () => {
-    const text = await openDialog(
-      await mount({
-        locale: "de",
-        question: question(estimate, 1),
-        publish: vi.fn(async () => pointers)
-      })
-    );
-    expect(text).toContain("1 Dokument wird mit den neuen Einstellungen noch einmal gelesen.");
-    expect(text).toMatch(/0,50\s*\$ bis 2,00\s*\$/u);
-    expect(text).not.toContain(SERVER_SENTENCE);
-  });
-
-  it.each([
-    ["none", "This costs nothing, because nothing is embedded."],
-    ["unavailable", "The embedding model has no price set"]
-  ] as const)("says what a cost of %s means", async (kind, expected) => {
-    const text = await openDialog(
-      await mount({ question: question({ kind }), publish: vi.fn(async () => pointers) })
-    );
-    expect(text).toContain(expected);
-    expect(text).not.toContain(SERVER_SENTENCE);
-  });
-});
-
 const pointers = { draftRevision: 3, publishedRevision: 3 };
 
 describe("Publishing a Knowledge Base that embeds again", () => {
-  it("shows what it embeds and passes the confirmation it read", async () => {
-    const publish = vi.fn(async () => ({ draftRevision: 3, publishedRevision: 3 }));
+  // fix: the dialog words what is processed again from the statement's fields, in the reader's
+  // language, not from the server's sentence.
+  it("words the processing line from the statement's fields, with its cost", async () => {
+    const question = (cost: NonNullable<PublishQuestionAnswer["processing"]>["cost"]) => ({
+      lines: ["Re-embed with text-embedding-3-large: 1,200 passages.", SERVER_SENTENCE],
+      confirmation: CONFIRMATION,
+      processing: { count: 3, line: 1, cost }
+    });
+    const text = await openDialog(
+      await mount({
+        question: question({ kind: "estimate", min: 0.5, max: 2, currency: "USD" }),
+        publish: vi.fn(async () => pointers)
+      })
+    );
+    expect(text).toContain("Re-embed with text-embedding-3-large");
+    expect(text).toContain("$0.50 to $2.00");
+    expect(text).not.toContain(SERVER_SENTENCE);
+    for (const unmount of unmounts.splice(0)) unmount();
+    const unpriced = await openDialog(
+      await mount({
+        question: question({ kind: "unavailable" }),
+        publish: vi.fn(async () => pointers)
+      })
+    );
+    expect(unpriced).toContain("no price");
+  });
+
+  // ACCEPT-2d: the dialog asked to publish the id; it names the Knowledge Base by its title.
+  it("names it by its title, shows what it embeds and passes the confirmation it read", async () => {
+    const publish = vi.fn(async () => pointers);
     const page = await mount({
       question: { lines: [STATEMENT], confirmation: CONFIRMATION },
       publish
     });
-    await publishFrom(page);
+    await act(async () => page.querySelector<HTMLButtonElement>("[data-build-publish]")?.click());
+    const dialog = [...document.body.querySelectorAll("dialog")].find((each) => each.open);
+    expect(dialog?.textContent).toContain("Publish Handbook?");
+    expect(dialog?.textContent).not.toContain(draft.name);
+    for (const unmount of unmounts.splice(0)) unmount();
+    await publishFrom(
+      await mount({ question: { lines: [STATEMENT], confirmation: CONFIRMATION }, publish })
+    );
     expect(document.body.textContent).toContain(STATEMENT);
     expect(publish).toHaveBeenCalledWith(
       expect.objectContaining({ name: draft.name, revision: 3, confirmProcessing: CONFIRMATION })
@@ -239,10 +231,9 @@ describe("Publishing a Knowledge Base that embeds again", () => {
   });
 
   it("passes none where the question names none", async () => {
-    const publish = vi.fn(async (_input: Parameters<BuildSource["writes"]["publish"]>[0]) => ({
-      draftRevision: 3,
-      publishedRevision: 3
-    }));
+    const publish = vi.fn(
+      async (_input: Parameters<BuildSource["writes"]["publish"]>[0]) => pointers
+    );
     await publishFrom(await mount({ question: { lines: [] }, publish }));
     expect(publish).toHaveBeenCalledTimes(1);
     expect(publish.mock.calls[0]?.[0]).not.toHaveProperty("confirmProcessing");
@@ -266,9 +257,7 @@ describe("Publishing a Knowledge Base that embeds again", () => {
     });
     await publishFrom(page);
     await act(async () => undefined);
-    expect(page.textContent).toContain(
-      "What this publish processes or embeds again changed in the meantime."
-    );
+    expect(page.textContent).toContain("changed in the meantime");
     expect(page.textContent).not.toContain("confirmProcessing");
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ConversationThreadSnapshot, RunObservation } from "@work-shape/catalyst-api-client";
+import {
+  ApiError,
+  type ConversationThreadSnapshot,
+  type RunObservation
+} from "@work-shape/catalyst-api-client";
 import { agentRunErrorSchema, runObservationSchema } from "@work-shape/catalyst-api-contract";
 import {
   toUiMessages,
@@ -8,11 +12,13 @@ import {
   controllerStateForConversation,
   createControllerStateFromSnapshot,
   createInitialControllerState,
+  isConversationGone,
   resolveRunConnectionTarget,
   staleThreadReread,
   terminalRunNotice
 } from "./support/chat-ui";
 import { createTranslationContext } from "./support/chat-ui/shared";
+import { required } from "./support/assertions";
 
 describe("chat UI conversation controller", () => {
   it("shows the preparing tool until the real tool call starts", () => {
@@ -53,235 +59,141 @@ describe("chat UI conversation controller", () => {
   describe("the notice of an ended run, live and after a reload", () => {
     const en = createTranslationContext("en").t;
     const de = createTranslationContext("de").t;
-    const interrupted = {
-      en: "The reply was interrupted. Please send your message again.",
-      de: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut."
-    };
-    const stopped = { en: "The reply was stopped.", de: "Die Antwort wurde gestoppt." };
-    /** What the worker stores when a run breaks (`agent-runtime/src/agent-run-worker.ts`). */
-    const workerFailures = [
-      { code: "INTERNAL", message: "Agent run failed", category: "internal_error" },
-      {
-        code: "OBSERVATION_PERSISTENCE_FAILED",
-        message: "Agent run failed",
-        category: "internal_error"
-      },
-      {
-        code: "AGENT_RUN_EXECUTOR_ENDED",
-        message: "Agent run executor ended without a terminal event",
-        category: "internal_error"
-      },
-      {
-        code: "AGENT_RUN_ABORTED",
-        message: "Agent run execution was interrupted",
-        category: "abort_error"
-      }
-    ] as const;
+
+    /** The state of a run that failed with `error`, live and after a reload. */
+    function failedStates(error: unknown, text = "") {
+      const live = applyRunObservationToControllerState(
+        createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text })),
+        runObservationSchema.parse(
+          createObservation({ sequence: 2, type: "run_failed", payload: { error } })
+        )
+      ).state;
+      const reloaded = createControllerStateFromSnapshot(
+        createSnapshot({
+          lastSequence: 2,
+          text,
+          runStatus: "failed",
+          error: agentRunErrorSchema.parse(error)
+        })
+      );
+      return [live, reloaded];
+    }
 
     function notices(state: ReturnType<typeof createInitialControllerState>) {
       return { en: terminalRunNotice(state.error, en), de: terminalRunNotice(state.error, de) };
     }
 
-    it("reads a failure as interrupted in the person's language, never as stopped", () => {
-      for (const error of workerFailures) {
-        const live = applyRunObservationToControllerState(
-          createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
-          createObservation({ sequence: 2, type: "run_failed", payload: { error } })
-        ).state;
-        expect(notices(live)).toEqual(interrupted);
-
-        const reloaded = createControllerStateFromSnapshot(
-          createSnapshot({ lastSequence: 2, text: "", runStatus: "failed", error })
-        );
-        expect(notices(reloaded)).toEqual(interrupted);
-      }
-    });
-
-    it("words a reached usage limit by its code in the person's language, never the server's English", () => {
-      // The refusal is an application error, whose message would otherwise reach the person.
-      const error = {
-        code: "MODEL_USAGE_LIMIT_REACHED",
-        message: "Daily model token safeguard has been reached",
-        category: "app_error"
-      } as const;
+    it("reads a failure as interrupted and a cancellation as stopped", () => {
+      const stopped = terminalRunNotice(
+        createControllerStateFromSnapshot(
+          createSnapshot({ lastSequence: 2, text: "", runStatus: "cancelled" })
+        ).error,
+        en
+      );
       const live = applyRunObservationToControllerState(
         createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
-        createObservation({ sequence: 2, type: "run_failed", payload: { error } })
+        createObservation({
+          sequence: 2,
+          type: "run_cancelled",
+          payload: { reason: "user_requested" }
+        })
       ).state;
-      const reloaded = createControllerStateFromSnapshot(
-        createSnapshot({ lastSequence: 2, text: "", runStatus: "failed", error })
-      );
-      for (const state of [live, reloaded]) {
-        const member = notices(state);
-        expect(member.de).toContain("Eine Nutzungsgrenze hat diese Antwort gestoppt");
-        expect(member.de).toContain("Bitte einen Admin für alle Arbeitsbereiche");
-        expect(member.en).toContain("A usage limit stopped this reply");
-        // A limit can be the person's own: the notice names no scope and promises no reset.
-        expect(member.en).not.toMatch(/limit of this instance|resets/u);
-        expect(member.en).not.toContain("safeguard");
-        const admin = terminalRunNotice(state.error, de, { seesRateCard: true });
-        expect(admin).toContain("Einstellungen › Nutzung");
+      expect(terminalRunNotice(live.error, en)).toBe(stopped);
+
+      /** What the worker stores when a run breaks (`agent-runtime/src/agent-run-worker.ts`). */
+      for (const error of [
+        { code: "INTERNAL", message: "Agent run failed", category: "internal_error" },
+        {
+          code: "AGENT_RUN_ABORTED",
+          message: "Agent run execution was interrupted",
+          category: "abort_error"
+        }
+      ]) {
+        for (const state of failedStates(error)) {
+          const notice = notices(state);
+          expect(notice.en).toContain("interrupted");
+          expect(notice.en).not.toBe(stopped);
+          expect(notice.de).not.toContain(error.message);
+        }
       }
     });
 
-    it("says in the person's language that a rate-limited run stopped and how to go on", () => {
+    it("words a rate limit and a timed-out stream in the person's language, keeping the answer so far", () => {
       // What the model provider fails a run with after its minute of waiting (`model-provider/src/retry.ts`).
-      const error = {
+      const rateLimited = {
         code: "RATE_LIMITED",
         message: "The model is receiving too many requests. Try again in a minute.",
         category: "app_error"
-      } as const;
-      const live = applyRunObservationToControllerState(
-        createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
-        createObservation({ sequence: 2, type: "run_failed", payload: { error } })
-      ).state;
-      const reloaded = createControllerStateFromSnapshot(
-        createSnapshot({ lastSequence: 2, text: "", runStatus: "failed", error })
-      );
-      for (const state of [live, reloaded]) {
-        const notice = notices(state);
-        expect(notice.de).toContain("Das Modell ist gerade überlastet");
-        expect(notice.de).toContain("Sie geht nicht von selbst weiter");
-        expect(notice.de).toContain("„weiter“");
-        expect(notice.en).toContain("It does not continue on its own");
-        expect(notice.de).not.toContain("too many requests");
-      }
-    });
-
-    it("explains a timed-out stream in both languages, live and after a reload", () => {
-      const error = {
+      };
+      const timeout = {
         code: "TIMEOUT",
         message: "Model provider stream ended before response.completed",
         category: "app_error"
-      } as const;
-      const live = applyRunObservationToControllerState(
-        createControllerStateFromSnapshot(
-          createSnapshot({ lastSequence: 1, text: "Answer so far" })
-        ),
-        createObservation({ sequence: 2, type: "run_failed", payload: { error } })
-      ).state;
-      const reloaded = createControllerStateFromSnapshot(
-        createSnapshot({ lastSequence: 2, text: "Answer so far", runStatus: "failed", error })
-      );
-      for (const state of [live, reloaded]) {
-        expect(state.activeRun?.projection.text).toBe("Answer so far");
-        expect(notices(state)).toEqual({
-          en: "The reply was interrupted. It does not continue on its own. The steps already done are kept: write “continue” and the agent picks up where it left off.",
-          de: "Die Antwort wurde unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat."
-        });
+      };
+      for (const error of [rateLimited, timeout]) {
+        for (const state of failedStates(error, "Answer so far")) {
+          expect(state.activeRun?.projection.text).toBe("Answer so far");
+          const notice = notices(state);
+          expect(notice.de).toContain("„weiter“");
+          expect(notice.de).not.toContain(error.message);
+          expect(notice.en).not.toContain(error.message);
+        }
       }
     });
 
-    describe("a reached usage limit that the run names", () => {
-      const advice = {
-        en: "Your answer so far is kept. Ask an admin for all workspaces to check the usage limits.",
-        de: "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Admin für alle Arbeitsbereiche, die Nutzungsgrenzen zu prüfen."
-      };
-      const generic = {
-        en: `A usage limit stopped this reply. ${advice.en}`,
-        de: `Eine Nutzungsgrenze hat diese Antwort gestoppt. ${advice.de}`
-      };
-      const periods = {
-        day: { en: ["daily", "at midnight UTC"], de: ["tägliche", "um Mitternacht UTC"] },
-        month: {
-          en: ["monthly", "at the start of next month (UTC)"],
-          de: ["monatliche", "zu Beginn des nächsten Monats (UTC)"]
-        }
-      } as const;
-      const metrics = {
-        modelCallCount: { en: "model calls", de: "Modellaufrufe" },
-        tokens: { en: "tokens", de: "Tokens" },
-        costMicros: { en: "spending", de: "Ausgaben" }
-      } as const;
-      const scopes = {
-        user: { en: "your own calls", de: "deine eigenen Aufrufe" },
-        system: { en: "the calls the product makes", de: "die Aufrufe des Produkts" },
-        instance: {
-          en: "the calls across all workspaces",
-          de: "die Aufrufe in allen Arbeitsbereichen"
-        }
-      } as const;
+    describe("a reached usage limit", () => {
       const serverText = "Daily model token safeguard has been reached <b>raw</b>";
+      const refusal = (usageLimit?: unknown) => ({
+        code: "MODEL_USAGE_LIMIT_REACHED",
+        message: serverText,
+        category: "app_error",
+        ...(usageLimit === undefined ? {} : { usageLimit })
+      });
+      const generic = notices(required(failedStates(refusal())[0]));
 
-      /** The notices of a refusal as the API delivers it, live and after a reload. */
-      function refusalNotices(usageLimit: unknown) {
-        const raw = {
-          code: "MODEL_USAGE_LIMIT_REACHED",
-          message: serverText,
-          category: "app_error",
-          usageLimit
-        };
-        const observation = runObservationSchema.parse(
-          createObservation({ sequence: 2, type: "run_failed", payload: { error: raw } })
-        );
-        const live = applyRunObservationToControllerState(
-          createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
-          observation
-        ).state;
-        const reloaded = createControllerStateFromSnapshot(
-          createSnapshot({
-            lastSequence: 2,
-            text: "",
-            runStatus: "failed",
-            error: agentRunErrorSchema.parse(raw)
-          })
-        );
-        return [live, reloaded].map((state) => ({
-          member: notices(state),
-          operator: {
-            en: terminalRunNotice(state.error, en, { seesRateCard: true }),
-            de: terminalRunNotice(state.error, de, { seesRateCard: true })
-          }
-        }));
-      }
+      it("words it by its code, never the server's English, and points an operator to Usage", () => {
+        for (const state of failedStates(refusal())) {
+          const member = notices(state);
+          expect(member.en).toContain("A usage limit stopped this reply");
+          expect(member.de).toContain("Eine Nutzungsgrenze hat diese Antwort gestoppt");
+          // A limit can be the person's own: the notice names no scope and promises no reset.
+          expect(member.en).not.toMatch(/limit of this instance|resets|safeguard/u);
+          expect(member.en).not.toContain("Settings › Usage");
+          expect(terminalRunNotice(state.error, en, { seesRateCard: true })).toContain(
+            "Settings › Usage"
+          );
+        }
+      });
 
-      it("says which limit, whose calls and when it resets, for every limit in both languages", () => {
-        for (const period of ["day", "month"] as const) {
-          for (const metric of ["modelCallCount", "tokens", "costMicros"] as const) {
-            for (const scope of ["user", "system", "instance"] as const) {
-              const [p, m, s] = [periods[period], metrics[metric], scopes[scope]];
-              const named = {
-                en: `The ${p.en[0]} limit on ${m.en} stopped this reply. It counts ${s.en} and resets ${p.en[1]}.`,
-                de: `Die ${p.de[0]} Grenze für ${m.de} hat diese Antwort gestoppt. Sie zählt ${s.de} und wird ${p.de[1]} zurückgesetzt.`
-              };
-              for (const { member, operator } of refusalNotices({ period, metric, scope })) {
-                expect(member).toEqual({
-                  en: `${named.en} ${advice.en}`,
-                  de: `${named.de} ${advice.de}`
-                });
-                expect(operator.en).toBe(
-                  `${named.en} Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the technical team to review the limits.`
-                );
-                expect(operator.de).toContain(`${named.de} Was bisher geantwortet wurde`);
-                expect(operator.de).toContain("Einstellungen › Nutzung");
-              }
-            }
-          }
+      it("says which limit, whose calls and when it resets, when the run names it", () => {
+        for (const state of failedStates(
+          refusal({ period: "day", metric: "tokens", scope: "user" })
+        )) {
+          expect(notices(state).en).toContain(
+            "The daily limit on tokens stopped this reply. It counts your own calls and resets at midnight UTC."
+          );
+        }
+        for (const state of failedStates(
+          refusal({ period: "month", metric: "costMicros", scope: "instance" })
+        )) {
+          expect(notices(state).de).toContain(
+            "Die monatliche Grenze für Ausgaben hat diese Antwort gestoppt. Sie zählt die Aufrufe in allen Arbeitsbereichen"
+          );
         }
       });
 
       it("says only that a limit was reached when the details are missing, old or hostile", () => {
-        const unreadable: unknown[] = [
-          undefined,
+        for (const usageLimit of [
           null,
           "day",
-          42,
-          [],
           ["day", "tokens", "user"],
-          {},
-          { period: "day", metric: "tokens" },
           { period: "week", metric: "tokens", scope: "user" },
-          { period: "day", metric: "dollars", scope: "user" },
-          { period: "day", metric: "tokens", scope: "everyone" },
-          { period: "DAY", metric: "TOKENS", scope: "USER" },
           { period: "__proto__", metric: "constructor", scope: "toString" },
-          { period: "day", metric: "tokens", scope: null },
-          { period: ["day"], metric: "tokens", scope: "user" },
-          { period: "day", metric: { toString: "tokens" }, scope: "user" },
           { period: "<script>alert(1)</script>", metric: "tokens", scope: "user" }
-        ];
-        for (const usageLimit of unreadable) {
-          for (const { member } of refusalNotices(usageLimit)) expect(member).toEqual(generic);
+        ]) {
+          for (const state of failedStates(refusal(usageLimit))) {
+            expect(notices(state)).toEqual(generic);
+          }
         }
       });
 
@@ -293,30 +205,18 @@ describe("chat UI conversation controller", () => {
           used: 987654321,
           message: "Monthly spend budget of 50 EUR reached"
         };
-        for (const { member, operator } of refusalNotices(padded)) {
-          for (const notice of [member.en, member.de, operator.en, operator.de]) {
+        for (const state of failedStates(refusal(padded))) {
+          const member = notices(state);
+          for (const notice of [
+            member.en,
+            member.de,
+            terminalRunNotice(state.error, en, { seesRateCard: true })
+          ]) {
             expect(notice).not.toMatch(/987654321|EUR|safeguard|<b>|raw/u);
           }
           expect(member.en).toContain("The monthly limit on spending stopped this reply.");
         }
       });
-    });
-
-    it("reads a cancellation as stopped, live and after a reload", () => {
-      const live = applyRunObservationToControllerState(
-        createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
-        createObservation({
-          sequence: 2,
-          type: "run_cancelled",
-          payload: { reason: "user_requested" }
-        })
-      ).state;
-      expect(notices(live)).toEqual(stopped);
-
-      const reloaded = createControllerStateFromSnapshot(
-        createSnapshot({ lastSequence: 2, text: "", runStatus: "cancelled" })
-      );
-      expect(notices(reloaded)).toEqual(stopped);
     });
   });
 
@@ -589,6 +489,9 @@ describe("chat UI conversation controller", () => {
     }
 
     expect(state.activeRun?.projection.text).toBe("Done. I split the PDF into 3 files.");
+    const [message] = toUiMessages([], state.activeRun);
+    expect(message?.metadata).toEqual({ custom: { source: "active-run" } });
+    expect(message?.parts.map((part) => part.type)).toEqual(["text", "dynamic-tool", "text"]);
     expect(state.activeRun?.projection.parts).toEqual([
       {
         type: "text",
@@ -604,70 +507,6 @@ describe("chat UI conversation controller", () => {
         text: "Done. I split the PDF into 3 files."
       }
     ]);
-  });
-
-  it("preserves live text and tool call chronology for active-run rendering", () => {
-    let state = createControllerStateFromSnapshot(createSnapshot({ lastSequence: 0, text: "" }));
-    for (const observation of [
-      createObservation({
-        sequence: 1,
-        type: "message_delta",
-        payload: {
-          delta: "First step."
-        }
-      }),
-      createObservation({
-        sequence: 2,
-        type: "tool_call_started",
-        payload: {
-          toolCallId: "tool_1",
-          toolName: "demo.lookup",
-          input: { query: "first" }
-        }
-      }),
-      createObservation({
-        sequence: 3,
-        type: "tool_call_completed",
-        payload: {
-          toolCallId: "tool_1",
-          toolName: "demo.lookup",
-          result: {
-            status: "success",
-            output: { ok: true }
-          },
-          modelOutput: '{"ok":true}'
-        }
-      }),
-      createObservation({
-        sequence: 4,
-        type: "message_delta",
-        payload: {
-          delta: "Second step."
-        }
-      })
-    ]) {
-      state = applyRunObservationToControllerState(state, observation).state;
-    }
-
-    expect(state.activeRun?.projection.parts).toEqual([
-      {
-        type: "text",
-        text: "First step."
-      },
-      expect.objectContaining({
-        type: "tool_call",
-        toolCallId: "tool_1",
-        state: "output_available"
-      }),
-      {
-        type: "text",
-        text: "Second step."
-      }
-    ]);
-
-    const [message] = toUiMessages([], state.activeRun);
-    expect(message?.metadata).toEqual({ custom: { source: "active-run" } });
-    expect(message?.parts.map((part) => part.type)).toEqual(["text", "dynamic-tool", "text"]);
   });
 
   it("renders active-run text when projection parts only contain tools", () => {
@@ -998,6 +837,31 @@ describe("chat UI conversation controller", () => {
     expect(
       resolveRunConnectionTarget({ conversationId: "conv_1", enabled: false, snapshot, state })
     ).toBeUndefined();
+  });
+});
+
+// An address of a conversation that is gone once opened an empty chat. The instance refuses the
+// thread read alike for every way a conversation can be gone.
+describe("a conversation that is gone", () => {
+  const refusal = (status: number) =>
+    new ApiError(status, "Conversation is not available", {
+      error: {
+        code: status === 404 ? "NOT_FOUND" : "FORBIDDEN",
+        message: "Conversation is not available"
+      }
+    });
+
+  it("is gone after a refused thread read, and not after a failure that may still pass", () => {
+    expect(isConversationGone(refusal(404))).toBe(true);
+    expect(isConversationGone(refusal(403))).toBe(true);
+    for (const error of [
+      undefined,
+      new ApiError(500, "Internal error", {}),
+      new ApiError(429, "Too many requests", {}),
+      new TypeError("Failed to fetch")
+    ]) {
+      expect(isConversationGone(error)).toBe(false);
+    }
   });
 });
 

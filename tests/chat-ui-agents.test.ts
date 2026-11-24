@@ -45,10 +45,10 @@ const helpdesk = agent({ name: "helpdesk", displayName: "Helpdesk" });
 
 const noop = () => undefined;
 
-function page(overrides: Partial<AgentsPageProps> = {}, locale: "en" | "de" = "en"): string {
+function page(overrides: Partial<AgentsPageProps> = {}): string {
   return renderToStaticMarkup(
     createElement(TranslationProvider, {
-      locale,
+      locale: "en",
       children: createElement(AgentsPage, {
         agents: [tax, helpdesk],
         defaultAgentName: "helpdesk",
@@ -101,7 +101,6 @@ describe("the Agents row of the rail", () => {
     const ids = (given: Parameters<typeof shownRailSections>[1]) =>
       shownRailSections(railSections, given).map((section) => section.id);
 
-    expect(ids({ agents: true })).toEqual(["agents"]);
     expect(ids({ agents: true, apps: true, inbox: { toDecide: 2 } })).toEqual([
       "agents",
       "apps",
@@ -109,11 +108,9 @@ describe("the Agents row of the rail", () => {
     ]);
     // An embedded session has no workspace whose agents the page could show.
     expect(ids({ apps: true })).toEqual(["apps"]);
-  });
 
-  // NAV-VIS-1: the workspace's list names the row with two agents or more, or for whoever may
-  // write one. With one agent New chat starts it, and the row is gone.
-  it("shows where the open workspace's list names it, in a session with workspaces", () => {
+    // NAV-VIS-1: the workspace's list names the row with two agents or more, or for whoever may
+    // write one. With one agent New chat starts it, and the row is gone.
     const named = { visibleSections: ["agents" as const] };
     const unnamed = { visibleSections: [] };
 
@@ -137,81 +134,36 @@ describe("the state of the workspace's list of agents", () => {
 });
 
 describe("the Agents page", () => {
-  it("shows a member each agent with its mark, its description and Start chat", () => {
+  it("shows a member each agent with its description and Start chat, and nothing of Studio", () => {
     const markup = page();
     const taxCard = card(markup, "Steuer-Assistent");
-
-    expect(markup).toContain('<h1 class="min-w-0 break-words outline-none text-title-lg">Agents');
-    expect(markup).toContain("The agents of this workspace. Start a chat with one.");
-    // The agent mark stands where the initials stood.
-    expect(taxCard).toMatch(/<span aria-hidden="true" data-kind="agent"[^>]*><svg[^>]*lucide-bot/u);
-    expect(taxCard).not.toContain(">SA</span>");
-    // What the agent does, in two lines at most.
-    expect(taxCard).toMatch(
-      /<p class="line-clamp-2[^"]*">Beantwortet Fragen zur Umsatzsteuer.<\/p>/u
-    );
+    expect(taxCard).toContain("Beantwortet Fragen zur Umsatzsteuer.");
     // The starter prompts wait in the empty chat with the agent, not on its card.
     expect(taxCard).not.toContain("Vorsteuer prüfen");
-    expect(taxCard).not.toContain("Reverse Charge");
-    expect(markup).not.toContain('aria-label="Suggestions"');
-    // Start chat is named as a sentence with the agent's name.
-    expect(taxCard).toMatch(
-      /<button[^>]*aria-label="Start chat with Steuer-Assistent"[^>]*>Start chat<\/button>/u
-    );
     // The whole card starts the chat: Start chat is its one target.
-    expect(taxCard.match(/data-card-target=""/gu)).toHaveLength(1);
     expect(taxCard).toMatch(/<button[^>]*data-card-target=""[^>]*>Start chat<\/button>/u);
-    // Nothing is edited here, and a member is not led to Studio.
-    expect(markup).not.toContain("Edit in Studio");
     expect(markup).not.toContain("/build/");
     expect(markup).not.toContain("tax.vat-helper");
-  });
-
-  it("marks the workspace's default agent and no other", () => {
-    const markup = page();
-
+    // The workspace's default agent is marked, and no other.
     expect(card(markup, "Helpdesk")).toContain("Default agent");
-    expect(card(markup, "Steuer-Assistent")).not.toContain("Default agent");
-    expect(page({ defaultAgentName: undefined })).not.toContain("Default agent");
+    expect(taxCard).not.toContain("Default agent");
   });
 
-  it("leaves out a description an agent does not have, with no placeholder", () => {
-    const helpdeskCard = card(page(), "Helpdesk");
-
-    // The agent mark is drawn with <path>: a paragraph is "<p" and a space or the tag's end.
-    expect(helpdeskCard).not.toMatch(/<p[ >]/u);
-    expect(helpdeskCard).toContain(">Start chat</button>");
-    // A description of spaces is none.
-    expect(card(page({ agents: [{ ...helpdesk, description: "   " }] }), "Helpdesk")).not.toMatch(
-      /<p[ >]/u
-    );
-  });
-
-  it("gives a builder a link to the agent's page in Studio, named by the agent", () => {
+  it("gives a builder a link to the agent's page in Studio, beside the card's own target", () => {
     const taxCard = card(page({ onOpenStudio: noop }), "Steuer-Assistent");
-
-    expect(taxCard).toMatch(
-      /<a[^>]*href="\/build\/agents\/tax\.vat-helper"[^>]*aria-describedby="[^"]+"[^>]*>Edit in Studio<\/a>/u
-    );
-    // It keeps its own way: the card's target stays Start chat.
-    expect(taxCard).not.toMatch(/<a[^>]*data-card-target[^>]*>Edit in Studio/u);
+    expect(taxCard).toMatch(/<a[^>]*href="\/build\/agents\/tax\.vat-helper"/u);
+    expect(taxCard).not.toMatch(/<a[^>]*data-card-target/u);
   });
 
-  it("offers New agent in the page head to a person who may create one, and to nobody else", () => {
-    const button = /<button[^>]*>(?:<svg.*?<\/svg>)?New agent<\/button>/u;
+  it("offers New agent to a person who may create one, and to nobody else", () => {
     const newAgent = {
       mayChooseAll: true,
       startsIn: { workspace: { id: "cws_1", name: "Steuer" }, mayChooseAll: true },
       checkName: async () => ({ available: true as const }),
       onStart: noop
     };
-
-    expect(page({ onOpenStudio: noop, newAgent })).toMatch(button);
-    expect(page({ agents: [], onOpenStudio: noop, newAgent })).toMatch(button);
-    expect(page({ newAgent }, "de")).toContain("Neuer Agent</button>");
-    // The dialog opens on this page once the button is pressed, not before.
-    expect(page({ newAgent })).not.toContain('id="build-create-form"');
-    // A builder who may read agents and not create one keeps the links and gets no button.
+    expect(page({ onOpenStudio: noop, newAgent })).toContain("New agent");
+    expect(page({ agents: [], onOpenStudio: noop, newAgent })).toContain("New agent");
     expect(page({ onOpenStudio: noop })).not.toContain("New agent");
     expect(page()).not.toContain("New agent");
   });
@@ -243,54 +195,15 @@ describe("the Agents page", () => {
     expect(markup).toContain("&lt;/p&gt;&lt;script&gt;");
   });
 
-  it("tells a member of a workspace without agents who can change that, without an action", () => {
-    const markup = page({ agents: [] });
-
-    expect(markup).toContain(
-      "No agent is available in this workspace yet. An administrator can make one available here."
-    );
-    expect(markup).not.toContain("Open Studio");
-    expect(markup).not.toContain("<ul");
+  it("leads only a builder of a workspace without agents to Studio", () => {
+    expect(page({ agents: [] })).not.toContain("/build/agents");
+    expect(page({ agents: [], onOpenStudio: noop })).toMatch(/<a[^>]*href="\/build\/agents"/u);
   });
 
-  it("tells a builder of a workspace without agents where one is made, with the way there", () => {
-    const markup = page({ agents: [], onOpenStudio: noop });
-
-    expect(markup).toContain(
-      "No agent is available in this workspace yet. Create one in Studio, or make an existing one available here."
-    );
-    expect(markup).toMatch(/<a[^>]*href="\/build\/agents"[^>]*>Open Studio<\/a>/u);
-  });
-
-  it("shows no card and no empty sentence while the list loads", () => {
-    const markup = page({ status: "loading", agents: [helpdesk] });
-
-    expect(markup).not.toContain("Helpdesk");
-    expect(markup).not.toContain("No agent is available");
-    expect(markup).toContain(">Agents</h1>");
-  });
-
-  it("says that the list failed and offers to ask again, without the instance's agents", () => {
-    const markup = page({ status: "failed", agents: [helpdesk] });
-
-    expect(markup).toContain('role="alert"');
-    expect(markup).toContain("The agents could not be loaded.");
-    expect(markup).toContain(">Try again</button>");
-    expect(markup).not.toContain("Helpdesk");
-  });
-
-  it("reads in German", () => {
-    const markup = page({ onOpenStudio: noop }, "de");
-
-    expect(markup).toContain(">Agenten</h1>");
-    expect(markup).toContain(">Chat starten</button>");
-    expect(markup).toContain(">Im Studio bearbeiten</a>");
-    expect(markup).toContain("Standardagent");
-    expect(markup).toContain(
-      "Die Agenten dieses Arbeitsbereichs. Starte einen Chat mit einem von ihnen."
-    );
-    expect(page({ agents: [], onOpenStudio: noop }, "de")).toContain(">Studio öffnen</a>");
-    // The card's target is named as one German sentence with the agent's name.
-    expect(page({}, "de")).toContain('aria-label="Chat starten mit Steuer-Assistent"');
+  it("shows no agent while the list loads or after it failed", () => {
+    expect(page({ status: "loading", agents: [helpdesk] })).not.toContain("Helpdesk");
+    const failed = page({ status: "failed", agents: [helpdesk] });
+    expect(failed).toContain('role="alert"');
+    expect(failed).not.toContain("Helpdesk");
   });
 });

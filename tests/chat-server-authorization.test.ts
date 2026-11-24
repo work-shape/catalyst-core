@@ -1,4 +1,6 @@
-import { createTestInstance } from "./support/test-instance";
+import { createTestInstance, createTestInstanceWith } from "./support/test-instance";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import { createStandaloneAuthRuntime } from "@work-shape/catalyst-auth";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -460,7 +462,6 @@ describe("client instance app vertical slice", () => {
       password: string;
     }> = [];
     const resetPasswords: Array<{ externalUserId: string; password: string }> = [];
-    const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
     const server = await createTestInstance({
       server: {
         config,
@@ -511,9 +512,7 @@ describe("client instance app vertical slice", () => {
             resetPasswords.push(input);
           },
           async changePassword() {},
-          async deletePasswordSignIn(input) {
-            deletedPasswordSignIns.push(input);
-          }
+          async deletePasswordSignIn() {}
         }
       }
     });
@@ -608,27 +607,6 @@ describe("client instance app vertical slice", () => {
       audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
     ).toEqual(expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"]));
 
-    const deleted = await server.call("users.delete", {
-      params: { userId: createdUser.id }
-    });
-    expect(deleted.statusCode).toBe(200);
-    expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-Jane@Example.Test" }]);
-
-    const listedAfterDelete = await server.call("users.list", {});
-    expect(listedAfterDelete.statusCode).toBe(200);
-    expect(listedAfterDelete.json().items).not.toContainEqual(
-      expect.objectContaining({
-        id: createdUser.id
-      })
-    );
-
-    const auditAfterDelete = await server.call("audit_events.list", {});
-    expect(auditAfterDelete.statusCode).toBe(200);
-    // The run records the authorization check in place of the old governance row.
-    expect(
-      auditAfterDelete.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
-    ).toEqual(expect.arrayContaining(["operation.authorization_checked", "user.deleted"]));
-
     await server.close();
   });
 
@@ -660,5 +638,60 @@ describe("client instance app vertical slice", () => {
     );
 
     await app.close();
+  });
+
+  // DIET-E2E-2: password reset and account removal must change real password sign-in,
+  // not just the administration response or a mocked password store.
+  it("refuses the old password after a reset, accepts the new one, and refuses a deleted user", async () => {
+    const auth = await createStandaloneAuthRuntime({
+      clientInstanceId: asClientInstanceId("demo-local"),
+      databaseUrl: await fileTestDatabaseUrl(),
+      secret: "test-account-administration-secret-long-enough",
+      baseUrl: "http://localhost:3000/api/auth"
+    });
+    const app = await createTestInstanceWith(() => ({ standaloneAuth: auth }));
+    const email = "account-admin@example.test";
+    const signIn = (password: string) =>
+      auth.handleRequest(
+        new Request("http://localhost:3000/api/auth/sign-in/email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password })
+        })
+      );
+    try {
+      const created = await app.call("users.create", {
+        payload: {
+          displayLabel: "Account administration",
+          email,
+          roles: ["user"],
+          passwordSignIn: { password: "initial-account-password" }
+        }
+      });
+      expect(created.statusCode).toBe(200);
+      const { id } = created.json<{ id: string }>();
+      expect((await signIn("initial-account-password")).status).toBe(200);
+      const reset = await app.call("users.password.reset", {
+        params: { userId: id },
+        payload: { password: "replacement-account-password" }
+      });
+      expect(reset.statusCode).toBe(200);
+      expect((await signIn("initial-account-password")).status).toBe(401);
+      const accepted = await signIn("replacement-account-password");
+      expect(accepted.status).toBe(200);
+      await expect(accepted.json()).resolves.toMatchObject({ user: { email } });
+      const deleted = await app.call("users.delete", { params: { userId: id } });
+      expect(deleted.statusCode).toBe(200);
+      expect(deleted.json()).toEqual({ state: "deleted" });
+      const listed = await app.call("users.list", {});
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json<{ items: { id: string; email?: string }[] }>().items).not.toContainEqual(
+        expect.objectContaining({ id })
+      );
+      expect((await signIn("replacement-account-password")).status).toBe(401);
+    } finally {
+      await app.close();
+      await auth.close();
+    }
   });
 });

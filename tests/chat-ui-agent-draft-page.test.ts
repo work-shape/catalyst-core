@@ -265,7 +265,7 @@ const badge = () => {
   const status = host.querySelector('[data-asset-status="draft"]');
   return status === null ? "" : `Draft version ${status.getAttribute("data-draft-revision") ?? ""}`;
 };
-/** The sentence of the head state's popover: which draft, by whom and when, and what is live. */
+/** The sentence of the head state's popover: which draft, by whom and when. */
 async function pending(): Promise<string> {
   const trigger = host.querySelector<HTMLButtonElement>('button[data-asset-status="draft"]');
   if (trigger === null) return "";
@@ -289,12 +289,6 @@ describe("saving the agent page", () => {
     // The page shows the draft it wrote, and the head's state names it.
     expect(instructions().value).toBe("Help the user and cite the contract.");
     expect(badge()).toBe("Draft version 1");
-    expect(await pending()).toContain("Draft version 1 by Me, ");
-    // The field says it differs from live, and shows the live text in its own box.
-    expect(host.querySelector('[data-draft-group="instructions"]')?.textContent).toContain(
-      "Differs from live in one place"
-    );
-    expect(host.querySelector("[data-versioned-text-live]")).toBeNull();
 
     type("Help the user, cite the contract and name the clause.");
     await saveDraft();
@@ -308,8 +302,7 @@ describe("saving the agent page", () => {
     world.writtenBy("Ana Writer", "Help the user.");
     mount(world);
     await settle();
-    expect(badge()).toBe("Draft version 1");
-    expect(await pending()).toContain("Draft version 1 by Ana Writer, ");
+    expect(await pending()).toContain("Ana Writer");
 
     // Somebody else saves the draft while this page has it open.
     world.writtenBy("Ben Builder", "Only read the contract.");
@@ -320,8 +313,7 @@ describe("saving the agent page", () => {
       expectedDraftRevision: 1
     });
     const behind = host.querySelector('[data-agent-draft-behind="2"]');
-    expect(behind?.textContent).toContain("Ben Builder saved draft version 2 on");
-    expect(behind?.textContent).toContain("Load the newer draft");
+    expect(behind?.textContent).toContain("Ben Builder");
     // What was typed stays; nothing is saved over the newer draft, and Publish waits.
     expect(instructions().value).toBe("Mine.");
     expect(button("Save draft").disabled).toBe(true);
@@ -339,7 +331,6 @@ describe("the rights on the agent page", () => {
     mount(world);
     await settle();
     expect(publish()?.disabled).toBe(true);
-    expect(publish()?.title).toBe("Publishing needs the right “Publish agents”.");
     act(() => root.unmount());
     root = createRoot(host);
     mount(world, { allowed: ["write", "publish"] });

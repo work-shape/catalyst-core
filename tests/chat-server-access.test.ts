@@ -432,7 +432,7 @@ describe("deny rows and asset grants", () => {
       params: { kind: "agent", name: "shared-one" },
       payload: {}
     });
-    // The deny stays with the name; see `chat-server-access-boundaries.test.ts`.
+    // The deny stays with the name; see `chat-server-access-administration.test.ts`.
     const left = await t.stores.access.listGrants({ clientInstanceId });
     expect(left.map((row) => [row.holderId, row.effect])).toEqual([[t.lena.id, "deny"]]);
 

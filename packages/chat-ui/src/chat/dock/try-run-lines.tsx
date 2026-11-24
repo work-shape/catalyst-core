@@ -54,7 +54,7 @@ export function TryRunLinesProvider({
 }
 
 /** What a run line says. */
-export function TryRunsLine({ runs }: { runs: TryRuns }) {
+function TryRunsLine({ runs }: { runs: TryRuns }) {
   const { t } = useTranslation();
   return (
     <ListMarker

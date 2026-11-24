@@ -853,7 +853,7 @@ function formatFileSize(byteSize: number): string {
   return `${Math.round(byteSize / 1024 / 102.4) / 10} MB`;
 }
 
-export function shouldExpandComposer(text: string, wrapsAtCompactWidth = false): boolean {
+function shouldExpandComposer(text: string, wrapsAtCompactWidth = false): boolean {
   return text.includes("\n") || wrapsAtCompactWidth;
 }
 

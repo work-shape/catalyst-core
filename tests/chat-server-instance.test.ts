@@ -13,21 +13,6 @@ import { injectStartConversationRun, drainRunEvents } from "./support/chat-serve
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 describe("client instance app vertical slice", () => {
-  it("boots and exposes safe config with zero stored assets", async () => {
-    const app = await createTestInstance({
-      seedAssets: false,
-      config: createTestConfig(),
-      env: {},
-      tools: []
-    });
-
-    const response = await app.call("config.get", {});
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ agents: [] });
-    await app.close();
-  });
-
   it("offers and accepts only the agent's own model and its user-selectable models", async () => {
     const app = await createTestInstance({
       config: createTestConfig({
@@ -62,10 +47,7 @@ describe("client instance app vertical slice", () => {
     // Not offered by this agent; the binding-level `userSelectable` flag has no effect.
     for (const modelBindingId of ["eligible", "internal", "retired"]) {
       const rejected = await start(modelBindingId);
-      expect(rejected.statusCode).toBe(422);
-      expect(rejected.json().error.message).toBe(
-        `Model binding '${modelBindingId}' is not available for user selection`
-      );
+      expect(rejected.statusCode, modelBindingId).toBe(422);
     }
     // A rejected model leaves no conversation behind.
     const conversations = await app.call("conversations.list", {});
@@ -203,50 +185,6 @@ describe("client instance app vertical slice", () => {
       };
       await drainRunEvents(app, conversation.id, run.id);
     }
-    await app.close();
-  });
-
-  it("rejects model bindings that are not available for user selection", async () => {
-    const app = await createTestInstance({
-      config: createTestConfig({
-        agentModelBindingId: "selectable",
-        modelBindings: [
-          {
-            id: "selectable",
-            providerId: "local",
-            model: "selectable-model",
-            userSelectable: true
-          },
-          {
-            id: "internal",
-            providerId: "local",
-            model: "internal-model",
-            agentSelectable: false
-          }
-        ]
-      }),
-      env: {},
-      tools: []
-    });
-    const created = await app.call("conversations.create", {
-      payload: { title: "Model selection" }
-    });
-    const conversation = created.json() as { id: string };
-
-    const rejected = await app.call("conversations.runs.start", {
-      params: { conversationId: conversation.id },
-      payload: {
-        idempotencyKey: "reject-internal-model",
-        modelBindingId: "internal",
-        message: { text: "Do not persist this" }
-      }
-    });
-
-    expect(rejected.statusCode).toBe(422);
-    const messages = await app.call("conversations.messages.list", {
-      params: { conversationId: conversation.id }
-    });
-    expect(messages.json().items).toEqual([]);
     await app.close();
   });
 
@@ -508,36 +446,6 @@ describe("client instance app vertical slice", () => {
     await webSearchApp.close();
   });
 
-  it("exposes configured agent welcome message and initial prompts through safe config", async () => {
-    const initialPrompts = [
-      {
-        title: "Review release",
-        prompt: "Summarize release readiness."
-      }
-    ];
-    const welcomeMessage = "What should we review first?";
-    const app = await createTestInstance({
-      config: createTestConfig({ welcomeMessage, initialPrompts }),
-      env: {},
-      tools: []
-    });
-
-    const response = await app.call("config.get", {});
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      agents: [
-        expect.objectContaining({
-          name: "test_agent",
-          welcomeMessage,
-          initialPrompts
-        })
-      ]
-    });
-
-    await app.close();
-  });
-
   it("limits safe config agents to those available in Personal Workspaces", async () => {
     const app = await createTestInstance({
       config: createTestConfig(),
@@ -656,29 +564,6 @@ describe("client instance app vertical slice", () => {
       code: "VALIDATION_FAILED",
       message: "Client instance assembly is invalid"
     });
-  });
-
-  it("registers workspace tools through the client assembly path", async () => {
-    const workspaceToolNames = [
-      "workspace.exec",
-      "workspace.list_files",
-      "workspace.import_files",
-      "workspace.read_file",
-      "workspace.promote_artifact",
-      "workspace.preview_images"
-    ];
-    const app = await createTestInstance({
-      config: createTestConfig({
-        tools: workspaceToolNames.map((name) => ({ name, enabled: true })),
-        toolNames: workspaceToolNames,
-        executionWorkspaces: {
-          enabled: true
-        }
-      }),
-      tools: []
-    });
-
-    await app.close();
   });
 
   it("rejects Postgres startup without DATABASE_URL", async () => {

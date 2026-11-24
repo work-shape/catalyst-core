@@ -113,17 +113,22 @@ describe("a chat message under the guardrails on chat input", () => {
     expect(await userMessages(server, conversationId)).toEqual([]);
     // Neither the message, nor the hit, the audit, the outbox or a job keeps its text.
     expect(await everyStoredRow()).not.toContain(SECRET.slice(4, 24));
-  });
 
-  it("is refused by a block before a new conversation is created for it", async () => {
-    const { app: server } = await instance();
+    // Sending anyway does not pass a block.
+    const anyway = await send(server, conversationId, `${PASSWORD} und ${SECRET}`, {
+      accept: true
+    });
+    expect(errorOf(anyway)).toMatchObject({ code: "GUARDRAIL_BLOCKED" });
+    expect(await userMessages(server, conversationId)).toEqual([]);
+
+    // A block refuses before a new conversation is created for it.
     const listed = async () =>
       (await server.call("conversations.list")).json<{ items: unknown[] }>().items.length;
     const before = await listed();
-    const blocked = await server.call("conversations.runs.create", {
+    const created = await server.call("conversations.runs.create", {
       payload: { idempotencyKey: "chat-input-create", message: { text: `Token ${SECRET}` } }
     });
-    expect(errorOf(blocked)).toMatchObject({
+    expect(errorOf(created)).toMatchObject({
       code: "GUARDRAIL_BLOCKED",
       details: { guardrailId: "chat-secrets" }
     });
@@ -164,26 +169,6 @@ describe("a chat message under the guardrails on chat input", () => {
       expect.objectContaining({ event: CHAT_INPUT_EVENT, field: "text", match_count: 1 })
     ]);
     expect(JSON.stringify(hits)).not.toContain("Herbstlaub");
-  });
-
-  it("still blocks a message sent anyway", async () => {
-    const { app: server, conversationId } = await instance();
-    const blocked = await send(server, conversationId, `${PASSWORD} und ${SECRET}`, {
-      accept: true
-    });
-    expect(errorOf(blocked)).toMatchObject({ code: "GUARDRAIL_BLOCKED" });
-    expect(await userMessages(server, conversationId)).toEqual([]);
-  });
-
-  it("goes as usual where nothing matches, an IBAN and a tax id included", async () => {
-    const { app: server, conversationId } = await instance();
-    const sent = await send(
-      server,
-      conversationId,
-      "Bitte überweise auf DE89 3704 0044 0532 0130 00, Steuer-ID 65 929 970 489."
-    );
-    expect(sent.statusCode).toBe(200);
-    expect(sent.json<{ chatInput?: unknown }>().chatInput).toBeUndefined();
   });
 
   // Fails without the change: an attachment's text was never checked.

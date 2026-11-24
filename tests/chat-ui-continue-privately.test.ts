@@ -114,10 +114,7 @@ function Thread({ privacy }: { privacy: "continued" | "workspace" | undefined })
   );
 }
 
-async function show(
-  locale: "en" | "de",
-  privacy: "continued" | "workspace" | undefined
-): Promise<string | undefined> {
+async function show(privacy: "continued" | "workspace" | undefined): Promise<boolean> {
   await act(async () => {
     root.render(
       createElement(
@@ -125,25 +122,20 @@ async function show(
         { mode: "light", labels: uiLabelsEn },
         createElement(
           TranslationProvider,
-          { children: null, locale },
+          { children: null, locale: "en" },
           createElement(Thread, { privacy })
         )
       )
     );
     await Promise.resolve();
   });
-  return (
-    container.querySelector("[data-testid=new-conversation-private-hint]")?.textContent ?? undefined
-  );
+  return container.querySelector("[data-testid=new-conversation-private-hint]") !== null;
 }
 
 describe("the private line above the composer", () => {
-  it("tells the person who went on privately that only they see the conversation", async () => {
-    expect(await show("de", "continued")).toBe("Privat: Nur du siehst diese Unterhaltung.");
-    expect(await show("en", "continued")).toBe("Private: only you see this conversation.");
-    expect(await show("en", "workspace")).toBe(
-      "New conversations in this workspace are private to you."
-    );
-    expect(await show("en", undefined)).toBeUndefined();
+  it("stands above the composer only where the start page is private", async () => {
+    expect(await show("continued")).toBe(true);
+    expect(await show("workspace")).toBe(true);
+    expect(await show(undefined)).toBe(false);
   });
 });

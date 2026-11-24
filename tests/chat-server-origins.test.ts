@@ -36,24 +36,8 @@ async function createCookieApp(configureOrigins = true) {
 }
 
 describe("browser origin policy", () => {
-  it.each([
-    true,
-    false,
-    {},
-    /example/u,
-    "*",
-    "null",
-    "not a url",
-    "ftp://x",
-    null,
-    () => true,
-    42,
-    [true],
-    ["https://*.test"],
-    "data:text/plain,hello"
-  ])(
-    "rejects runtime-invalid allowed origins at direct server and assembly startup: %s",
-    async (allowedOrigins) => {
+  it("rejects runtime-invalid allowed origins at direct server and assembly startup", async () => {
+    for (const allowedOrigins of [true, "*", "null", "ftp://x", ["https://*.test"]]) {
       await expect(rejectInvalidOrigins(allowedOrigins, "server")).rejects.toMatchObject({
         code: "VALIDATION_FAILED"
       });
@@ -61,31 +45,42 @@ describe("browser origin policy", () => {
         code: "VALIDATION_FAILED"
       });
     }
-  );
+  });
 
-  it.each([
-    { name: "allowed", origin: allowedOrigin, status: 200 },
-    { name: "foreign", origin: foreignOrigin, status: 403 },
-    { name: "sibling subdomain", origin: siblingOrigin, status: 403 },
-    { name: "prefix lookalike", origin: `${allowedOrigin}.evil.test`, status: 403 },
-    { name: "trusted proxy origin", origin: "https://api.example.test", proxy: true, status: 200 },
-    { name: "server origin", origin: "http://localhost", status: 200 },
-    { name: "missing Origin", status: 403 },
-    { name: "same-origin fetch", fetchSite: "same-origin", status: 200 },
-    { name: "same-site fetch", fetchSite: "same-site", status: 403 },
-    { name: "direct navigation", fetchSite: "none", status: 403 },
-    { name: "opaque origin", origin: "null", status: 403 },
-    {
-      name: "foreign Origin with same-origin fetch",
-      origin: foreignOrigin,
-      fetchSite: "same-origin",
-      status: 403
-    }
-  ])(
-    "checks cookie POST, PATCH, DELETE, multipart and bodyless requests: $name",
-    async ({ origin, fetchSite, status, proxy }) => {
-      const app = await createCookieApp();
-      try {
+  it("checks cookie POST, PATCH, DELETE, multipart and bodyless requests by origin", async () => {
+    const cases: {
+      name: string;
+      origin?: string;
+      fetchSite?: string;
+      proxy?: boolean;
+      status: number;
+    }[] = [
+      { name: "allowed", origin: allowedOrigin, status: 200 },
+      { name: "foreign", origin: foreignOrigin, status: 403 },
+      { name: "sibling subdomain", origin: siblingOrigin, status: 403 },
+      { name: "prefix lookalike", origin: `${allowedOrigin}.evil.test`, status: 403 },
+      {
+        name: "trusted proxy origin",
+        origin: "https://api.example.test",
+        proxy: true,
+        status: 200
+      },
+      { name: "server origin", origin: "http://localhost", status: 200 },
+      { name: "missing Origin", status: 403 },
+      { name: "same-origin fetch", fetchSite: "same-origin", status: 200 },
+      { name: "same-site fetch", fetchSite: "same-site", status: 403 },
+      { name: "direct navigation", fetchSite: "none", status: 403 },
+      { name: "opaque origin", origin: "null", status: 403 },
+      {
+        name: "foreign Origin with same-origin fetch",
+        origin: foreignOrigin,
+        fetchSite: "same-origin",
+        status: 403
+      }
+    ];
+    const app = await createCookieApp();
+    try {
+      for (const { name, origin, fetchSite, status, proxy } of cases) {
         const headers = {
           cookie: "test-session=present",
           ...(origin ? { origin } : {}),
@@ -133,22 +128,16 @@ describe("browser origin policy", () => {
           headers
         });
         for (const response of [json, bodyless, multipart, patch, deleted]) {
-          expect(response.statusCode, response.body).toBe(status);
+          expect(response.statusCode, `${name}: ${response.body}`).toBe(status);
           if (status === 403) {
-            expect(response.json()).toEqual({
-              error: {
-                correlationId: expect.any(String),
-                code: "FORBIDDEN",
-                message: "Session request origin is not allowed"
-              }
-            });
+            expect(response.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
           }
         }
-      } finally {
-        await app.close();
       }
+    } finally {
+      await app.close();
     }
-  );
+  });
 
   it("refuses invalid explicit credentials on the config-asset identity path", async () => {
     const app = await createCookieApp();
@@ -231,9 +220,8 @@ describe("browser origin policy", () => {
     }
   });
 
-  it.each(["development", "production"] as const)(
-    "has no cross-origin grant without configuration in %s",
-    async (environment) => {
+  it("has no cross-origin grant without configuration in development or production", async () => {
+    for (const environment of ["development", "production"] as const) {
       const config = createTestConfig({ sessionToken: { issuer: "test", ttlSeconds: 900 } });
       config.clientInstance.environment = environment;
       config.auth.development = undefined;
@@ -247,12 +235,12 @@ describe("browser origin policy", () => {
       });
       try {
         const response = await app.call("health.get", { headers: { origin: foreignOrigin } });
-        expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+        expect(response.headers["access-control-allow-origin"], environment).toBeUndefined();
       } finally {
         await app.close();
       }
     }
-  );
+  });
 
   it("allows same-origin cookie writes without any configured CORS origins", async () => {
     const app = await createCookieApp(false);

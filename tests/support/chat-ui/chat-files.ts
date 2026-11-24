@@ -1,6 +1,5 @@
 export { AttachmentContentProvider } from "../../../packages/chat-ui/src/chat/files/attachment-content";
 export {
-  ARTIFACT_PREVIEW_POLL_DELAYS_MS,
   ArtifactPreview,
   artifactPreviewPollDelayMs,
   createArtifactPreviewView,
@@ -8,7 +7,7 @@ export {
   getArtifactSourceFallbackKind,
   shouldUseLiveArtifactPreviewState
 } from "../../../packages/chat-ui/src/chat/files/artifact-preview";
-export { ArtifactPreviewMessage } from "../../../packages/chat-ui/src/chat/files/artifact-preview-shell";
+
 export {
   isImageAttachment,
   managedFileIdFromAttachmentContent
@@ -41,7 +40,7 @@ export {
   extractSpreadsheetVisuals,
   type SpreadsheetVisual
 } from "../../../packages/chat-ui/src/chat/files/spreadsheet-visuals";
-export { StructuredDataView } from "../../../packages/chat-ui/src/chat/files/structured-data-view";
+
 export {
   rasterImageType,
   viewerObjectUrl

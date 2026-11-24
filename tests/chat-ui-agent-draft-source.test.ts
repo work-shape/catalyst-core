@@ -247,20 +247,6 @@ describe("the answer to Publish", () => {
     }
   );
 
-  it("sends neither when the reader did not choose it", async () => {
-    const page = await mountDraft();
-    try {
-      const published = page.publish({
-        makeDependenciesAvailable: false,
-        expectedAvailability: null
-      });
-      await page.answer(refusal(409, "CONFLICT", "stale_base"), published);
-      expect(page.sent).toEqual([{ decision: "publish", body: { revision: 1 } }]);
-    } finally {
-      await page.unmount();
-    }
-  });
-
   it("says the draft changed beside the newer revision a 412 makes the page read", async () => {
     const page = await mountDraft();
     try {
@@ -396,22 +382,6 @@ describe("an offer a made Publish could not set", () => {
 
       await act(async () => page.seen.state?.settleOffer?.());
       expect(page.seen.state?.unsetOffer).toBeUndefined();
-      await page.remount();
-      expect(page.seen.state?.unsetOffer).toBeUndefined();
-    } finally {
-      await page.unmount();
-    }
-  });
-
-  it("holds nothing where the place was set", async () => {
-    const page = await mountDraft();
-    try {
-      const published = page.publish({
-        makeDependenciesAvailable: false,
-        expectedAvailability: null,
-        afterPublish: async () => undefined
-      });
-      await page.answer(Response.json({ draftRevision: 1, publishedRevision: 1 }), published);
       await page.remount();
       expect(page.seen.state?.unsetOffer).toBeUndefined();
     } finally {

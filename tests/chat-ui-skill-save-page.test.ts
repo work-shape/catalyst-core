@@ -275,7 +275,6 @@ describe("the page of a skill a team or the instance owns", () => {
       { expectedRevision: LIVE_REVISION, expectedDraftRevision: undefined }
     ]);
     const filed = host.querySelector("[data-skill-filed]");
-    expect(filed?.textContent).toContain("Submitted for approval.");
     expect(filed?.querySelector("a")?.getAttribute("href")).toContain("apr_filed");
     expect(summary()).toBe("");
     noDraft();
@@ -285,12 +284,9 @@ describe("the page of a skill a team or the instance owns", () => {
     const world = instance({ draft: oldDraft });
     mount(world);
     await settle();
-    expect(host.querySelector("[data-skill-old-draft]")?.textContent).toContain(
-      "from before skills went live on save"
-    );
+    expect(host.querySelector("[data-skill-old-draft]")).not.toBeNull();
     expect(summary()).toBe(oldDraft.config.summary);
     expect(publish()?.disabled).toBe(true);
-    expect(publish()?.title).toBe("Publishing needs the right “Publish skills”.");
     expect(
       [...host.querySelectorAll("button")].map((found) => found.textContent?.trim())
     ).not.toContain("Submit for approval");

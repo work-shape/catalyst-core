@@ -3,7 +3,6 @@ export { ApprovalRequestCardView } from "../../../packages/chat-ui/src/chat/appr
 export {
   APPROVAL_REQUEST_DISPLAY_KIND,
   type ApprovalDecisionStatus,
-  approvalRevisionHintKey,
   approvalRevisionPlan,
   readApprovalRequestDisplay,
   shouldSendApprovalFollowUp
