@@ -104,6 +104,14 @@ function knowledgeBaseRows(text: GalleryText): KnowledgeBaseRow[] {
       updated: text.today
     },
     {
+      id: "product-sheets",
+      name: text.buildProductSheets,
+      status: text.buildProductSheetsStatus,
+      scope: "instance",
+      state: { tone: "warning", label: text.stateNotIngested },
+      updated: text.yesterday
+    },
+    {
       id: "prices",
       name: text.buildPrices,
       status: text.buildPricesStatus,

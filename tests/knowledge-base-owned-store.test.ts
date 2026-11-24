@@ -396,12 +396,13 @@ describe("the store a Knowledge Base owns", () => {
           summary: z.object({
             count: z.number(),
             state: z.string(),
+            failed: z.number(),
             lastIngestedAt: z.string().optional()
           })
         })
         .parse(response.json());
     };
-    expect((await summary()).summary).toEqual({ count: 0, state: "indexed" });
+    expect((await summary()).summary).toEqual({ count: 0, state: "indexed", failed: 0 });
     await inDatabase(record.location.database, async (sql) => {
       for (const [index, state] of ["extracted", "pending", "failed", "extracted"].entries()) {
         const hash = String(index + 1).repeat(64);
@@ -418,18 +419,20 @@ describe("the store a Knowledge Base owns", () => {
     expect(page.summary).toEqual({
       count: 3,
       state: "failed",
+      failed: 1,
       lastIngestedAt: "2026-10-01T12:00:00.000Z"
     });
     await inDatabase(record.location.database, async (sql) => {
       await sql`update catalyst_kb.documents set withdrawn_at = now() where id = 'doc-2'`;
     });
-    expect((await summary()).summary).toMatchObject({ count: 2, state: "pending" });
+    expect((await summary()).summary).toMatchObject({ count: 2, state: "pending", failed: 0 });
     await inDatabase(record.location.database, async (sql) => {
       await sql`update catalyst_kb.contents set state = 'extracted', updated_at = '2026-10-06T12:00:00Z' where state = 'pending'`;
     });
     expect((await summary()).summary).toEqual({
       count: 2,
       state: "indexed",
+      failed: 0,
       lastIngestedAt: "2026-10-06T12:00:00.000Z"
     });
   });

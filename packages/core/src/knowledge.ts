@@ -1257,7 +1257,13 @@ export interface KnowledgeDocumentStore {
   ): Promise<{
     documents: KnowledgeDocumentEntry[];
     nextCursor?: string;
-    summary?: { count: number; state: KnowledgeDocumentState; lastIngestedAt?: string };
+    summary?: {
+      count: number;
+      state: KnowledgeDocumentState;
+      /** How many of them failed: a count only. */
+      failed?: number;
+      lastIngestedAt?: string;
+    };
   }>;
   /**
    * The failed contents of the named documents not withdrawn: what a retry puts back, read

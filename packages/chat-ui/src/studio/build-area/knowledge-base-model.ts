@@ -292,15 +292,26 @@ export function documentsByAttention<Document extends Pick<KnowledgeDocument, "s
  */
 export type KnowledgeDocumentTally =
   | { exact: true; total: number; searchable: number; failed: number; pending: number }
-  | { exact: false; total: number | undefined; state: KnowledgeDocument["state"] | undefined };
+  | {
+      exact: false;
+      total: number | undefined;
+      state: KnowledgeDocument["state"] | undefined;
+      /** How many failed, where the instance says so. */
+      failed?: number;
+    };
 
 export function knowledgeDocumentTally(
   documents: readonly Pick<KnowledgeDocument, "state">[],
   complete: boolean,
-  summary?: { count: number; state: KnowledgeDocument["state"] }
+  summary?: { count: number; state: KnowledgeDocument["state"]; failed?: number }
 ): KnowledgeDocumentTally {
   if (!complete) {
-    return { exact: false, total: summary?.count, state: summary?.state };
+    return {
+      exact: false,
+      total: summary?.count,
+      state: summary?.state,
+      ...(summary?.failed === undefined ? {} : { failed: summary.failed })
+    };
   }
   const count = (state: KnowledgeDocument["state"]) =>
     documents.filter((document) => document.state === state).length;

@@ -91,7 +91,14 @@ function tallyWords(
             ? t("knowledge.tallyAll", { count })
             : t("knowledge.tallyCount", { count }),
       ...(tally.state === "failed"
-        ? { detail: t("knowledge.tallySomeFailed") }
+        ? {
+            detail:
+              tally.failed === undefined || tally.failed < 1
+                ? t("knowledge.tallySomeFailed")
+                : tally.failed === 1
+                  ? t("knowledge.tallyFailedCountOne")
+                  : t("knowledge.tallyFailedCountMany", { count: number(tally.failed) })
+          }
         : tally.state === "pending"
           ? { detail: t("knowledge.tallySomePending") }
           : {})

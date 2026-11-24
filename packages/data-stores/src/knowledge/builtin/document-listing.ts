@@ -73,7 +73,7 @@ const ISO_UTC = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`;
 const summaryRow = z.object({
   count: z.number().int(),
   pending: z.boolean(),
-  failed: z.boolean(),
+  failed: z.number().int(),
   last_ingested_at: z.string().nullable()
 });
 
@@ -89,7 +89,7 @@ export async function listKnowledgeDocuments(
           await sql.run(`
     select count(*)::int as count,
       coalesce(bool_or(c.state = 'pending'), false) as pending,
-      coalesce(bool_or(c.state = 'failed'), false) as failed,
+      (count(*) filter (where c.state = 'failed'))::int as failed,
       to_char(max(c.updated_at) filter (where c.state = 'extracted') at time zone 'UTC', ${ISO_UTC}) as last_ingested_at
     from catalyst_kb.documents d
     join catalyst_kb.contents c on c.sha256 = d.content_sha256
@@ -100,11 +100,13 @@ export async function listKnowledgeDocuments(
   const summary = totals
     ? {
         count: totals.count,
-        state: totals.failed
-          ? ("failed" as const)
-          : totals.pending
-            ? ("pending" as const)
-            : ("indexed" as const),
+        state:
+          totals.failed > 0
+            ? ("failed" as const)
+            : totals.pending
+              ? ("pending" as const)
+              : ("indexed" as const),
+        failed: totals.failed,
         ...(totals.last_ingested_at ? { lastIngestedAt: totals.last_ingested_at } : {})
       }
     : undefined;

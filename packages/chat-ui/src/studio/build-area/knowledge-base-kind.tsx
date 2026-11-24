@@ -43,12 +43,22 @@ function KnowledgeBaseRowFacts({
   const keepsDocuments = state?.documentFormats !== undefined;
   const documents = source.useDocumentSummary?.(asset.name, keepsDocuments);
   const summary = documents?.status === "ready" ? documents.data : null;
-  const badge = rowStateBadge(state?.status, summary?.state);
+  const badge = rowStateBadge(state?.status, summary ?? undefined);
   return (
     <>
       {badge === undefined ? null : (
-        <Badge tone={badge.tone} dot data-knowledge-row-state={badge.state}>
-          {t(badge.label)}
+        <Badge
+          tone={badge.tone}
+          dot
+          data-knowledge-row-state={badge.state}
+          data-knowledge-row-tone={badge.tone}
+        >
+          {t(
+            badge.label,
+            badge.count === undefined
+              ? undefined
+              : { count: new Intl.NumberFormat(locale).format(badge.count) }
+          )}
         </Badge>
       )}
       {!keepsDocuments || documents?.status === "loading" ? null : (
@@ -79,19 +89,30 @@ function KnowledgeBaseRowFacts({
 
 /**
  * The one badge of a row: the Knowledge Base's own state where it needs attention or is being
- * prepared, else its documents' where ingestion failed or runs. A ready one shows none.
+ * prepared, else its documents'. Where some documents failed beside others that did not, it is
+ * a warning that counts them; only where every document failed, or the instance sends no
+ * count, does it say ingestion failed. A ready one shows none.
  */
 function rowStateBadge(
   status: KnowledgeBaseState["status"] | undefined,
-  documents: KnowledgeDocumentSummary["state"] | undefined
-): { state: string; tone: BadgeTone; label: TranslationKey } | undefined {
+  documents: Pick<KnowledgeDocumentSummary, "count" | "state" | "failed"> | undefined
+): { state: string; tone: BadgeTone; label: TranslationKey; count?: number } | undefined {
   if (status === "needs_attention" || status === "preparing") {
     return { state: status, ...KNOWLEDGE_STATUS_VIEWS[status] };
   }
-  if (documents === "failed") {
+  if (documents?.state === "failed") {
+    const { failed } = documents;
+    if (failed !== undefined && failed > 0 && failed < documents.count) {
+      return {
+        state: "not-ingested",
+        tone: "warning",
+        label: "knowledge.rowNotIngested",
+        count: failed
+      };
+    }
     return { state: "ingestion-failed", tone: "danger", label: "knowledge.rowIngestionFailed" };
   }
-  if (documents === "pending") {
+  if (documents?.state === "pending") {
     return { state: "ingesting", tone: "info", label: "knowledge.rowIngesting" };
   }
   return undefined;
