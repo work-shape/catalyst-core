@@ -1,6 +1,19 @@
 import type { ClientInstanceId, UserId } from "./ids";
+import type { JsonObject } from "./json";
 
-/** Publication attribution and once-per-root failure notices, without run values. */
+/** A person's failure notice of one Workflow that they have not marked handled yet. */
+export interface OpenWorkflowFailureNotice {
+  noticeId: string;
+  /** What the notice holds now: its title, text and link. */
+  payload: JsonObject;
+  /** The failing runs counted into it since it was opened. */
+  failures: number;
+}
+
+/**
+ * Publication attribution and failure notices, without run values. Each root is counted once;
+ * one person holds at most one unhandled failure notice per Workflow, which later roots update.
+ */
 export interface WorkflowNoticesStore {
   recordPublisher(input: {
     clientInstanceId: ClientInstanceId;
@@ -22,6 +35,39 @@ export interface WorkflowNoticesStore {
     revisionId: string;
   }): Promise<boolean>;
   failureCount(input: { clientInstanceId: ClientInstanceId; rootRunId: string }): Promise<number>;
-  /** In the transaction that creates the notice, after locking the ended root. */
-  markNotified(input: { clientInstanceId: ClientInstanceId; rootRunId: string }): Promise<boolean>;
+  /**
+   * In the transaction that writes the notice, after locking the ended root: false where the
+   * root was counted already. `failures` is the root's own count.
+   */
+  markNotified(input: {
+    clientInstanceId: ClientInstanceId;
+    rootRunId: string;
+    failures: number;
+  }): Promise<boolean>;
+  /**
+   * The person's newest unhandled failure notice of the Workflow, locked with the transaction,
+   * as are the person's failure notices of the Workflow, so two roots ending at once write one.
+   */
+  openFailureNotice(input: {
+    clientInstanceId: ClientInstanceId;
+    workflowId: string;
+    userId: UserId;
+  }): Promise<OpenWorkflowFailureNotice | undefined>;
+  /**
+   * Words the open notice anew and moves it to the top of its person's Inbox: its time becomes
+   * `at`. False where it is no longer pending.
+   */
+  updateFailureNotice(input: {
+    clientInstanceId: ClientInstanceId;
+    noticeId: string;
+    summary: string;
+    payload: JsonObject;
+    at: string;
+  }): Promise<boolean>;
+  /** Names the notice the root was counted into. */
+  linkFailureNotice(input: {
+    clientInstanceId: ClientInstanceId;
+    rootRunId: string;
+    noticeId: string;
+  }): Promise<void>;
 }

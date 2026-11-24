@@ -56,5 +56,12 @@ export interface NoticeSendResult {
 
 /** The one way the platform sends a notice. The Workflow engine calls it. */
 export interface Notices {
-  send(input: NoticeSendInput, context: { correlationId: string }): Promise<NoticeSendResult>;
+  send(
+    input: NoticeSendInput,
+    context: {
+      correlationId: string;
+      /** Told the id of each Inbox item the notice created, for a sender that keeps it. */
+      created?: (item: { id: string; userId: string }) => void;
+    }
+  ): Promise<NoticeSendResult>;
 }

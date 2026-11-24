@@ -206,6 +206,7 @@ export function createNotices(options: NoticesOptions): Notices {
             requestedBy: { id: input.from.id, displayLabel: input.from.displayLabel },
             addresseeUserId: user.id
           });
+          context.created?.({ id: item.id, userId: user.id });
           if (!channels.includes("mail")) continue;
           if (!options.mailConfigured || !user.email) {
             mailsUnsent += 1;

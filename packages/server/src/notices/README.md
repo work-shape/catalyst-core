@@ -31,8 +31,14 @@ Delivery is at least once: a crash after provider acceptance and before committi
 can repeat a digest. No mail transport offers a transaction with our database.
 
 Each root end queues a failure-notice job in its transaction. That job counts failed and
-limited runs under the root in SQL and writes one Inbox notice, including for a successful
+limited runs under the root in SQL and writes the Inbox notice, including for a successful
 root with failed children. A marker and the Inbox write commit together under the root lock.
+A person holds at most one unhandled failure notice per Workflow: while it is pending, a later
+failing root updates it instead of adding one. Its count becomes the failing runs counted into
+it since it was opened, its link the newest run, and its time the update's, so it stands at the
+top of the Inbox. The marker names the notice it was counted into; once the person marks the
+notice handled, the next failing root opens a fresh one. Failure notices are Inbox-only, so an
+update queues no mail.
 The addressee is the publisher recorded for the root's revision, or the tester in test mode.
 Publisher records live with the revision; failure markers live with the root run. Migration
 0114 backfills publishers from retained successful publication audit events. An older revision

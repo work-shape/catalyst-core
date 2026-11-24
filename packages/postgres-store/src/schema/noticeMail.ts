@@ -1,6 +1,6 @@
 import { configAssetRevisions } from "./configAssets";
 import { workflowRuns } from "./workflowRuns";
-import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { approvalRequests } from "./approvals";
 import { productUsers } from "./users";
 
@@ -33,9 +33,18 @@ export const workflowRevisionPublishers = pgTable("workflow_revision_publishers"
   userId: text("user_id").notNull()
 });
 
-export const workflowFailureNotices = pgTable("workflow_failure_notices", {
-  rootRunId: text("root_run_id")
-    .primaryKey()
-    .references(() => workflowRuns.id, { onDelete: "cascade" }),
-  clientInstanceId: text("client_instance_id").notNull()
-});
+// One marker per root that was counted into a failure notice. `noticeId` names the Inbox notice
+// it was counted into, so a later failing run of the Workflow updates that notice while its
+// person has not marked it handled; `failures` is the root's count of failing runs.
+export const workflowFailureNotices = pgTable(
+  "workflow_failure_notices",
+  {
+    rootRunId: text("root_run_id")
+      .primaryKey()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    clientInstanceId: text("client_instance_id").notNull(),
+    noticeId: text("notice_id").references(() => approvalRequests.id, { onDelete: "set null" }),
+    failures: integer("failures").notNull().default(0)
+  },
+  (table) => [index("workflow_failure_notices_notice_idx").on(table.noticeId)]
+);
