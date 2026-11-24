@@ -209,6 +209,17 @@ export { workflowContinuationIssues } from "./continuation-rules";
 export { resolveWorkflowNeededRights } from "./needed-rights";
 export { testRunCall } from "./test-run";
 export { agentOutputError } from "./agent-step";
+export {
+  AGENT_WORKSPACE_INSTRUCTIONS,
+  AGENT_WORKSPACE_TOOL_NAMES,
+  agentFacingOutputSchema,
+  agentWorkspaceInput,
+  stageAgentWorkspace,
+  storeAgentOutputDatasets,
+  workflowAgentToolNames,
+  type AgentWorkspaceInputSources,
+  type WorkflowAgentWorkspaceFiles
+} from "./agent-workspace";
 export { createWorkflowRunFiles, runFilesOwner, type WorkflowRunFiles } from "./run-files";
 export {
   WORKFLOW_OUTSIDE_TRIGGER,

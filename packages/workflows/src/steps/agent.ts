@@ -18,14 +18,18 @@ export const agentStep = {
       type: z.literal("agent"),
       instructions: z.string().min(1),
       input: inputMappingSchema,
-      model: z.string().min(1).optional()
+      model: z.string().min(1).optional(),
+      workspace: z.boolean().optional()
     }),
+  // With a workspace the agent reads a dataset as a file (`agent-workspace.ts`).
   unsupported: (step: StepOf<"agent">, at: string) =>
-    namesDatasetType(step.inputSchema)
+    step.workspace !== true && namesDatasetType(step.inputSchema)
       ? [notSupported(`${at}.inputSchema`, "a dataset in an agent input (EW-14)")]
       : [],
   structural: (step: StepOf<"agent">, id: string) => {
-    const problem = agentOutputSchemaProblem(step.outputSchema);
+    const problem = agentOutputSchemaProblem(step.outputSchema, {
+      datasets: step.workspace === true
+    });
     return problem === undefined
       ? []
       : [

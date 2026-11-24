@@ -559,4 +559,27 @@ describe("a pruned Workflow run's threads", () => {
     ]);
     expect(elsewhere.size).toBe(2);
   });
+
+  // An agent step with a workspace: its thread's workspace lives as long as the run's values.
+  it("give an agent step's thread a workspace of its own that goes once the values are pruned", async () => {
+    const { t, threadOf, pruneValues, readRun } = await prepared({ attachmentHandler: true });
+    const run = await readRun();
+    const thread = await threadOf(run);
+    const workspace = await t.stores.executionWorkspaces.ensureExecutionWorkspace({
+      clientInstanceId,
+      conversationId: thread,
+      ownerUserId: "usr_owner",
+      now: new Date().toISOString()
+    });
+    expect(workspace.conversationId).toBe(thread);
+    const targets = () =>
+      t.stores.executionWorkspaces
+        .listExecutionWorkspaceCleanupTargets({ clientInstanceId, limit: 100 })
+        .then((all) => all.map((target) => target.workspaceId));
+    expect(await targets()).not.toContain(workspace.id);
+
+    expect(await pruneValues(run)).toBe(true);
+
+    expect(await targets()).toContain(workspace.id);
+  });
 });

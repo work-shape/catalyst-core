@@ -1,6 +1,7 @@
 import { checkpointFrame } from "./continuation-checkpoint";
 import { createBranchProgress } from "./branch-progress";
 import { startAgentStep } from "./agent-step";
+import type { WorkflowAgentWorkspaceFiles } from "./agent-workspace";
 import { createStepBeginning } from "./step-begin";
 import { createRunReads } from "./run-reads";
 import { createRunFinisher } from "./run-finish";
@@ -153,6 +154,8 @@ export interface WorkflowEngineOptions {
    * are run there. Without it a code step fails at once instead of waiting for nobody.
    */
   codeRunner?: WorkflowCodeRunner;
+  /** The workspaces of agent steps' threads; missing where the instance has none. */
+  agentWorkspace?: Pick<WorkflowAgentWorkspaceFiles, "read">;
   /** For how many days after its end a run keeps its values. The release's default when left out. */
   stepDataDays?: number;
   /** Batch sizes of the job that removes run data, below the release's own, for a test. */
@@ -315,7 +318,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     stepFiles,
     ...(datasets ? { datasets } : {}),
     ...(runFiles ? { runFiles } : {}),
-    ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
+    ...(options.codeRunner ? { codeRunner: options.codeRunner } : {}),
+    ...(options.agentWorkspace ? { agentWorkspace: options.agentWorkspace } : {})
   });
 
   const endRun = createRunEnd({

@@ -199,7 +199,15 @@ export async function openOutputFile(input: {
  * longer than a row may be, or one that is no JSON, ends the reading with its number.
  */
 export async function* outputFileRows(input: {
-  handle: FileHandle;
+  /** An open file, or bytes read as one (an agent step's file from its workspace). */
+  handle: {
+    read(
+      buffer: Buffer,
+      offset: number,
+      length: number,
+      position: null
+    ): Promise<{ bytesRead: number }>;
+  };
   bound: number;
   rowBytes: number;
 }): AsyncIterable<unknown> {

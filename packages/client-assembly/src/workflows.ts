@@ -110,6 +110,7 @@ export interface InstanceWorkflowsParts extends Pick<
    * fails at once, as no process would ever run its script.
    */
   codeRunner?: WorkflowEngineOptions["codeRunner"];
+  agentWorkspace?: WorkflowEngineOptions["agentWorkspace"];
   /** `retention.workflowStepDataDays` of release config. The release's default when left out. */
   stepDataDays?: number;
   /** Batch sizes of the job that removes run data, for a test. */
@@ -206,6 +207,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone }),
     stepFiles,
     ...(parts.codeRunner ? { codeRunner: parts.codeRunner } : {}),
+    ...(parts.agentWorkspace ? { agentWorkspace: parts.agentWorkspace } : {}),
     ...(parts.stepDataDays === undefined ? {} : { stepDataDays: parts.stepDataDays }),
     ...(parts.pruneBatch ? { pruneBatch: parts.pruneBatch } : {}),
     ...(parts.secretKeyring ? { webhookKeyring: parts.secretKeyring } : {})
@@ -440,7 +442,13 @@ export const assembleWorkflows: ModuleSeam = ({
           ]
         }
       : {}),
-    async start({ operationCalls, files, notices, releaseConversationAttachments }) {
+    async start({
+      operationCalls,
+      files,
+      notices,
+      releaseConversationAttachments,
+      agentWorkspaceFiles
+    }) {
       registry = operationCalls.registry;
       const workflows = createInstanceWorkflows({
         modules,
@@ -467,6 +475,7 @@ export const assembleWorkflows: ModuleSeam = ({
         ...(config.executionWorkspaces.enabled && config.infrastructure.sandbox
           ? { codeRunner: { timeoutSeconds: config.workflows.codeSteps.timeoutSeconds } }
           : {}),
+        ...(agentWorkspaceFiles ? { agentWorkspace: agentWorkspaceFiles } : {}),
         stepDataDays: config.retention.workflowStepDataDays,
         // A Workflow's webhook secret is kept in the Secret Store, as a Connection's is.
         ...(config.secretStore.keys.length > 0

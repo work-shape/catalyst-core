@@ -136,3 +136,4 @@ export { createScheduledStartTools, SCHEDULED_START_TOOL_NAMES } from "./schedul
 
 export * from "./run-skills";
 export { SKILL_FOLDER_CACHE_DIRECTORY, SkillFolderCache } from "./skill-folder-cache";
+export { createWorkspaceFileAccess } from "./workspace-file-access";

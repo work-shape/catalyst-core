@@ -112,7 +112,9 @@ export async function findExecutionWorkspaceOfActiveConversation(
 
 /**
  * The active Conversation whose Execution Workspace a Conversation uses: its own, or for a
- * subagent's run thread its root's, so a subagent works on its root's files (CR-1).
+ * subagent's run thread its root's, so a subagent works on its root's files (CR-1). A
+ * Workflow agent step's thread has its own; only a step with `workspace: true` is given the
+ * tools that reach it.
  */
 async function requireActiveConversation(
   db: PostgresConnection,
@@ -122,7 +124,11 @@ async function requireActiveConversation(
   }
 ): Promise<ConversationId> {
   const [row] = await db
-    .select({ kind: conversations.kind, parentConversationId: conversations.parentConversationId })
+    .select({
+      kind: conversations.kind,
+      parentConversationId: conversations.parentConversationId,
+      workflowRunId: conversations.workflowRunId
+    })
     .from(conversations)
     .where(
       and(
@@ -135,7 +141,7 @@ async function requireActiveConversation(
   if (!row) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
-  if (row.kind !== "run_thread") return input.conversationId;
+  if (row.kind !== "run_thread" || row.workflowRunId) return input.conversationId;
   if (!row.parentConversationId) {
     throw new AppError("NOT_FOUND", "Conversation has no Execution Workspace");
   }
