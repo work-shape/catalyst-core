@@ -352,8 +352,9 @@ export function defineKnowledgeExtractHandler(input: {
     },
     async onExhausted(job, stores) {
       // Without the stored failure the index job would ask for the extraction again, so the
-      // index job is queued only once the failure is stored. Where storing fails, the content
-      // stays `pending` and Retry asks again.
+      // index job is queued only once the failure is stored. Where storing fails, as when the
+      // store of files is down, the content stays `pending` and the job dead;
+      // `knowledge_base.recover_extracts` retries it.
       const file = await stores.files.getManagedFile({
         clientInstanceId,
         fileId: asManagedFileId(job.payload.fileId),

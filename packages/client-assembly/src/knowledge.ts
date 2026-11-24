@@ -471,7 +471,10 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
             : [])
         ],
         // The tick is a kind of the knowledge worker, or of the one process that serves its jobs.
-        schedules: runtime.files && sourceJobs ? [knowledgeSourceTickSchedule] : [],
+        schedules: [
+          ...fileJobs.schedules,
+          ...(runtime.files && sourceJobs ? [knowledgeSourceTickSchedule] : [])
+        ],
         jobRetries: fileJobs.retries
       };
     }

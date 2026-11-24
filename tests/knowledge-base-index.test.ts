@@ -11,13 +11,16 @@ import {
   readKnowledgeCitationSources,
   knowledgeExtractionKey,
   KNOWLEDGE_BASE_ASSET_KIND,
+  knowledgeExtractJob,
   knowledgeIndexJob,
+  ObjectStorageUnavailable,
   storeKnowledgeExtraction,
   verifyKnowledgeExtractor,
   type DataStoreRecord,
   type JsonObject,
   type Logger,
-  type KnowledgeExtractor
+  type KnowledgeExtractor,
+  type ObjectStorage
 } from "@work-shape/catalyst-core";
 import {
   chunkKnowledgeText,
@@ -756,6 +759,142 @@ describe("indexing the documents of a Knowledge Base", () => {
       )
     ).resolves.toMatchObject({ size: expect.any(Number) });
     await extractWorker.stop();
+  });
+
+  it("waits minutes between extract attempts, and brings back a PDF whose extraction died while the store of files was down", async () => {
+    expect(knowledgeExtractJob).toMatchObject({
+      maxAttempts: 5,
+      backoff: { baseMs: 60_000, maxMs: 15 * 60_000 }
+    });
+    const { instance } = await instanceWith({ documents: true });
+    const objects = createFilesystemObjectStorage(instance.filesRoot);
+    // The extract worker's store of files fails every request while `down`, so the job can
+    // neither read the copy nor store its failure.
+    let down = false;
+    const flaky: Pick<ObjectStorage, "get" | "put"> = {
+      get: (key) =>
+        down ? Promise.reject(new ObjectStorageUnavailable("request_failed")) : objects.get(key),
+      put: (key, body, options) =>
+        down
+          ? Promise.reject(new ObjectStorageUnavailable("request_failed"))
+          : objects.put(key, body, options)
+    };
+    const extractWorker = createJobWorker({
+      stores: instance.stores,
+      clientInstanceId,
+      logger: silent,
+      handlers: [
+        defineKnowledgeExtractHandler({
+          clientInstanceId,
+          objects: flaky,
+          extractor: fakeExtractor,
+          maxPages: 500,
+          slots: 1
+        })
+      ]
+    });
+    const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
+    try {
+      const extractJobs = () => platform<{ status: string; attempts: number }[]>`
+        select status, attempts from platform_jobs where kind = 'knowledge_base.extract'`;
+      const pdf = await add(instance, {
+        filename: "Expose.pdf",
+        contentType: "application/pdf",
+        content: "%FAKE-PDF\nLage und Umgebung"
+      });
+      await runJobs(instance);
+      down = true;
+      // Every attempt fails at once; the next one waits for its backoff, here skipped.
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await platform`update platform_jobs set run_after = now()
+          where kind = 'knowledge_base.extract' and status = 'queued'`;
+        await extractWorker.runDue();
+      }
+      expect(await extractJobs()).toEqual([{ status: "dead", attempts: 5 }]);
+      await runJobs(instance);
+      // No failure could be stored, so nothing moves the content on: it waits unsearchable.
+      expect((await list(instance)).documents).toEqual([
+        expect.objectContaining({ id: pdf.id, state: "pending" })
+      ]);
+
+      // The store is back. The recovery tick queues the dead job again, and it extracts.
+      down = false;
+      await platform`update platform_jobs set run_after = now()
+        where kind = 'knowledge_base.recover_extracts' and status = 'queued'`;
+      await eventually(async () => {
+        await runJobs(instance);
+        await extractWorker.runDue();
+        await runJobs(instance);
+        expect((await list(instance)).documents).toEqual([
+          expect.objectContaining({ id: pdf.id, state: "indexed" })
+        ]);
+      });
+      expect(await extractJobs()).toEqual([{ status: "succeeded", attempts: 1 }]);
+    } finally {
+      await platform.end();
+      await extractWorker.stop();
+    }
+  });
+
+  it("leaves a dead extract job dead where its content failed with a stored code", async () => {
+    const { instance } = await instanceWith({ documents: true });
+    const objects = createFilesystemObjectStorage(instance.filesRoot);
+    let extractions = 0;
+    const extractWorker = createJobWorker({
+      stores: instance.stores,
+      clientInstanceId,
+      logger: silent,
+      handlers: [
+        defineKnowledgeExtractHandler({
+          clientInstanceId,
+          objects,
+          extractor: {
+            revision: 1,
+            extract() {
+              extractions += 1;
+              return Promise.reject(new Error("The converter crashed"));
+            }
+          },
+          maxPages: 500,
+          slots: 1
+        })
+      ]
+    });
+    const platform = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
+    try {
+      const pdf = await add(instance, {
+        filename: "Expose.pdf",
+        contentType: "application/pdf",
+        content: "%FAKE-PDF\nLage und Umgebung"
+      });
+      await runJobs(instance);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await platform`update platform_jobs set run_after = now()
+          where kind = 'knowledge_base.extract' and status = 'queued'`;
+        await extractWorker.runDue();
+      }
+      await runJobs(instance);
+      expect((await list(instance)).documents).toEqual([
+        expect.objectContaining({
+          id: pdf.id,
+          state: "failed",
+          failureCode: "knowledge_extraction_failed"
+        })
+      ]);
+      const before = extractions;
+      await platform`update platform_jobs set run_after = now()
+        where kind = 'knowledge_base.recover_extracts' and status = 'queued'`;
+      await runJobs(instance);
+      await extractWorker.runDue();
+      expect(extractions).toBe(before);
+      expect(
+        await platform<{ status: string }[]>`
+          select status from platform_jobs where kind = 'knowledge_base.extract'`
+      ).toEqual([{ status: "dead" }]);
+    } finally {
+      await platform.end();
+      await extractWorker.stop();
+    }
   });
 
   it("extracts a failed or empty PDF afresh on Retry, and indexes a stored text again without extraction", async () => {
