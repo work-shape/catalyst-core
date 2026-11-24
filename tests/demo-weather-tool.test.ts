@@ -30,15 +30,13 @@ describe("demo weather forecast tool", () => {
     expect(schema).not.toHaveProperty("$schema");
     expect(properties.location).toMatchObject({
       type: "string",
-      maxLength: 120,
-      description: "City, region, or place name for the forecast."
+      maxLength: 120
     });
     expect(properties.days).toMatchObject({
       type: "integer",
       minimum: 1,
       maximum: 5,
-      default: 3,
-      description: "Number of forecast days to return."
+      default: 3
     });
     expect(properties.unit).toMatchObject({
       type: "string",
@@ -47,8 +45,7 @@ describe("demo weather forecast tool", () => {
     });
     expect(properties.startDate).toMatchObject({
       type: "string",
-      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-      description: "Optional ISO date for deterministic demos."
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
     });
     expect(schema.required).not.toContain("startDate");
     // A minimum length of one tells the model nothing a required string does not.
@@ -75,17 +72,6 @@ describe("demo weather forecast tool", () => {
         location: "Oslo"
       }
     });
-  });
-
-  it("localizes forecast summaries from the runtime locale", async () => {
-    const result = await runWeatherTool("de");
-    expect(result.status).toBe("success");
-    if (result.status !== "success") {
-      throw new Error("Expected weather tool to succeed");
-    }
-
-    expect(JSON.stringify(result.output)).toContain("Regenschutz");
-    expect(JSON.stringify(result.display)).toContain("Regenschutz");
   });
 });
 

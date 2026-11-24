@@ -134,24 +134,7 @@ describe("HMAC chat session tokens", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
   });
 
-  it("rejects broad bearer scopes during chat session token issuance", () => {
-    const issuer = new HmacSessionTokenIssuer({
-      secret: "a-development-secret-with-enough-length",
-      clientInstanceId: asClientInstanceId("demo-local"),
-      issuer: "demo",
-      ttlSeconds: 900
-    });
-
-    expect(() =>
-      issuer.issue({
-        externalUserId: "external-123",
-        displayLabel: "Jane Reviewer",
-        scopes: ["*"]
-      })
-    ).toThrow("Chat session token scopes must be limited to chat API operations");
-  });
-
-  it("allows explicit first-party config asset scopes for service principals", async () => {
+  it("limits a user's session token to chat scopes and a service principal's to named first-party ones", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const options = {
       secret: "a-development-secret-with-enough-length",
@@ -161,95 +144,36 @@ describe("HMAC chat session tokens", () => {
     };
     const issuer = new HmacSessionTokenIssuer(options);
     const adapter = new HmacSessionTokenAuthAdapter(options);
+
+    for (const scopes of [["*"], ["config_assets:read"], ["collaboration_workspace:manage"]]) {
+      expect(() =>
+        issuer.issue({ externalUserId: "external-123", displayLabel: "Jane Reviewer", scopes })
+      ).toThrow(expect.objectContaining({ code: "VALIDATION_FAILED" }));
+    }
+
     const issued = issuer.issue({
       externalUserId: "config-cli",
       displayLabel: "Config CLI",
       permissions: ["config_assets.read", "config_assets.write"],
-      scopes: ["config_assets:read", "config_assets:write"],
+      scopes: ["config_assets:read", "config_assets:write", "collaboration_workspace:manage"],
       delegatedActor: {
         kind: "service_principal",
         id: "config-cli",
         authSource: "server-credential"
       }
     });
-
     const user = await adapter.authenticate({
       headers: { authorization: `Bearer ${issued.chatSessionToken}` },
       clientInstanceId,
       correlationId: "corr_service"
     });
-
-    expect(user.scopes).toEqual(["config_assets:read", "config_assets:write"]);
+    expect(user.scopes).toEqual([
+      "config_assets:read",
+      "config_assets:write",
+      "collaboration_workspace:manage"
+    ]);
     expect(user.permissions).toEqual(["config_assets.read", "config_assets.write"]);
     expect(user.principal).toMatchObject({ kind: "service", id: "config-cli" });
-  });
-
-  it("keeps non-service tokens restricted to chat scopes", () => {
-    const issuer = new HmacSessionTokenIssuer({
-      secret: "a-development-secret-with-enough-length",
-      clientInstanceId: asClientInstanceId("demo-local"),
-      issuer: "demo",
-      ttlSeconds: 900
-    });
-
-    expect(() =>
-      issuer.issue({
-        externalUserId: "external-123",
-        displayLabel: "Jane Reviewer",
-        scopes: ["config_assets:read"]
-      })
-    ).toThrow("Chat session token scopes must be limited to chat API operations");
-  });
-
-  it("rejects Collaboration Workspace scopes for user chat sessions", () => {
-    const issuer = new HmacSessionTokenIssuer({
-      secret: "a-development-secret-with-enough-length",
-      clientInstanceId: asClientInstanceId("demo-local"),
-      issuer: "demo",
-      ttlSeconds: 900
-    });
-
-    expect(() =>
-      issuer.issue({
-        externalUserId: "external-123",
-        displayLabel: "Jane Reviewer",
-        scopes: ["collaboration_workspace:manage"]
-      })
-    ).toThrow(
-      expect.objectContaining({
-        code: "VALIDATION_FAILED"
-      })
-    );
-  });
-
-  it("allows Collaboration Workspace scopes for service principals", async () => {
-    const clientInstanceId = asClientInstanceId("demo-local");
-    const options = {
-      secret: "a-development-secret-with-enough-length",
-      clientInstanceId,
-      issuer: "demo",
-      ttlSeconds: 900
-    };
-    const issuer = new HmacSessionTokenIssuer(options);
-    const adapter = new HmacSessionTokenAuthAdapter(options);
-    const issued = issuer.issue({
-      externalUserId: "workspace-service",
-      displayLabel: "Workspace service",
-      scopes: ["collaboration_workspace:manage"],
-      delegatedActor: {
-        kind: "service_principal",
-        id: "workspace-service",
-        authSource: "server-credential"
-      }
-    });
-
-    const user = await adapter.authenticate({
-      headers: { authorization: `Bearer ${issued.chatSessionToken}` },
-      clientInstanceId,
-      correlationId: "corr_workspace_service"
-    });
-
-    expect(user.scopes).toEqual(["collaboration_workspace:manage"]);
   });
 
   it("rejects wildcard and unknown scopes for service principals", () => {

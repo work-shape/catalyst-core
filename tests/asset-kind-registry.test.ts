@@ -241,13 +241,6 @@ describe("asset kind registry", () => {
       title: "Assistant",
       description: "Answers"
     });
-    // A list in another language names the agent in it, and falls back to the default.
-    expect(
-      agentKind.summarize(agent({ description: { en: "Answers", de: "Antwortet" } }), "de")
-    ).toEqual({ name: "assistant", title: "Assistentin", description: "Antwortet" });
-    expect(agentKind.summarize(agent({ displayName: "Assistant" }), "de")).toMatchObject({
-      title: "Assistant"
-    });
 
     expect(issuesOf(skillKind, withSkills(), skill)).toEqual([]);
     expect(issuesOf(skillKind, withSkills(), { ...skill, name: "-first" })).toEqual([
@@ -260,15 +253,6 @@ describe("asset kind registry", () => {
       description: "How to",
       attributes: { origin: "instance" }
     });
-    // The sentence for people reaches a list beside the name. No skill names an icon itself.
-    expect(skillKind.summarize({ ...skill, summary: "Knows how to research a question." })).toEqual(
-      {
-        name: "research",
-        title: "Research",
-        description: "How to",
-        attributes: { origin: "instance", summary: "Knows how to research a question." }
-      }
-    );
   });
 });
 

@@ -626,26 +626,6 @@ describe("the content route of a Page", () => {
     expect(response.headers).toMatchObject(HEADER_SET);
   });
 
-  it("writes the token to no log line", async () => {
-    const started = await startInstance();
-    const { instance, lines } = started;
-    const page = await withPage(started);
-    const { url } = (await preview(instance, page)).json<Preview>();
-    const token = url.split("/")[3] ?? "";
-    const [payload = "", signature = ""] = token.split(".");
-
-    await callTestPath(instance, "GET", url, asFrame);
-    await callTestPath(instance, "GET", `${url}assets/main.js`, asScript);
-    await callTestPath(instance, "GET", `${url}assets/none.js`, asScript);
-    await callTestPath(instance, "GET", `${url.slice(0, -2)}A/assets/main.js`, asScript);
-    await callTestPath(instance, "GET", url, { "sec-fetch-dest": "document" });
-
-    // Other requests are logged with their address, so the absence below says something.
-    expect(lines.some((line) => line.includes("/health"))).toBe(true);
-    expect(lines.filter((line) => line.includes("/app-content/"))).toEqual([]);
-    expect(lines.filter((line) => line.includes(payload) || line.includes(signature))).toEqual([]);
-  });
-
   it("keeps the token out of logs and answers for an address spelled another way, a malformed one and another method", async () => {
     const started = await startInstance();
     const { instance, lines } = started;
@@ -659,6 +639,12 @@ describe("the content route of a Page", () => {
       expect(response.body).not.toContain("content");
       expect(response.headers).toMatchObject(HEADER_SET);
     };
+
+    await callTestPath(instance, "GET", url, asFrame);
+    await callTestPath(instance, "GET", `${url}assets/main.js`, asScript);
+    await callTestPath(instance, "GET", `${url}assets/none.js`, asScript);
+    await callTestPath(instance, "GET", `${url.slice(0, -2)}A/assets/main.js`, asScript);
+    await callTestPath(instance, "GET", url, { "sec-fetch-dest": "document" });
 
     // The router reads an escaped character as the character, so this address is served.
     const escaped = await callTestPath(
@@ -708,6 +694,7 @@ describe("the content route of a Page", () => {
     expect(short.statusCode).toBe(404);
     expect(short.headers).toMatchObject(HEADER_SET);
 
+    // Other requests are logged with their address, so the absence below says something.
     expect(lines.some((line) => line.includes("/health"))).toBe(true);
     expect(lines.filter((line) => /app.{1,3}content/iu.test(line))).toEqual([]);
     expect(lines.filter((line) => line.includes(payload) || line.includes(signature))).toEqual([]);

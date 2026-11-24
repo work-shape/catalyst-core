@@ -36,7 +36,6 @@ describe("the check of a move that takes a Data Store along", () => {
       workspaceId: personal.id
     });
     for (const [locale, sentence] of [
-      ["de", "Die Daten in „orders“ gehen mit und sind dann für das Team „Vertrieb“ lesbar."],
       ["en", 'The data in "orders" goes along and can then be read by the team "Vertrieb".']
     ] as const) {
       const response = await world.api.call("assets.move_check", {

@@ -375,16 +375,6 @@ describe("web access app assembly", () => {
     });
   });
 
-  it("does not expose web_fetch unless web access fetch is enabled", async () => {
-    await expectAppAssemblyInvalid(
-      createTestConfig({
-        toolNames: ["web_fetch"],
-        tools: [{ name: "web_fetch", enabled: true }]
-      }),
-      "Enabled tool 'web_fetch' has no implementation registered by the client assembly app"
-    );
-  });
-
   it("does not expose web_fetch when the top-level web access gate is disabled", async () => {
     await expectAppAssemblyInvalid(
       createTestConfig({

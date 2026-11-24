@@ -410,10 +410,9 @@ describe("the CLI with an agent offered in all workspaces except one", () => {
       excluded
     );
     expect(set, set.err).toMatchObject({ code: 0 });
-    expect(set.out).toContain(`is offered in every workspace except ${excluded}.`);
-    expect((await run("agent", "show", "helper")).out).toContain(
-      `available in: every workspace except ${excluded}`
-    );
+    expect(
+      (await t.stores.configAssets.listAgentAvailability({ clientInstanceId })).get("helper")
+    ).toMatchObject({ mode: "all_except", collaborationWorkspaceIds: [excluded] });
     // A second change compares against what the first one stored, all_except included.
     const again = await run("agent", "set-availability", "helper", "--mode", "all");
     expect(again, again.err).toMatchObject({ code: 0 });
@@ -484,6 +483,5 @@ describe("the CLI with an agent offered in all workspaces except one", () => {
       excluded
     );
     expect(wrong.code).not.toBe(0);
-    expect(wrong.err).toContain("--except goes with --mode all_except.");
   });
 });

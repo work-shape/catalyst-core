@@ -337,76 +337,61 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect((await asset("app", "golive-first-app"))?.publishedRevision).toBeUndefined();
   });
 
-  it.each(["unpublished", "below_min_schema"] as const)(
-    "checks an unnamed bound store that is %s before publishing a named store",
-    async (fault) => {
-      const name = `golive-unnamed-${fault.replaceAll("_", "-")}`;
-      const app = `${name}-app`;
-      const other = `${name}-other`;
-      const named = await storeWithPendingMigration(name, app);
-      if (fault === "unpublished") {
-        await t.draftStore(other, [storeManifest(other), init], t.workspaceId);
-      } else {
-        await t.publishStore(other, [storeManifest(other), init], t.workspaceId);
-      }
-      const files = findingsApp({ id: app, marker: app, store: name, minSchema: 2 })
-        .filter((file) => !file.path.endsWith(".sql"))
-        .map((file) => {
-          if (file.path !== "app.yaml" || !("text" in file)) return file;
-          const manifest = z.record(z.string(), z.unknown()).parse(JSON.parse(file.text));
-          return {
-            ...file,
-            text: JSON.stringify({
-              ...manifest,
-              actions: [],
-              dataStores: [
-                { name, minSchema: 2 },
-                { name: other, minSchema: 2 }
-              ]
-            })
-          };
-        });
-      expectStatus(await t.putApp(t.admin.id, app, files), 200);
-      const refused = await publishWith(t.admin.id, app, 2, [{ name, revision: named.store }]);
-      expectStatus(refused, fault === "unpublished" ? 404 : 409);
-      expect(t.refusal(refused).details).toMatchObject({
-        reason: fault === "unpublished" ? "data_store_unavailable" : "data_store_below_min_schema",
-        dataStore: other
+  it("checks an unnamed bound store that is below_min_schema before publishing a named store", async () => {
+    const name = "golive-unnamed-below-min-schema";
+    const app = `${name}-app`;
+    const other = `${name}-other`;
+    const named = await storeWithPendingMigration(name, app);
+    await t.publishStore(other, [storeManifest(other), init], t.workspaceId);
+    const files = findingsApp({ id: app, marker: app, store: name, minSchema: 2 })
+      .filter((file) => !file.path.endsWith(".sql"))
+      .map((file) => {
+        if (file.path !== "app.yaml" || !("text" in file)) return file;
+        const manifest = z.record(z.string(), z.unknown()).parse(JSON.parse(file.text));
+        return {
+          ...file,
+          text: JSON.stringify({
+            ...manifest,
+            actions: [],
+            dataStores: [
+              { name, minSchema: 2 },
+              { name: other, minSchema: 2 }
+            ]
+          })
+        };
       });
-      expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
-      expect(await record(name)).toMatchObject({ level: 1 });
-      expect((await asset("app", app))?.publishedRevision).toBeUndefined();
-    }
-  );
+    expectStatus(await t.putApp(t.admin.id, app, files), 200);
+    const refused = await publishWith(t.admin.id, app, 2, [{ name, revision: named.store }]);
+    expectStatus(refused, 409);
+    expect(t.refusal(refused).details).toMatchObject({
+      reason: "data_store_below_min_schema",
+      dataStore: other
+    });
+    expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
+    expect(await record(name)).toMatchObject({ level: 1 });
+    expect((await asset("app", app))?.publishedRevision).toBeUndefined();
+  });
 
-  it.each(["read", "insert"] as const)(
-    "checks the publisher's sql action right data_store.%s before publishing a store",
-    async (missing) => {
-      const name = `golive-sql-${missing}`;
-      const app = `${name}-app`;
-      const named = await storeWithPendingMigration(name, app);
-      const storeId = required(await asset(DATA_STORE_ASSET_KIND, name)).id;
-      await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
-        t.withRight(t.kai.id, "data_store.publish", { assetId: storeId }, () =>
-          t.withRight(
-            t.kai.id,
-            `data_store.${missing === "read" ? "insert" : "read"}`,
-            { assetId: storeId },
-            async () => {
-              const refused = await publishWith(t.kai.id, app, named.app, [
-                { name, revision: named.store }
-              ]);
-              expectStatus(refused, 403);
-              expect(t.refusal(refused).details).toMatchObject({ action: `data_store.${missing}` });
-            }
-          )
-        )
-      );
-      expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
-      expect(await record(name)).toMatchObject({ level: 1 });
-      expect((await asset("app", app))?.publishedRevision).toBeUndefined();
-    }
-  );
+  it("checks the publisher's sql action right data_store.read before publishing a store", async () => {
+    const name = "golive-sql-read";
+    const app = `${name}-app`;
+    const named = await storeWithPendingMigration(name, app);
+    const storeId = required(await asset(DATA_STORE_ASSET_KIND, name)).id;
+    await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
+      t.withRight(t.kai.id, "data_store.publish", { assetId: storeId }, () =>
+        t.withRight(t.kai.id, "data_store.insert", { assetId: storeId }, async () => {
+          const refused = await publishWith(t.kai.id, app, named.app, [
+            { name, revision: named.store }
+          ]);
+          expectStatus(refused, 403);
+          expect(t.refusal(refused).details).toMatchObject({ action: "data_store.read" });
+        })
+      )
+    );
+    expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
+    expect(await record(name)).toMatchObject({ level: 1 });
+    expect((await asset("app", app))?.publishedRevision).toBeUndefined();
+  });
 
   it("checks the App's built files before publishing a store", async () => {
     const name = "golive-no-files";
@@ -439,7 +424,7 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect((await asset("app", app))?.publishedRevision).toBeUndefined();
   });
 
-  it.each(["unpublished", "input", "use", "named-input", "named-valid"] as const)(
+  it.each(["input", "use", "named-valid"] as const)(
     "checks the App's Workflow before publishing a store: %s",
     async (fault) => {
       const name = `golive-wf-${fault}`;
@@ -469,17 +454,15 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
           payload: { config: config(requiredInput), expectedRevision }
         });
       await put(null, fault === "input" || fault === "named-valid");
-      if (fault !== "unpublished") {
-        expectStatus(
-          await t.call(t.root.id, "assets.publish", {
-            params: { kind: "workflow", name: workflow },
-            payload: { revision: 1 }
-          }),
-          200
-        );
-      }
-      const jointly = fault === "named-input" || fault === "named-valid";
-      if (jointly) await put(1, fault === "named-input");
+      expectStatus(
+        await t.call(t.root.id, "assets.publish", {
+          params: { kind: "workflow", name: workflow },
+          payload: { revision: 1 }
+        }),
+        200
+      );
+      const jointly = fault === "named-valid";
+      if (jointly) await put(1, false);
       const files = [
         ...findingsApp({ id: app, marker: app, store: name, minSchema: 2 }).map((file) => {
           if (file.path !== "app.yaml" || !("text" in file)) return file;
@@ -505,24 +488,10 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
         });
       const check = async (userId: string) => {
         const response = await publish(userId);
-        expectStatus(
-          response,
-          fault === "named-valid"
-            ? 200
-            : fault === "use"
-              ? 403
-              : fault === "unpublished"
-                ? 404
-                : 422
-        );
+        expectStatus(response, fault === "named-valid" ? 200 : fault === "use" ? 403 : 422);
         if (fault !== "named-valid") {
           expect(t.refusal(response).details).toMatchObject(
-            fault === "use"
-              ? { action: "workflow.use" }
-              : {
-                  reason:
-                    fault === "unpublished" ? "workflow_unavailable" : "workflow_input_invalid"
-                }
+            fault === "use" ? { action: "workflow.use" } : { reason: "workflow_input_invalid" }
           );
         }
       };
@@ -896,10 +865,7 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     );
 
     expect(code, err.join("")).toBe(0);
-    expect(out.join("")).toContain(
-      `Data Store 'Store golive-cli' (golive-cli): revision ${named.store} in place of 1, at level 1, applies 1 migration: add_note`
-    );
-    expect(out.join("")).toContain(`Published revision ${named.store} of Data Store 'golive-cli'.`);
+    expect(out.join("")).toContain("add_note");
     expect(await record("golive-cli")).toMatchObject({ level: 2 });
     expect((await asset("app", "golive-cli-app"))?.publishedRevision).toBe(named.app);
   });

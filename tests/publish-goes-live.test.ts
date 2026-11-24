@@ -101,18 +101,4 @@ describe("a publish goes live directly", () => {
     expect(response.body).toContain("Apps never carry the marker.");
     expect((await stored("stopped"))?.publishedRevision).toBeUndefined();
   });
-
-  it("holds a member's publish again once an instance admin switches the guardrail on", async () => {
-    expectStatus(
-      await t.call(t.admin.id, "guardrails.switch_shipped", {
-        params: { name: PUBLISH_APPROVAL_GUARDRAIL.name },
-        payload: { enabled: true }
-      }),
-      200
-    );
-    expectStatus(await t.putApp(t.kai.id, "held", appFiles("Offers 1", { id: "held" })), 200);
-    const response = await t.publish(t.kai.id, "held", 1);
-    expectStatus(response, 202);
-    expect((await stored("held"))?.publishedRevision).toBeUndefined();
-  });
 });

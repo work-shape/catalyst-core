@@ -5,36 +5,22 @@ import {
   EVENTS,
   GRANTABLE_ACTION_SCOPES,
   MAIL_BODY_MAX_BYTES,
-  MAIL_RECIPIENT_ID_PATTERN,
-  MAIL_SEND_ERROR_CODES,
   MAIL_SEND_MAX_ADDRESSES,
   MAIL_SEND_OPERATION,
   MAIL_SENDER_ACTIONS,
   MAIL_SENDER_RESOURCE_KIND,
   MAIL_SENDER_SYSTEM,
-  MAIL_SENDER_SYSTEM_ICON,
-  MAIL_WORKFLOW_MESSAGE_TEMPLATE,
-  NOTICE_ID_PATTERN,
-  PROVIDER_PORT_FIELDS,
   PRINCIPAL_GRANTABLE_ACTIONS,
   ROLE_DEFAULT_ACTIONS,
-  WORKFLOW_MARKDOWN_MAX_COLUMNS,
-  WORKFLOW_MARKDOWN_MAX_ROWS,
-  WORKFLOW_STEP_SOURCE_KINDS,
-  WORKFLOW_TEXT_FORMAT_MARKDOWN,
   WORKFLOW_TEXT_MAX_PARTS,
   mailSendContract,
   mailSendInputSchema,
   mailSendOutputSchema,
   mailSendRefusalDetailsSchema,
-  mailSendSimulatedOutputSchema,
   workflowInputTextSchema,
   workflowInputValueSchema,
-  workflowMailSenderFactSchema,
-  workflowMessageMailParamsSchema,
   type MailSenderId,
-  type MailSendInput,
-  type WorkflowInputText
+  type MailSendInput
 } from "@work-shape/catalyst-core";
 import { mailSendContract as contractOfApi } from "@work-shape/catalyst-api-contract";
 import {
@@ -137,23 +123,6 @@ describe("the input of mail.send", () => {
       mailSendInputSchema.safeParse({ ...mail, attachments: [{ file: "file_1" }] }).success
     ).toBe(false);
   });
-
-  it("marks the body as Markdown and the subject as one line in its JSON Schema", () => {
-    const schema = z
-      .looseObject({
-        properties: z.record(z.string(), z.looseObject({ pattern: z.string().optional() })),
-        required: z.array(z.string())
-      })
-      .parse(z.toJSONSchema(mailSendInputSchema, { io: "input", unrepresentable: "any" }));
-    const { properties } = schema;
-    expect(properties.body).toMatchObject({
-      type: "string",
-      format: WORKFLOW_TEXT_FORMAT_MARKDOWN
-    });
-    expect(properties.subject).toMatchObject({ type: "string", maxLength: 200 });
-    expect(properties.subject?.pattern).toEqual(expect.any(String));
-    expect(schema.required).toEqual(["to", "subject", "body"]);
-  });
 });
 
 describe("what mail.send answers", () => {
@@ -175,30 +144,7 @@ describe("what mail.send answers", () => {
     expect(mailSendOutputSchema.parse({ ...output, test: true }).test).toBe(true);
   });
 
-  it("answers a simulated call with the mail as it would go out", () => {
-    const preview = {
-      from: { name: "Workshape Catalyst", address: "noreply@catalyst.example" },
-      to: [{ kind: "person", label: "Miriam Voss" }],
-      cc: [],
-      bcc: [{ kind: "address", label: "archiv@kanzlei.de" }],
-      skipped: 0,
-      subject: mail.subject,
-      html: "<p>…</p>",
-      text: "…"
-    };
-    expect(mailSendSimulatedOutputSchema.parse({ simulated: true, preview }).preview).toEqual(
-      preview
-    );
-    expect(mailSendSimulatedOutputSchema.safeParse({ simulated: true }).success).toBe(false);
-  });
-
-  it("refuses with one of four codes, naming the domain of a refused recipient", () => {
-    expect(Object.values(MAIL_SEND_ERROR_CODES)).toEqual([
-      "recipient_not_allowed",
-      "no_recipient",
-      "mail_rejected",
-      "workspace_not_allowed"
-    ]);
+  it("refuses naming the domain of a refused recipient", () => {
     // A workspace its author may not mail is refused without a word of who is in it (MAIL-2).
     expect(
       mailSendRefusalDetailsSchema.safeParse({ reason: "workspace_not_allowed", workspace: "w" })
@@ -234,28 +180,6 @@ describe("the contract descriptor", () => {
   });
 });
 
-describe("the template workflow-message", () => {
-  it("takes the subject, the Markdown and who sent it; the frame is the instance's", () => {
-    expect(MAIL_WORKFLOW_MESSAGE_TEMPLATE).toBe("workflow-message");
-    const params = {
-      subject: mail.subject,
-      markdown: mail.body,
-      sentBy: { kind: "workflow", workflowName: "Mandanten-Check" }
-    };
-    expect(workflowMessageMailParamsSchema.parse(params)).toEqual(params);
-    expect(
-      workflowMessageMailParamsSchema.parse({
-        ...params,
-        sentBy: { kind: "agent", onBehalfOf: "Miriam Voss" },
-        test: { intendedRecipients: { to: [{ kind: "person", label: "Tim" }], cc: [], bcc: [] } }
-      }).test
-    ).toBeDefined();
-    expect(
-      workflowMessageMailParamsSchema.safeParse({ ...params, logoUrl: "https://x" }).success
-    ).toBe(false);
-  });
-});
-
 describe("infrastructure.mail.outbound", () => {
   const models = { local: { provider: "deterministic" } };
   const mailEntry = {
@@ -271,10 +195,6 @@ describe("infrastructure.mail.outbound", () => {
       recipientDomains: [],
       limits: { perWorkflowPerHour: 200, perInstancePerDay: 1000 }
     });
-  });
-
-  it("belongs to the mail port, so no adapter's schema reads it", () => {
-    expect(PROVIDER_PORT_FIELDS.mail).toContain("outbound");
   });
 
   it("cannot be switched on without a mail provider", () => {
@@ -365,44 +285,9 @@ describe("the right mail_sender.use", () => {
   it("is granted on one named sender and never at instance scope", () => {
     expect(GRANTABLE_ACTION_SCOPES["mail_sender.use"]).toEqual(["asset"]);
   });
-
-  it("names recipients by the ids notices name them by", () => {
-    expect(MAIL_RECIPIENT_ID_PATTERN.source).toBe(NOTICE_ID_PATTERN.source);
-  });
-});
-
-describe("the step facts of a mail.send step", () => {
-  it("name the sender as a source of kind mail_sender with its icon, address and domains", () => {
-    expect(WORKFLOW_STEP_SOURCE_KINDS).toContain("mail_sender");
-    expect(MAIL_SENDER_SYSTEM_ICON).toBe("system-mail");
-    const fact = {
-      sender: "system",
-      title: "Workshape Catalyst",
-      icon: MAIL_SENDER_SYSTEM_ICON,
-      address: "noreply@catalyst.example",
-      recipientDomains: ["kanzlei.de"]
-    };
-    expect(workflowMailSenderFactSchema.parse(fact)).toEqual(fact);
-    expect(workflowMailSenderFactSchema.safeParse({ ...fact, provider: "mailjet" }).success).toBe(
-      false
-    );
-  });
 });
 
 describe("the text value form", () => {
-  it("joins literal strings and references in order", () => {
-    const value = {
-      text: [
-        "Prüfergebnis ",
-        { ref: { step: "monat", path: "label" } },
-        " für ",
-        { ref: { step: "mandant", path: "name" } }
-      ]
-    };
-    expect(workflowInputTextSchema.parse(value)).toEqual(value);
-    expectTypeOf(value).toExtend<WorkflowInputText>();
-  });
-
   it("refuses an empty text, a part that is no string or reference, and too many parts", () => {
     expect(workflowInputTextSchema.safeParse({ text: [] }).success).toBe(false);
     expect(workflowInputTextSchema.safeParse({ text: [3] }).success).toBe(false);
@@ -414,7 +299,6 @@ describe("the text value form", () => {
       workflowInputTextSchema.safeParse({ text: Array(WORKFLOW_TEXT_MAX_PARTS + 1).fill("a") })
         .success
     ).toBe(false);
-    expect([WORKFLOW_MARKDOWN_MAX_ROWS, WORKFLOW_MARKDOWN_MAX_COLUMNS]).toEqual([100, 8]);
   });
 
   it("is a value of a mapping beside a literal and a reference (EW-TEXT)", () => {

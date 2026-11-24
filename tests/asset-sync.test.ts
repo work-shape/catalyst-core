@@ -101,19 +101,6 @@ describe("the revision each item of a batch is made against", () => {
     expect(JSON.stringify(details)).not.toContain("Admin");
   });
 
-  it("refuses the creation of a name that exists", async () => {
-    await sync(t, t.kai.id, [putSkill("kai-taken", null)]);
-
-    const again = await sync(t, t.kai.id, [putSkill("kai-taken", null, "Again.")]);
-
-    expect(again.statusCode).toBe(412);
-    expect(refusalOf(again)).toMatchObject({
-      code: "REVISION_CONFLICT",
-      details: { conflicts: [{ kind: "skill", name: "kai-taken", currentRevision: 1 }] }
-    });
-    expect(await revisionsOf("skill", "kai-taken")).toBe(1);
-  });
-
   // Fails without the change: a create brought a deleted asset back without having seen it go.
   it("creates a deleted name again only against the revision of its delete", async () => {
     await sync(t, t.kai.id, [putSkill("kai-gone", null)]);

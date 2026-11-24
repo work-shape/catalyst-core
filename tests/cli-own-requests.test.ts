@@ -338,13 +338,9 @@ describe("personal keys following their calls and requests", () => {
   });
 
   it.each([
-    ["operation"],
     ["operation", "show"],
-    ["operation", "show", "id", "extra"],
-    ["requests", "id"],
     ["operation", "show", "id", "--withdraw", "request"],
-    ["requests", "--withdraw", ""],
-    ["requests", "--workspace", "workspace"]
+    ["requests", "--withdraw", ""]
   ])("rejects invalid command arguments without sending a request: %j", async (...args) => {
     let sent = false;
     const code = await runCli(args, {

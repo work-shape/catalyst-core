@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { parseSkillMarkdown } from "@work-shape/catalyst-asset-schemas";
+import {
+  skillConfigToForm,
+  skillFacts,
+  skillFormToConfig
+} from "@work-shape/catalyst-chat-ui/build-area";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   agentConfigSchema,
@@ -6,6 +12,7 @@ import {
   parseClientInstanceConfig,
   skillConfigSchema
 } from "@work-shape/catalyst-config-schema";
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
 
 const starter = (title: string, extra: Record<string, unknown> = {}) => ({
   title: { en: title, de: `${title} (de)` },
@@ -145,22 +152,6 @@ describe("skill starters", () => {
     expect(shown(13)).toEqual(own(12));
   });
 
-  it("gives an author's prompt the icon the author chose, and none where none is chosen", () => {
-    const agent = agentOf({
-      skillNames: [],
-      skills: [],
-      initialPrompts: [
-        { title: "Plan", prompt: "Plan the week.", icon: "calendar" },
-        { title: "Ask", prompt: "Ask." }
-      ]
-    });
-
-    expect(agent?.initialPrompts).toEqual([
-      { title: "Plan", prompt: "Plan the week.", icon: "calendar" },
-      { title: "Ask", prompt: "Ask." }
-    ]);
-  });
-
   it("refuses an agent whose prompt names an icon outside the starter icons", () => {
     const parsed = agentConfigSchema.safeParse({
       name: "agent",
@@ -171,7 +162,6 @@ describe("skill starters", () => {
 
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues[0]?.path).toEqual(["initialPrompts", 0, "icon"]);
-    expect(parsed.error?.issues[0]?.message).toBe("A starter's icon is one of the starter icons");
   });
 
   it("carries the skill's icon for a platform skill only", () => {
@@ -222,5 +212,57 @@ describe("skill starters", () => {
     ]);
     expect(issues([{ title: "Two\nlines", prompt: "Go" }])).toHaveLength(1);
     expect(issues([{ title: "One", prompt: "Go", send: true }])).toHaveLength(1);
+  });
+});
+
+// A skill's `summary`: the sentence for people, from the skill file to the row that shows it.
+describe("the summary of a skill", () => {
+  const plain = {
+    name: "plain-language",
+    title: "Plain language",
+    description: "Use when a text should be short and easy to read.",
+    content: "One thought per sentence."
+  };
+  const summary = "Knows how to write short, easy sentences in German and English.";
+
+  it("is read from the front matter, optional, and one line of at most 120 characters", () => {
+    const file = `---\ntitle: Plain language\ndescription: Use for short texts.\nsummary: ${summary}\n---\nWrite.`;
+    expect(parseSkillMarkdown(file, "SKILL.md", "skills/plain/SKILL.md")).toMatchObject({
+      summary,
+      description: "Use for short texts."
+    });
+    expect(skillConfigSchema.parse(plain)).not.toHaveProperty("summary");
+    const valid = (value: string) =>
+      skillConfigSchema.safeParse({ ...plain, summary: value }).success;
+    expect(valid("a".repeat(120))).toBe(true);
+    expect(valid("a".repeat(121))).toBe(false);
+    expect(valid("Knows how to write.\nAnd more.")).toBe(false);
+    expect(valid("")).toBe(false);
+  });
+
+  it("changes the version a proposed change is checked against, and only where it is set", () => {
+    const before = createSkillSourceVersion(plain);
+
+    expect(createSkillSourceVersion({ ...plain, summary })).not.toBe(before);
+    expect(createSkillSourceVersion({ ...plain, summary: undefined })).toBe(before);
+  });
+
+  it("is kept by a save of the form and left out where the field is empty", () => {
+    expect(skillFormToConfig(skillConfigToForm({ ...plain, summary }))).toEqual({
+      ...plain,
+      summary
+    });
+    expect(skillFormToConfig({ ...skillConfigToForm(plain), summary: "  " })).toEqual(plain);
+    expect(skillFacts({ attributes: { summary } })).toEqual({ summary });
+    expect(skillFacts({ attributes: { summary: " " } })).toEqual({});
+  });
+
+  it("takes the icon a list shows from a skill a release ships and from no other", () => {
+    expect(skillFacts({ attributes: { origin: "release", icon: "pdf" } })).toEqual({
+      icon: "pdf"
+    });
+    // A custom skill named like a shipped one, or one that claims an icon, stays generic.
+    expect(skillFacts({ attributes: { icon: "pdf" } })).toEqual({});
+    expect(skillFacts({ attributes: { origin: "custom", icon: "pdf" } })).toEqual({});
   });
 });

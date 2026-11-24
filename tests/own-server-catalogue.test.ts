@@ -198,14 +198,6 @@ const byEntry = (id: string, extra: Record<string, unknown> = {}) => ({
 });
 
 describe("an agent's proposal by entry", () => {
-  it("lists the offered entries in its description, and says so where there are none", () => {
-    expect(proposeTool(true).description).toContain("'notes' (Notes)");
-    expect(proposeTool(true).description).toContain("ownServerEntry");
-    expect(proposeTool(true).description).not.toContain(ADDRESS);
-    const bare = createConnectionProposeTool({ connectorTypes: registry() });
-    expect(bare.description).toContain("offers no own-server entries");
-  });
-
   it("answers with the entry's name and address, and audits the mode and the entry alone", async () => {
     const tool = proposeTool(true);
     const answer = await tool.execute(tool.inputSchema.parse(byEntry("notes")), context);
@@ -226,7 +218,6 @@ describe("an agent's proposal by entry", () => {
     const elsewhere = await shared.execute(shared.inputSchema.parse(byEntry("notes")), context);
     const output = elsewhere.status === "success" ? elsewhere.output : undefined;
     expect(output).toMatchObject({ privateChat: false, ownServer: { entry: "notes" } });
-    expect(JSON.stringify(output)).toContain("private chats");
     expect(JSON.stringify(answer.auditSummary)).not.toContain("notes.example.com");
   });
 

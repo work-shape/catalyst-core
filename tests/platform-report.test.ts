@@ -318,7 +318,7 @@ describe("platform problem reports", () => {
     expect(logged.join("\n")).not.toContain("note-marker-7f3a");
   });
 
-  it("reports a run that failed with a platform code, with a reply to the person where they ask", async () => {
+  it("reports a run that failed with a platform code, with a reply to the person where they ask, once when reported twice at once", async () => {
     const at = await setup();
     await withTestSql(
       (sql) => sql`update product_users set email = 'kai@client.example.test'
@@ -331,10 +331,31 @@ describe("platform problem reports", () => {
     expect(mail?.text).toContain(AGENT_RUN_COMMAND_NOT_TAKEN_CODE);
     expect(mail?.from.email).toBe(identity.fromAddress);
     expect(mail?.replyTo?.email).toBe("kai@client.example.test");
+
+    // One run reported twice at once sends one mail.
+    const concurrent = await failedRun(at, at.kai);
+    const answers = await Promise.all([
+      report(at, at.kai, concurrent),
+      report(at, at.kai, concurrent)
+    ]);
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([200, 409]);
+    expect(transport.list()).toHaveLength(2);
   });
 
-  it("refuses a run that failed for no platform reason, and a second report of one run", async () => {
+  it("refuses a run that failed for no platform reason or another tool names, a run of another conversation, and a second report of one run", async () => {
     const at = await setup();
+    const other = await failedRun(at, at.kai, "other-tool");
+    expect((await report(at, at.kai, other)).statusCode).toBe(409);
+    const own = await failedRun(at, at.kai);
+    const elsewhere = await failedRun(at, at.kai);
+    // Both conversations are Kai's: a run is still reported only in its own.
+    const crossed = await report(at, at.kai, {
+      conversationId: own.conversationId,
+      runId: elsewhere.runId
+    });
+    expect(crossed.statusCode).toBe(404);
+    expect(transport.list()).toHaveLength(0);
+
     const plain = await failedRun(at, at.kai, "none");
     const refused = await report(at, at.kai, plain);
     expect(refused.statusCode).toBe(409);
@@ -351,30 +372,6 @@ describe("platform problem reports", () => {
     );
     // Another person who reads the conversation is not this one: Lena cannot read Kai's.
     expect((await report(at, at.lena, target)).statusCode).toBe(404);
-    expect(transport.list()).toHaveLength(1);
-  });
-
-  it("takes no failure another tool names, and no run of another conversation", async () => {
-    const at = await setup();
-    const other = await failedRun(at, at.kai, "other-tool");
-    const refused = await report(at, at.kai, other);
-    expect(refused.statusCode).toBe(409);
-    const own = await failedRun(at, at.kai);
-    const elsewhere = await failedRun(at, at.kai);
-    // Both conversations are Kai's: a run is still reported only in its own.
-    const crossed = await report(at, at.kai, {
-      conversationId: own.conversationId,
-      runId: elsewhere.runId
-    });
-    expect(crossed.statusCode).toBe(404);
-    expect(transport.list()).toHaveLength(0);
-  });
-
-  it("sends one mail when one run is reported twice at once", async () => {
-    const at = await setup();
-    const target = await failedRun(at, at.kai);
-    const answers = await Promise.all([report(at, at.kai, target), report(at, at.kai, target)]);
-    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([200, 409]);
     expect(transport.list()).toHaveLength(1);
   });
 

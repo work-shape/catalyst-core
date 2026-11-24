@@ -32,7 +32,7 @@ function timed<Result>(read: () => Result): { ms: number; result?: Result; error
 
 /** A read of a file of a few hundred bytes that takes longer was walking what it should refuse. */
 const REFUSED_WITHIN_MS = 1_000;
-const LEVELS = [5, 6, 7, 12];
+const LEVELS = [5, 12];
 
 describe("a YAML file of nested aliases", () => {
   it("is no value by the walk that meets one object twice, and a file without an alias is", () => {

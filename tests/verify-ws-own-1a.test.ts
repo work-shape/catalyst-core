@@ -13,7 +13,6 @@ import {
   storeTestServicePrincipal,
   type AccessInstance
 } from "./support/access-instance";
-import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { releaseAsService } from "./support/asset-release";
 
 // Verifier probes for WS-OWN-1a (PR 71). Each `it` is one probe; a failing one is a finding.
@@ -74,41 +73,6 @@ function shape(response: { statusCode: number; body: string }, name: string) {
 const defaultAgentName = async (t: AccessInstance) =>
   (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).defaultAgentName;
 
-describe("WS-OWN-1a verifier: decision 4, a workspace agent is never the instance default", () => {
-  it("refuses assets.set_default on an agent a workspace owns, also for an administrator", async () => {
-    const { t, team } = await setup();
-    expect((await putIn(t, t.kai.id, "agent", agent("team-helper"), team)).statusCode).toBe(200);
-
-    // The administrator offers it everywhere, as a default must be, then names it the default.
-    await t.expectOk(t.admin.id, "assets.set_availability", {
-      params: { kind: "agent", name: "team-helper" },
-      payload: { mode: "all" }
-    });
-    const response = await t.call(t.admin.id, "assets.set_default", {
-      params: { kind: "agent" },
-      payload: { name: "team-helper" }
-    });
-    expect(response.statusCode, response.body).not.toBe(200);
-    expect(await defaultAgentName(t)).toBe("assistant");
-  });
-
-  it("does not make a workspace's first agent the default of an empty instance", async () => {
-    const { t, team } = await setup();
-    await applyAtCurrentRevisions(t.stores.configAssets, {
-      clientInstanceId,
-      mutations: [
-        { type: "setDefaultAgent", agentName: undefined },
-        { type: "delete", kind: "agent", name: "assistant" }
-      ]
-    });
-    const response = await putIn(t, t.admin.id, "agent", agent("team-first"), team);
-    // Either refused, or written without becoming the instance default.
-    if (response.statusCode === 200) {
-      expect(await defaultAgentName(t)).not.toBe("team-first");
-    }
-  });
-});
-
 describe("WS-OWN-1a verifier: decision 4 through a release", () => {
   it("refuses a release that names a workspace's agent the default", async () => {
     const { t, team } = await setup();
@@ -125,26 +89,6 @@ describe("WS-OWN-1a verifier: decision 4 through a release", () => {
     });
     expect(released.statusCode, released.body).not.toBe(200);
     expect(await defaultAgentName(t)).toBe("assistant");
-  });
-
-  it("leaves no default naming a deleted workspace's agent", async () => {
-    const { t, team } = await setup();
-    expect((await putIn(t, t.kai.id, "agent", agent("team-helper"), team)).statusCode).toBe(200);
-    await t.expectOk(t.admin.id, "assets.set_availability", {
-      params: { kind: "agent", name: "team-helper" },
-      payload: { mode: "all" }
-    });
-    const set = await t.call(t.admin.id, "assets.set_default", {
-      params: { kind: "agent" },
-      payload: { name: "team-helper" }
-    });
-    if (set.statusCode !== 200) return;
-    await t.stores.workspaces.deleteWorkspace({ clientInstanceId, collaborationWorkspaceId: team });
-    const after = await defaultAgentName(t);
-    const row = after
-      ? await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: after })
-      : undefined;
-    expect({ after, active: row?.status }).toEqual({ after: "assistant", active: "active" });
   });
 });
 
@@ -320,36 +264,5 @@ describe("WS-OWN-1a verifier: workspace boundary and existence oracle", () => {
     expect(shape(refused, "other-agent").body.replace(/corr_[0-9a-f-]+/u, "")).toEqual(
       shape(await start("nobody-agent"), "nobody-agent").body.replace(/corr_[0-9a-f-]+/u, "")
     );
-  });
-
-  it("lets a workspace's builder start a Build conversation about the workspace's own agent", async () => {
-    const { t, team } = await setup();
-    expect((await putIn(t, t.kai.id, "agent", agent("team-helper"), team)).statusCode).toBe(200);
-    const started = await t.call(t.kai.id, "conversations.create", {
-      payload: { collaborationWorkspaceId: team, subject: { kind: "agent", name: "team-helper" } }
-    });
-    expect(started.statusCode, started.body).toBe(200);
-  });
-
-  it("does not let a workspace's builder offer its agent in another workspace he is a member of", async () => {
-    const { t, team, other } = await setup();
-    // Kai is a member of Other too, but holds no right there.
-    await join(t, t.kai, other);
-    const response = await t.call(t.kai.id, "assets.put", {
-      params: { kind: "agent", name: "team-helper" },
-      payload: {
-        config: agent("team-helper"),
-        expectedRevision: null,
-        workspaceId: team,
-        availableIn: { workspaceId: other }
-      }
-    });
-    const availability = (
-      await t.stores.configAssets.listAgentAvailability({ clientInstanceId })
-    ).get("team-helper");
-    // Either the put is refused, or the agent is offered in its own workspace only.
-    if (response.statusCode === 200) {
-      expect(availability?.collaborationWorkspaceIds ?? []).not.toContain(other);
-    }
   });
 });

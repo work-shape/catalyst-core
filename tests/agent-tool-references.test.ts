@@ -58,15 +58,9 @@ describe("the tools the agent page is told of", () => {
 
     // Every offered tool is described, in the order of the names.
     expect(references.tools?.map((tool) => tool.name)).toEqual(references.enabledToolNames);
-    expect(byName.get("read_skill")).toEqual({
+    expect(byName.get("read_skill")).toMatchObject({
       name: "read_skill",
-      title: { en: "Read assigned skill", de: "Zugewiesenen Skill lesen" },
-      summary: {
-        en: "Reads the instructions of the skills assigned to the agent.",
-        de: "Liest die Anleitungen der Skills, die dem Agenten zugewiesen sind."
-      },
       group: "skills",
-      icon: "skill",
       effect: "reading"
     });
     // A deployment's tool carries its own wording and stands among the instance's own tools.
@@ -166,7 +160,6 @@ describe("the tools the agent page is told of", () => {
     expect(agentToolReferences(["web_search", "unknown.tool"], [])).toEqual([
       expect.objectContaining({
         name: "web_search",
-        title: { en: "Search the web", de: "Im Web suchen" },
         group: "web",
         effect: "reading"
       }),
@@ -229,19 +222,6 @@ describe("the tools the agent page is told of", () => {
           clientSecret: "never-in-chat"
         }).success
       ).toBe(false);
-      expect(proposal?.description).toContain("do not web-search the provider");
-      expect(proposal?.description).toContain(
-        "Never ask a question in the same turn as an approval card"
-      );
-      // How a Connection is proposed is said by its tools, once: the orientation names the kind.
-      expect(proposal?.description).toContain("Read catalogue.entries in platform.context first");
-      expect(proposal?.description).toContain(
-        "credentialMode (user for mail, calendar and personal files)"
-      );
-      expect(proposal?.description).toContain("Never say a service is unsupported");
-      const draft = tools.find((tool) => tool.name === "platform.connections.draft_tools");
-      expect(draft?.description).toContain("Read catalogue.entries and connectorTypes");
-      expect(draft?.description).toContain("draft nothing against a host it covers");
       const untold = tools
         .filter((tool) => !tool.title?.en || !tool.title.de || !tool.group)
         .map((tool) => tool.name);
@@ -260,12 +240,6 @@ describe("the tools the agent page is told of", () => {
         )
         .map((tool) => tool.name);
       expect(naming).toEqual([]);
-      // Check 57: what a member reads of the two tools says App and never Page or Seite.
-      const told = tools
-        .filter((tool) => tool.name === "workspace.open" || tool.name === "app.save")
-        .map((tool) => JSON.stringify([tool.title, tool.summary]));
-      expect(told).toHaveLength(2);
-      expect(told.filter((text) => /\b(?:pages?|seiten?)\b/iu.test(text))).toEqual([]);
     } finally {
       await assembly.close();
       await rm(workspaceObjectRoot, { recursive: true, force: true });

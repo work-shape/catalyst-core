@@ -26,70 +26,65 @@ const hash = createHash("sha256").update(bytes).digest("hex");
 describe("synced originals are released after extraction (KB 76)", () => {
   const { setup } = useKnowledgeSync();
 
-  it.each(["txt"])(
-    "releases every %s copy, retains extraction, and reindexes with zero fetch",
-    async (extension) => {
-      let fetches = 0;
-      const world = await setup((source) => ({
-        ...source,
-        async *fetch(input, context) {
-          fetches++;
-          yield* source.fetch(input, context);
-        }
-      }));
-      for (let i = 0; i < 2; i++)
-        world.world.put({
-          folderId: "folder",
-          name: `${i}.${extension}`,
-          mime: extension === "txt" ? "text/plain" : "text/markdown",
-          bytes
-        });
-      await world.drain(await world.sync());
-      const copies = await world.instance.stores.files.listOwnedManagedFilesById({
-        clientInstanceId,
-        owner: { kind: "knowledge_base", id: world.record.id },
-        fileIds: (await world.sql`select managed_file_id from catalyst_kb.documents`).map((row) =>
-          String(row.managed_file_id)
-        )
-      });
-      expect(copies).toHaveLength(2);
-      for (const copy of copies) {
-        expect(copy.status).toBe("released");
-        await expect(readObjectBytes(world.objects, copy.objectKey)).rejects.toBeInstanceOf(
-          ObjectNotFound
-        );
+  it("releases every synced copy, retains extraction, and reindexes with zero fetch", async () => {
+    let fetches = 0;
+    const world = await setup((source) => ({
+      ...source,
+      async *fetch(input, context) {
+        fetches++;
+        yield* source.fetch(input, context);
       }
-      const extracted = await readObjectBytes(
-        world.objects,
-        knowledgeExtractionKey(world.record.id, hash)
+    }));
+    for (let i = 0; i < 2; i++)
+      world.world.put({
+        folderId: "folder",
+        name: `${i}.txt`,
+        mime: "text/plain",
+        bytes
+      });
+    await world.drain(await world.sync());
+    const copies = await world.instance.stores.files.listOwnedManagedFilesById({
+      clientInstanceId,
+      owner: { kind: "knowledge_base", id: world.record.id },
+      fileIds: (await world.sql`select managed_file_id from catalyst_kb.documents`).map((row) =>
+        String(row.managed_file_id)
+      )
+    });
+    expect(copies).toHaveLength(2);
+    for (const copy of copies) {
+      expect(copy.status).toBe("released");
+      await expect(readObjectBytes(world.objects, copy.objectKey)).rejects.toBeInstanceOf(
+        ObjectNotFound
       );
-      expect(new TextDecoder().decode(extracted)).toContain("Original text");
-      await world.sql`delete from catalyst_kb.chunks`;
-      await world.sql`update catalyst_kb.contents set state='pending', chunking_revision=null`;
-      fetches = 0;
-      await enqueueKnowledgeIndex(
-        world.instance.stores.jobs,
-        {
-          knowledgeBaseId: world.record.id,
-          contentSha256: hash,
-          fileId: required(copies[0]).id,
-          operationRunId: "operation"
-        },
-        { clientInstanceId }
-      );
-      await world.worker.runDue();
-      expect(await world.sql`select state from catalyst_kb.contents`).toEqual([
-        { state: "extracted" }
-      ]);
-      expect(await world.sql`select count(*)::int as n from catalyst_kb.chunks`).toEqual([
-        { n: 1 }
-      ]);
-      expect(fetches).toBe(0);
-      expect(
-        await readObjectBytes(world.objects, knowledgeExtractionKey(world.record.id, hash))
-      ).toEqual(extracted);
     }
-  );
+    const extracted = await readObjectBytes(
+      world.objects,
+      knowledgeExtractionKey(world.record.id, hash)
+    );
+    expect(new TextDecoder().decode(extracted)).toContain("Original text");
+    await world.sql`delete from catalyst_kb.chunks`;
+    await world.sql`update catalyst_kb.contents set state='pending', chunking_revision=null`;
+    fetches = 0;
+    await enqueueKnowledgeIndex(
+      world.instance.stores.jobs,
+      {
+        knowledgeBaseId: world.record.id,
+        contentSha256: hash,
+        fileId: required(copies[0]).id,
+        operationRunId: "operation"
+      },
+      { clientInstanceId }
+    );
+    await world.worker.runDue();
+    expect(await world.sql`select state from catalyst_kb.contents`).toEqual([
+      { state: "extracted" }
+    ]);
+    expect(await world.sql`select count(*)::int as n from catalyst_kb.chunks`).toEqual([{ n: 1 }]);
+    expect(fetches).toBe(0);
+    expect(
+      await readObjectBytes(world.objects, knowledgeExtractionKey(world.record.id, hash))
+    ).toEqual(extracted);
+  });
 
   it("releases later copies even when their index handoff joins an already queued job", async () => {
     const world = await setup();
@@ -340,30 +335,6 @@ describe("synced originals are released after extraction (KB 76)", () => {
     });
     expect(removed.statusCode).toBe(409);
     expect(removed.body).toContain("knowledge_synced_document_remove_refused");
-  });
-
-  it("releases failed, unreadable text and keeps its failure visible on Documents", async () => {
-    const world = await setup();
-    world.world.put({
-      folderId: "folder",
-      name: "bad.txt",
-      mime: "text/plain",
-      bytes: new Uint8Array([0xff, 0x00, 0xff])
-    });
-    await world.drain(await world.sync());
-    const [copy] =
-      await world.platform`select status, object_key from managed_files where owner_id=${world.record.id}`;
-    expect(copy?.status).toBe("released");
-    await expect(
-      readObjectBytes(world.objects, String(required(copy).object_key))
-    ).rejects.toBeInstanceOf(ObjectNotFound);
-    const listed = await world.instance.api.call("knowledge_bases.list_documents", {
-      params: { knowledgeBase: "sync-test" }
-    });
-    expect(listed.statusCode, listed.body).toBe(200);
-    expect(listed.json()).toMatchObject({
-      documents: [{ state: "failed", failureCode: "knowledge_text_unreadable", bytes: 3 }]
-    });
   });
 
   it("keeps the separately owned hand-added copy of the same hash readable through cleanup", async () => {

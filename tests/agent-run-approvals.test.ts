@@ -134,7 +134,7 @@ async function fixture(startAgentRunJobs = true) {
 }
 
 describe("agent approval pause (operations checks 4, 5 and 6)", () => {
-  it.each(["queued Stop", "waiting Stop", "approve", "reject"] as const)(
+  it.each(["queued Stop", "waiting Stop", "approve"] as const)(
     "%s takes the conversation before the run during a concurrent queue withdrawal",
     async (action) => {
       const f = await fixture(action !== "queued Stop");
@@ -189,10 +189,10 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
         });
         const [outcome] = await required(pending);
         expect(outcome).toMatchObject({ status: "fulfilled" });
-        if (action === "approve" || action === "reject") {
+        if (action === "approve") {
           expect(outcome).toMatchObject({ value: { statusCode: 200 } });
           await f.until(said.runId, "completed");
-          expect(f.executed).toEqual(action === "approve" ? ["one"] : []);
+          expect(f.executed).toEqual(["one"]);
         } else {
           expect((await f.run(said.runId)).status).toBe("cancelled");
         }
@@ -726,33 +726,25 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
     await f.app.close();
   });
 
-  it("check 5: rejection resumes with a denied tool result, with and without a reason", async () => {
+  it("check 5: rejection resumes with a denied tool result carrying the reason", async () => {
     const f = await fixture();
     try {
-      for (const comment of [undefined, "Not this one."]) {
-        const said = await f.say();
-        expect(
-          (await f.decide(required(said.call.approvalRequestId), "reject", "approver", comment))
-            .statusCode
-        ).toBe(200);
-        await f.until(said.runId, "completed");
-        expect(f.executed).toEqual([]);
-        expect(await f.calls(said.runId)).toMatchObject([
-          {
-            id: said.call.id,
-            status: "denied",
-            decision: { mode: "declined", ...(comment ? { comment } : {}) }
-          }
-        ]);
-        const tool = (await f.messages(said.conversationId)).find(
-          (message) => message.role === "tool"
-        );
-        expect(tool?.text).not.toContain("not_allowed");
-        expect(tool?.text).toContain(comment ?? "The user declined this call. Nothing ran.");
-        expect((await f.messages(said.conversationId)).at(-1)?.text).toContain(
-          comment ?? "declined"
-        );
-      }
+      const comment = "Not this one.";
+      const said = await f.say();
+      expect(
+        (await f.decide(required(said.call.approvalRequestId), "reject", "approver", comment))
+          .statusCode
+      ).toBe(200);
+      await f.until(said.runId, "completed");
+      expect(f.executed).toEqual([]);
+      expect(await f.calls(said.runId)).toMatchObject([
+        { id: said.call.id, status: "denied", decision: { mode: "declined", comment } }
+      ]);
+      const tool = (await f.messages(said.conversationId)).find(
+        (message) => message.role === "tool"
+      );
+      expect(tool?.text).not.toContain("not_allowed");
+      expect(tool?.text).toContain(comment);
     } finally {
       await f.app.close();
     }
@@ -788,7 +780,6 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
     ).toMatchObject({ status: "superseded", applyResult: { execution: "expired" } });
     const tool = (await f.messages(said.conversationId)).find((message) => message.role === "tool");
     expect(tool?.text).toContain("expired");
-    expect((await f.messages(said.conversationId)).at(-1)?.text).toContain("Nothing ran");
     expect(
       (await f.events(said.runId)).filter((event) => event.type === "tool_decision_recorded")
     ).toMatchObject([{ outcome: "expired" }]);

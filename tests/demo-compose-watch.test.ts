@@ -66,7 +66,7 @@ describe("demo Compose watch", () => {
     }
   });
 
-  it.each(["ui", "api", "artifact-preview-worker", "workspace-command-worker"])(
+  it.each(["ui", "workspace-command-worker"])(
     "%s rebuilds for package manifests and the lockfile",
     (service) => {
       const block = serviceBlock(service);

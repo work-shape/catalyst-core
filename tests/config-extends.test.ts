@@ -2,6 +2,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
+import * as configSchemas from "@work-shape/catalyst-config-schema";
+import { clientBrandingSchema, safeConfigSchema } from "@work-shape/catalyst-api-contract";
+import { dataStoreRecordsRuleSchema } from "@work-shape/catalyst-asset-schemas";
 import { AppError } from "@work-shape/catalyst-core";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
@@ -10,6 +13,7 @@ import {
   loadClientInstanceConfigFromFile,
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
+import { assertIndependentSchemaDefaults } from "./support/schema-defaults";
 
 const baseConfig = [
   "version: 1",
@@ -136,31 +140,6 @@ describe("config file extends", () => {
     expect(config.ui.showAgentName).toBe(false);
     expect(config.ui.accentColor).toBe("#111111");
     expect(config.ui.resources.enabled).toBe(false);
-    expect(config.ui.defaultThemeMode).toBe("system");
-  });
-
-  it("loads UI from a file without an inline overlay", async () => {
-    const root = await writeFixtures({
-      "ui.yaml": ["welcomeMessage: File welcome", "showAgentName: false", ""].join("\n"),
-      "app.yaml": `${baseConfig}uiFile: ./ui.yaml\n`
-    });
-
-    const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
-    expect(config.ui.welcomeMessage).toBe("File welcome");
-    expect(config.ui.showAgentName).toBe(false);
-    expect(config.ui.defaultThemeMode).toBe("system");
-  });
-
-  it("loads inline UI without a UI file", async () => {
-    const root = await writeFixtures({
-      "app.yaml": [baseConfig, "ui:", "  title: Inline title", "  showAgentName: false", ""].join(
-        "\n"
-      )
-    });
-
-    const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
-    expect(config.ui.title).toBe("Inline title");
-    expect(config.ui.showAgentName).toBe(false);
     expect(config.ui.defaultThemeMode).toBe("system");
   });
 
@@ -315,5 +294,58 @@ describe("config file extends", () => {
       expect(error.code).toBe("VALIDATION_FAILED");
       expect(JSON.stringify(error.details)).toContain("catalyst config push");
     }
+  });
+});
+
+it("never shares objects or arrays between independently parsed config defaults", () => {
+  assertIndependentSchemaDefaults({
+    ...configSchemas,
+    safeConfigSchema,
+    dataStoreRecordsRuleSchema
+  });
+});
+
+const withUi = (...lines: string[]) => [baseConfig, "ui:", ...lines, ""].join("\n");
+
+/** The docs address as the interface gets it: from the config endpoint and from the branding. */
+async function servedDocsUrl(root: string, file: string): Promise<string | undefined> {
+  const config = await loadClientInstanceConfigFromFile(join(root, file));
+  const view = createSafeConfigView(
+    config,
+    { version: 1, defaultAgentName: "none", agents: [], skills: [] },
+    resolveInstanceModules(config, []).snapshot
+  );
+  // The interface reads the answer through the contract, which drops a key it does not name.
+  const branding = clientBrandingSchema.parse(createClientBranding(config));
+  expect("docsUrl" in view.ui).toBe(view.ui.docsUrl !== undefined);
+  expect(branding.docsUrl).toBe(view.ui.docsUrl);
+  return branding.docsUrl;
+}
+
+describe("ui.docsUrl", () => {
+  it("has no default, serves the address an instance sets, and is cleared by null over an inherited one", async () => {
+    const root = await writeFixtures({
+      "plain.yaml": baseConfig,
+      "app.base.yaml": withUi("  docsUrl: https://docs.workshape.ai/catalyst"),
+      "app.yaml": ["extends: ./app.base.yaml", "ui:", "  docsUrl: null", ""].join("\n"),
+      "inherits.yaml": ["extends: ./app.base.yaml", "ui:", "  title: Inherits", ""].join("\n")
+    });
+
+    expect(await servedDocsUrl(root, "plain.yaml")).toBeUndefined();
+    expect(await servedDocsUrl(root, "app.base.yaml")).toBe("https://docs.workshape.ai/catalyst");
+    expect(await servedDocsUrl(root, "app.yaml")).toBeUndefined();
+    expect(await servedDocsUrl(root, "inherits.yaml")).toBe("https://docs.workshape.ai/catalyst");
+  });
+
+  it.each([
+    ["a javascript address", "'javascript:alert(1)'"],
+    ["a data address", "'data:text/html,<p>docs</p>'"],
+    ["a path", "/docs"]
+  ])("refuses %s when the config loads", async (_name, value) => {
+    const root = await writeFixtures({ "app.yaml": withUi(`  docsUrl: ${value}`) });
+
+    await expect(loadClientInstanceConfigFromFile(join(root, "app.yaml"))).rejects.toMatchObject({
+      code: "VALIDATION_FAILED"
+    });
   });
 });

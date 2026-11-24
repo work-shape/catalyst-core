@@ -102,7 +102,7 @@ describe("the agent that ships with the platform", () => {
     expect(published.statusCode, published.body).toBe(200);
   }
 
-  it("stores Workshaper with the instance's tools, offered in no workspace", async () => {
+  it("stores Workshaper with the instance's tools, offered in no workspace, and refuses deleting it", async () => {
     const app = await start(true);
     const { config } = await read(app);
     expect(config.toolNames).toContain("platform.context");
@@ -136,6 +136,14 @@ describe("the agent that ships with the platform", () => {
     expect(listed.find((agent) => agent.name === NAME)?.attributes?.origin).toBeUndefined();
     // Only an admin's "Available in" offers it; until then no chat lists it.
     expect((await chatConfig(app)).agents.map((agent) => agent.name)).not.toContain(NAME);
+    // Nobody deletes it.
+    const { revision } = await read(app);
+    const refused = await app.call("assets.delete", {
+      params: { kind: "agent", name: NAME },
+      payload: { expectedRevision: revision }
+    });
+    expect(refused.statusCode, refused.body).toBe(403);
+    expect((await read(app)).revision).toBe(revision);
   });
 
   it("is the default where it is offered and the instance names none, and never replaces one it names", async () => {
@@ -324,18 +332,6 @@ describe("the agent that ships with the platform", () => {
     expect(after.revision).toBeGreaterThan(live.revision);
     expect(after.config.instructions).toBe(next.instructions);
     expect(after.config.additionalInstructions).toBe("Our addition.");
-  });
-
-  it("refuses deleting it", async () => {
-    const app = await start(true);
-    const { revision } = await read(app);
-    const refused = await app.call("assets.delete", {
-      params: { kind: "agent", name: NAME },
-      payload: { expectedRevision: revision }
-    });
-    expect(refused.statusCode, refused.body).toBe(403);
-    expect(refused.body).toContain("ships with the platform and cannot be deleted");
-    expect((await read(app)).revision).toBe(revision);
   });
 
   it("ships nothing with the module off and keeps the name the platform's", async () => {

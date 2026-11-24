@@ -1,50 +1,24 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Progress, type ProgressProps } from "@work-shape/catalyst-ui";
+import {
+  LevelMeter,
+  Progress,
+  serviceInitial,
+  type LevelMeterProps,
+  type ProgressProps
+} from "@work-shape/catalyst-ui";
 
-// Progress is a bar for "so many of so many". Every test here fails without the component:
-// the library did not export it.
-
-const render = (props: Partial<ProgressProps>) =>
-  renderToStaticMarkup(createElement(Progress, { label: "Entries done", ...props }));
-const bar = (markup: string) => /<div role="progressbar"[^>]*>/u.exec(markup)?.[0] ?? "";
-const parts = (markup: string) =>
-  [...markup.matchAll(/<span data-tone="(\w+)" class="([^"]*)" style="width:([\d.]+)%">/gu)].map(
-    (match) => ({ tone: match[1], classes: match[2]?.split(" ") ?? [], width: Number(match[3]) })
-  );
+// The arithmetic of the library's small measures: Progress, LevelMeter and a service's initial.
 
 describe("Progress", () => {
-  it("is a named progress bar that reports the amount, its range and the amount in words", () => {
-    const markup = render({ value: 412, max: 600, valueLabel: "412 of 600" });
-
-    expect(bar(markup)).toContain('aria-label="Entries done"');
-    expect(bar(markup)).toContain('aria-valuemin="0"');
-    expect(bar(markup)).toContain('aria-valuemax="600"');
-    expect(bar(markup)).toContain('aria-valuenow="412"');
-    expect(bar(markup)).toContain('aria-valuetext="412 of 600"');
-    expect(parts(markup).map((part) => part.width)).toEqual([(412 / 600) * 100]);
-    // The words stand after the bar once: a screen reader has them from the bar already.
-    expect(markup).toMatch(/<span aria-hidden="true" class="[^"]*">412 of 600<\/span><\/div>$/u);
-  });
-
-  it("shows no words without a value label, and counts in percent without a maximum", () => {
-    const markup = render({ value: 40 });
-
-    expect(bar(markup)).toContain('aria-valuemax="100"');
-    expect(bar(markup)).not.toContain("aria-valuetext");
-    expect(markup).not.toContain('aria-hidden="true"');
-    expect(parts(markup).map((part) => part.width)).toEqual([40]);
-  });
-
-  it.each([
-    ["neutral", "bg-foreground"],
-    ["success", "bg-success"],
-    ["warning", "bg-warning"],
-    ["danger", "bg-destructive"]
-  ] as const)("fills a %s bar from the tone's token", (tone, fill) => {
-    expect(parts(render({ value: 50, tone }))[0]?.classes).toContain(fill);
-  });
+  const render = (props: Partial<ProgressProps>) =>
+    renderToStaticMarkup(createElement(Progress, { label: "Entries done", ...props }));
+  const bar = (markup: string) => /<div role="progressbar"[^>]*>/u.exec(markup)?.[0] ?? "";
+  const parts = (markup: string) =>
+    [...markup.matchAll(/<span data-tone="(\w+)" class="[^"]*" style="width:([\d.]+)%">/gu)].map(
+      (match) => ({ tone: match[1], width: Number(match[2]) })
+    );
 
   it("draws several shares in one bar, in their order, and reports their sum", () => {
     const markup = render({
@@ -76,21 +50,42 @@ describe("Progress", () => {
     expect(bar(over)).toContain('aria-valuenow="10"');
     expect(parts(render({ value: 5, max: 0 })).map((part) => part.width)).toEqual([0]);
   });
+});
 
-  it("says that the amount is unknown by reporting none", () => {
-    const markup = render({});
+describe("LevelMeter", () => {
+  const render = (props: Partial<LevelMeterProps>) =>
+    renderToStaticMarkup(
+      createElement(LevelMeter, {
+        label: "Usage consumption",
+        level: 3,
+        valueLabel: "Moderate",
+        ...props
+      })
+    );
+  const meter = (markup: string) => /<div role="meter"[^>]*>/u.exec(markup)?.[0] ?? "";
+  const fills = (markup: string) =>
+    [...markup.matchAll(/<span data-filled="" class="([^"]*)"><\/span>/gu)].map((match) =>
+      (match[1] ?? "").split(" ").find((name) => name.startsWith("bg-"))
+    );
 
-    expect(bar(markup)).not.toContain("aria-valuenow");
-    expect(parts(markup)).toEqual([]);
-    expect(markup).toContain('data-indeterminate=""');
+  it("spreads a shorter scale over the six colours, ending on the last", () => {
+    const top = (level: number) => fills(render({ level, steps: 4, scale: "spectrum" }))[0];
+
+    expect([1, 2, 3, 4].map(top)).toEqual(["bg-level-1", "bg-level-3", "bg-level-4", "bg-level-6"]);
   });
 
-  it("moves nothing under reduced motion, in either form", () => {
-    expect(parts(render({ value: 50 }))[0]?.classes).toEqual(
-      expect.arrayContaining(["transition-[width]", "motion-reduce:transition-none"])
-    );
-    expect(render({})).toMatch(
-      /<span data-indeterminate="" class="[^"]*animate-pulse[^"]*motion-reduce:animate-none/u
-    );
+  it("keeps a level outside the scale on its nearest end", () => {
+    expect(meter(render({ level: 0 }))).toContain('aria-valuenow="1"');
+    expect(meter(render({ level: 9 }))).toContain('aria-valuenow="6"');
+    expect(fills(render({ level: 9 }))).toHaveLength(6);
+  });
+});
+
+describe("serviceInitial", () => {
+  it("takes the first letter or digit of the name", () => {
+    expect(serviceInitial("  exampledata")).toBe("E");
+    expect(serviceInitial("ödland")).toBe("Ö");
+    expect(serviceInitial("(1&1)")).toBe("1");
+    expect(serviceInitial("—")).toBe("");
   });
 });

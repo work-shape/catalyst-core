@@ -21,51 +21,7 @@ const revisionPageSchema = z.object({
 });
 const address = { params: { kind: "agent", name: "kai-intake" } };
 
-describe("the availability of an agent in assets.get", () => {
-  it("names only the workspaces its reader may see, and all of them to an administrator", async () => {
-    const t = await setupWorkspaceHolder();
-    await t.put(t.admin.id, "agent", "kai-intake");
-    // Kai and Lena read the agent of the instance through a grant on it. Kai is a member of
-    // one workspace the agent is offered in, Lena of the other.
-    const assetId = await t.assetId("agent", "kai-intake");
-    for (const [user, collaborationWorkspaceId] of [
-      [t.kai, t.kaiTeam],
-      [t.lena, t.lenaTeam]
-    ] as const) {
-      await t.grant(user.id, "agent.read", { assetId });
-      await t.stores.workspaces.addMembership({
-        clientInstanceId,
-        collaborationWorkspaceId,
-        userId: asUserId(user.id),
-        role: "member"
-      });
-    }
-    await t.stores.configAssets.setAgentAvailability({
-      clientInstanceId,
-      agentName: "kai-intake",
-      availability: {
-        mode: "selected",
-        personalWorkspaces: true,
-        collaborationWorkspaceIds: [t.kaiTeam, t.lenaTeam]
-      }
-    });
-    const seenBy = async (userId: string) => {
-      const response = await t.expectOk(userId, "assets.get", address);
-      const { availability } = availabilitySchema.parse(response.json());
-      expect(availability).toMatchObject({ mode: "selected", personalWorkspaces: true });
-      return availability.collaborationWorkspaceIds;
-    };
-
-    expect(await seenBy(t.kai.id)).toEqual([t.kaiTeam]);
-    expect(await seenBy(t.lena.id)).toEqual([t.lenaTeam]);
-    // Whoever may set the availability lists every Shared Workspace, and reads them all here.
-    const all = [t.kaiTeam, t.lenaTeam].sort();
-    expect((await seenBy(t.admin.id)).sort()).toEqual(all);
-    expect((await seenBy(t.root.id)).sort()).toEqual(all);
-  });
-});
-
-describe("the history of an asset", () => {
+describe("the history and the availability of an asset", () => {
   it("is listed newest first a page at a time and restored from the one revision named", async () => {
     const t = await setupWorkspaceHolder();
     const inKai = { workspaceId: t.kaiTeam };
@@ -119,5 +75,49 @@ describe("the history of an asset", () => {
       { ...address, payload: { revision: 9, ...inKai } },
       { status: 422, code: "VALIDATION_FAILED" }
     );
+    // The availability in assets.get names only the workspaces its reader may see, and all of
+    // them to an administrator.
+    {
+      await t.put(t.admin.id, "agent", "offered");
+      // Kai and Lena read the agent of the instance through a grant on it. Kai is a member of
+      // one workspace the agent is offered in, Lena of the other.
+      const assetId = await t.assetId("agent", "offered");
+      for (const [user, collaborationWorkspaceId] of [
+        [t.kai, t.kaiTeam],
+        [t.lena, t.lenaTeam]
+      ] as const) {
+        await t.grant(user.id, "agent.read", { assetId });
+        await t.stores.workspaces.addMembership({
+          clientInstanceId,
+          collaborationWorkspaceId,
+          userId: asUserId(user.id),
+          role: "member"
+        });
+      }
+      await t.stores.configAssets.setAgentAvailability({
+        clientInstanceId,
+        agentName: "offered",
+        availability: {
+          mode: "selected",
+          personalWorkspaces: true,
+          collaborationWorkspaceIds: [t.kaiTeam, t.lenaTeam]
+        }
+      });
+      const seenBy = async (userId: string) => {
+        const response = await t.expectOk(userId, "assets.get", {
+          params: { kind: "agent", name: "offered" }
+        });
+        const { availability } = availabilitySchema.parse(response.json());
+        expect(availability).toMatchObject({ mode: "selected", personalWorkspaces: true });
+        return availability.collaborationWorkspaceIds;
+      };
+
+      expect(await seenBy(t.kai.id)).toEqual([t.kaiTeam]);
+      expect(await seenBy(t.lena.id)).toEqual([t.lenaTeam]);
+      // Whoever may set the availability lists every Shared Workspace, and reads them all here.
+      const all = [t.kaiTeam, t.lenaTeam].sort();
+      expect((await seenBy(t.admin.id)).sort()).toEqual(all);
+      expect((await seenBy(t.root.id)).sort()).toEqual(all);
+    }
   });
 });

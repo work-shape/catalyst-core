@@ -40,18 +40,13 @@ async function withDatabase<Result>(
 }
 
 describe("GET /ready", () => {
-  it("answers 200 with the newest migration on a migrated database, without a credential", async () => {
+  it("answers 200 with the newest migration without a credential, and 503 database_behind naming the one it lacks", async () => {
     const instance = await createTestInstance();
     expect(newestMigration).toBeDefined();
     expect(await ready(instance)).toEqual({
       status: 200,
       body: { status: "ready", migration: newestMigration }
     });
-  });
-
-  it("answers 503 database_behind and names the migration the database lacks", async () => {
-    const instance = await createTestInstance();
-    await instance.call("health.get");
     await withDatabase(async (sql) => {
       const [removed] = await sql<{ hash: string; created_at: string }[]>`
         delete from drizzle.__drizzle_migrations
@@ -72,20 +67,6 @@ describe("GET /ready", () => {
       }
     });
     expect((await ready(instance)).status).toBe(200);
-  });
-
-  it("answers 503 database_unreachable within the timeout once the pool is closed", async () => {
-    const instance = await createTestInstance();
-    await instance.call("health.get");
-    await instance.stores.close();
-    const started = Date.now();
-    expect(await ready(instance)).toEqual({
-      status: 503,
-      body: { status: "not_ready", reason: "database_unreachable" }
-    });
-    expect(Date.now() - started).toBeLessThan(READINESS_DATABASE_TIMEOUT_MS);
-    // The process is up all the same.
-    expect((await instance.call("health.get")).statusCode).toBe(200);
   });
 
   it("answers 503 database_unreachable at the timeout when the database does not answer", async () => {
@@ -122,6 +103,20 @@ describe("GET /ready", () => {
       }
     });
     expect((await ready(instance)).status).toBe(200);
+  });
+
+  it("answers 503 database_unreachable within the timeout once the pool is closed", async () => {
+    const instance = await createTestInstance();
+    await instance.call("health.get");
+    await instance.stores.close();
+    const started = Date.now();
+    expect(await ready(instance)).toEqual({
+      status: 503,
+      body: { status: "not_ready", reason: "database_unreachable" }
+    });
+    expect(Date.now() - started).toBeLessThan(READINESS_DATABASE_TIMEOUT_MS);
+    // The process is up all the same.
+    expect((await instance.call("health.get")).statusCode).toBe(200);
   });
 
   it("logs the class and code of a failed read, and nothing of the connection", async () => {

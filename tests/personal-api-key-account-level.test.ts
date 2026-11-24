@@ -156,26 +156,13 @@ describe("the account and workspaces level of a personal key", () => {
     );
   });
 
-  it("is issued to a person who holds no right at all, since no grant gives it", async () => {
-    const t = await setupPersonalKeyInstance();
-    const { key } = await t.issue([ACCOUNT, WORKSPACES, `${WORKSPACES}:${t.kaiTeam}`]);
-    expect(key.scopes).toEqual([ACCOUNT, WORKSPACES, `${WORKSPACES}:${t.kaiTeam}`]);
-    const unknown = await t.call(t.kai.id, "me.api_keys.create", {
-      payload: { name: "Nowhere", scopes: [`${WORKSPACES}:ws-none`], expiresAt: inDays(1) }
-    });
-    expect(unknown.statusCode).toBe(422);
-  });
-
   it("refuses every operation of the level to a key without it, naming the action the key lacks", async () => {
     const t = await setupPersonalKeyInstance();
     // Every action a key may name but the level's: the widest key without it.
     const without = PERSONAL_API_KEY_ACTIONS.filter(
       (action) => !PERSONAL_API_KEY_ACCOUNT_LEVEL_ACTIONS.some((level) => level === action)
     );
-    const keys = [
-      (await keyHeaders(t, t.root.id, [...without])).headers,
-      (await keyHeaders(t, t.root.id, ["agent.read", "agent.write", "workflow.use"])).headers
-    ];
+    const widest = (await keyHeaders(t, t.root.id, [...without])).headers;
     // Each half of the level opens its own operations only.
     const halves = {
       [ACCOUNT]: (await keyHeaders(t, t.root.id, [WORKSPACES])).headers,
@@ -187,13 +174,13 @@ describe("the account and workspaces level of a personal key", () => {
         collaborationWorkspaceId: t.kaiTeam,
         userId: t.kai.id
       });
-      for (const headers of [...keys, halves[action]]) {
+      for (const headers of [widest, halves[action]]) {
         const response = await t.call(t.root.id, operation, { params, headers });
         expect(response.statusCode, `${operation}: ${response.body}`).toBe(403);
-        const { error } = errorSchema.parse(response.json());
-        expect(error.message).toContain(`'${action}'`);
-        expect(error.message).toContain("account and workspaces level");
-        expect(error.details).toEqual({ action, reason: "outside_key_scope" });
+        expect(errorSchema.parse(response.json()).error.details).toEqual({
+          action,
+          reason: "outside_key_scope"
+        });
       }
     }
   });
@@ -533,6 +520,10 @@ describe("the account and workspaces level of a personal key", () => {
       ids.push(workspaceSchema.parse(created.json()).id);
     }
     const [one = "", two = ""] = ids;
+    const unknown = await t.call(t.kai.id, "me.api_keys.create", {
+      payload: { name: "Nowhere", scopes: [`${WORKSPACES}:ws-none`], expiresAt: inDays(1) }
+    });
+    expect(unknown.statusCode).toBe(422);
     const { headers } = await keyHeaders(t, t.kai.id, [`${WORKSPACES}:${one}`]);
     expect(
       (

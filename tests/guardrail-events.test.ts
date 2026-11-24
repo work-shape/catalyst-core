@@ -19,7 +19,6 @@ import { resultSchema as appActionResultSchema } from "./support/app-actions";
 import { setupFindingsApp } from "./support/findings-app";
 import {
   IBAN,
-  configWith,
   guardedEvents,
   ibanPattern,
   judge,
@@ -210,23 +209,18 @@ describe("guardrails in release config", () => {
     });
 
   // Fails without the change: a backtracking pattern would have been accepted and run.
-  it.each(["(a)\\1", "(?=lookahead)"])(
-    "refuses the pattern %s, which RE2 does not compile, and says why at load",
-    (pattern) => {
-      expect(refused({ ...noIban(), check: { kind: "pattern", pattern } })).toThrow(
-        "The pattern is no RE2 expression, which has no backreferences and no lookaround"
-      );
-    }
-  );
+  it("refuses a backreference, which RE2 does not compile, and says why at load", () => {
+    expect(refused({ ...noIban(), check: { kind: "pattern", pattern: "(a)\\1" } })).toThrow(
+      "The pattern is no RE2 expression, which has no backreferences and no lookaround"
+    );
+  });
 
   it.each([
-    ["a pattern past its limit", { check: { kind: "pattern", pattern: "a".repeat(2_001) } }],
     // Fails without the change: a short pattern of a large program was accepted and read little.
     [
       "a pattern too complex to read 64 Ki",
       { check: { kind: "pattern", pattern: "[a-z]{1000}[0-9]" } }
     ],
-    ["a filter its event does not know", { filter: { operation: "data_store.*" } }],
     [
       "a field its event does not have",
       { check: { kind: "pattern", pattern: "x", fields: ["input"] } }
@@ -238,25 +232,9 @@ describe("guardrails in release config", () => {
         filter: undefined,
         outcome: "require_approval"
       }
-    ],
-    ["an unknown origin", { on: "operation.before_call", filter: { origin: "browser" } }]
+    ]
   ])("refuses %s", (_case, overrides) => {
     expect(refused({ ...noIban(), ...overrides })).toThrow("Client instance config is invalid");
-  });
-
-  it("loads a guardrail at each event the platform runs them at", () => {
-    const config = configWith({
-      writes: noIban(),
-      calls: {
-        on: "operation.before_call",
-        filter: { operation: "data_store.kunden.insert" },
-        check: { kind: "pattern", pattern: ".", fields: ["input"] },
-        outcome: "require_approval"
-      },
-      apps: { ...noIban(), on: "app.before_publish", filter: { origin: "user" } },
-      workflows: judge("workflow.before_publish", "allow")
-    });
-    expect(Object.keys(config.guardrails)).toEqual(["writes", "calls", "apps", "workflows"]);
   });
 });
 

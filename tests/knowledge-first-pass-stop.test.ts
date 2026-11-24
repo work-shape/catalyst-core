@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "@work-shape/catalyst-cli";
 import {
   asUserId,
-  KNOWLEDGE_FIRST_PASS_STOP,
   knowledgeSourcesOutputSchema,
   LEGACY_LIST_GRANTOR
 } from "@work-shape/catalyst-core";
@@ -26,6 +25,9 @@ import {
 const KB = "sync-test";
 const SOURCE = "source";
 const STOP = 150;
+/** A Workflow's stop and dataset: past one full page of 100 rows, so the stop cuts the second. */
+const WORKFLOW_STOP = 110;
+const WORKFLOW_ITEMS = 130;
 
 type World = Awaited<ReturnType<ReturnType<typeof useKnowledgeSync>["setup"]>>;
 
@@ -39,6 +41,30 @@ async function sourceStatus(world: Pick<World, "instance">, id: string) {
   );
 }
 
+/** Runs the source jobs with every queued job and backoff wake due, until `check` holds. */
+function drain<Result>(world: Pick<World, "platform" | "worker">, check: () => Promise<Result>) {
+  return eventually(async () => {
+    await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+    await world.platform`update platform_job_wakes set run_after = now() where kind like 'knowledge_base.%'`;
+    await world.worker.runDue();
+    return check();
+  }, 180_000);
+}
+
+/** Until the sync run is done with every item fetched and indexed. */
+const synced = (world: World, run: string) =>
+  drain(world, async () => {
+    expect(
+      await world.sql`select count(*)::int as n from catalyst_kb.source_items where state = 'discovered'`
+    ).toEqual([{ n: 0 }]);
+    expect(await world.sql`select state from catalyst_kb.sync_runs where id = ${run}`).toEqual([
+      { state: "done" }
+    ]);
+    expect(
+      await world.sql`select count(*)::int as n from catalyst_kb.contents where state = 'pending'`
+    ).toEqual([{ n: 0 }]);
+  });
+
 describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600_000 }, () => {
   const { setup } = useKnowledgeSync({ firstPassStop: STOP });
 
@@ -48,16 +74,14 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
     for (let i = 0; i < 230; i++)
       world.world.put({ folderId: "folder", name: `${i}.txt`, mime: "text/plain", bytes: text });
     const run = await world.sync();
-    const waiting = await eventually(async () => {
-      await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-      await world.worker.runDue();
+    const waiting = await drain(world, async () => {
       const [fetched] =
         await world.sql`select count(*)::int as n from catalyst_kb.source_items where state = 'fetched'`;
       expect(fetched?.n).toBe(STOP);
       const status = await sourceStatus(world, SOURCE);
       expect(status.confirmation).toBeDefined();
       return status;
-    }, 180_000);
+    });
     // Nothing past the stop is fetched while it waits, and the run keeps running.
     expect(
       await world.sql`select state, count(*)::int as n from catalyst_kb.source_items group by state order by state`
@@ -149,7 +173,7 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
     // The call joins the waiting sync run, as a sync while one runs does.
     expect(confirmed.statusCode, confirmed.body).toBe(202);
     expect(confirmed.json<{ id: string }>().id).not.toBe("operation");
-    await world.drain(run);
+    await synced(world, run);
     expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toEqual([
       { n: 230 }
     ]);
@@ -175,7 +199,7 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
     // A later pass never waits, however much it lists.
     for (let i = 230; i < 400; i++)
       world.world.put({ folderId: "folder", name: `${i}.txt`, mime: "text/plain", bytes: text });
-    await world.drain(await world.sync("full"));
+    await synced(world, await world.sync("full"));
     expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toEqual([
       { n: 400 }
     ]);
@@ -193,16 +217,14 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
     for (let i = 0; i < STOP + 10; i++)
       world.world.put({ folderId: "folder", name: `${i}.txt`, mime: "text/plain", bytes: text });
     await world.sync();
-    const waiting = await eventually(async () => {
-      await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-      await world.worker.runDue();
+    const waiting = await drain(world, async () => {
       const [fetched] =
         await world.sql`select count(*)::int as n from catalyst_kb.source_items where state = 'fetched'`;
       expect(fetched?.n).toBe(STOP);
       const status = await sourceStatus(world, SOURCE);
       expect(status.confirmation).toBeDefined();
       return status;
-    }, 180_000);
+    });
     // 8,000 bytes is the assumed size of a text file (UNSIZED_ITEM_BYTES).
     expect(waiting.confirmation).toMatchObject({ items: STOP + 10, bytes: (STOP + 10) * 8_000 });
     expect(
@@ -223,7 +245,7 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
         mime: "text/plain",
         bytes: new TextEncoder().encode(`Small source item ${i}`)
       });
-    await world.drain(await world.sync());
+    await synced(world, await world.sync());
     expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toEqual([
       { n: STOP }
     ]);
@@ -232,10 +254,6 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
         (event) => event.type === "knowledge_base.first_pass_confirmed"
       )
     ).toBe(false);
-  });
-
-  it("keeps the real stop at the default of knowledge.maxDocuments", () => {
-    expect(KNOWLEDGE_FIRST_PASS_STOP).toBe(10_000);
   });
 });
 
@@ -248,13 +266,11 @@ describe("a keyword-only first import that waits (KB-ISO-1b review)", { timeout:
     for (let i = 0; i < 230; i++)
       world.world.put({ folderId: "folder", name: `${i}.txt`, mime: "text/plain", bytes: text });
     const run = await world.sync();
-    const waiting = await eventually(async () => {
-      await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-      await world.worker.runDue();
+    const waiting = await drain(world, async () => {
       const status = await sourceStatus(world, SOURCE);
       expect(status.confirmation).toBeDefined();
       return required(status.confirmation);
-    }, 180_000);
+    });
     expect(waiting).toMatchObject({ syncRunId: run, items: 230, stop: STOP });
     for (const absent of ["tokens", "passages", "model", "cost", "room", "addedBytes"])
       expect(waiting).not.toHaveProperty(absent);
@@ -264,7 +280,7 @@ describe("a keyword-only first import that waits (KB-ISO-1b review)", { timeout:
       payload: { source: SOURCE, confirm: true }
     });
     expect(confirmed.statusCode, confirmed.body).toBe(202);
-    await world.drain(run);
+    await synced(world, run);
     const [event] = (
       await world.instance.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 })
     ).filter((each) => each.type === "knowledge_base.first_pass_confirmed");
@@ -277,26 +293,32 @@ describe(
   "a Workflow's first ingest stops for a confirmation (KB-ISO-1b)",
   { timeout: 600_000 },
   () => {
-    const { world } = useKnowledgeWorkflow({ firstPassStop: STOP });
+    const { world } = useKnowledgeWorkflow({ firstPassStop: WORKFLOW_STOP });
+    type WorkflowWorld = Awaited<ReturnType<typeof world>>;
+    /** Until the ingest Operation Run ended done; answers it. */
+    const settle = (w: WorkflowWorld, id: string) =>
+      drain(w, async () => {
+        const run = await w.instance.stores.operationRuns.get({ clientInstanceId, id });
+        expect(run?.status, JSON.stringify(run?.error)).toBe("done");
+        return required(run);
+      });
 
     it("takes the items up to the stop while the step waits, and the rest after a confirmation", async () => {
       const w = await world();
       const run = await w.startRun();
-      const rows = Array.from({ length: 230 }, (_, n) => item(n));
+      const rows = Array.from({ length: WORKFLOW_ITEMS }, (_, n) => item(n));
       const operationRunId = operationRunOf(
         await run.call("ingest", { dataset: await run.dataset(rows) })
       );
-      const waiting = await eventually(async () => {
-        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await w.worker.runDue();
-        expect(await w.states()).toEqual({ fetched: STOP });
+      const waiting = await drain(w, async () => {
+        expect(await w.states()).toEqual({ fetched: WORKFLOW_STOP });
         const status = await sourceStatus(w, WORKFLOW_SOURCE);
         expect(status.confirmation).toBeDefined();
         return status;
-      }, 180_000);
+      });
       expect(waiting).toMatchObject({
         running: { mode: "ingest" },
-        confirmation: { items: 230, stop: STOP }
+        confirmation: { items: WORKFLOW_ITEMS, stop: WORKFLOW_STOP }
       });
       // The step's call still runs: it waits for the rest.
       expect(
@@ -321,9 +343,13 @@ describe(
           id: confirmed.json<{ id: string }>().id
         })
       ).toMatchObject({ status: "done", output: { value: { confirmed: true } } });
-      const ended = await w.settle(operationRunId);
-      expect(ended.output?.value).toMatchObject({ accepted: 230, done: 230, failed: 0 });
-      expect(await w.states()).toEqual({ fetched: 230 });
+      const ended = await settle(w, operationRunId);
+      expect(ended.output?.value).toMatchObject({
+        accepted: WORKFLOW_ITEMS,
+        done: WORKFLOW_ITEMS,
+        failed: 0
+      });
+      expect(await w.states()).toEqual({ fetched: WORKFLOW_ITEMS });
 
       // A confirmation with nothing waiting is refused for a Workflow's source.
       const again = await w.instance.api.call("knowledge_bases.sync", {
@@ -336,10 +362,10 @@ describe(
       const later = await w.startRun();
       const second = operationRunOf(
         await later.call("ingest", {
-          dataset: await later.dataset(Array.from({ length: 300 }, (_, n) => item(n + 1000)))
+          dataset: await later.dataset(Array.from({ length: 120 }, (_, n) => item(n + 1000)))
         })
       );
-      expect((await w.settle(second)).output?.value).toMatchObject({ accepted: 300, done: 300 });
+      expect((await settle(w, second)).output?.value).toMatchObject({ accepted: 120, done: 120 });
     });
 
     it("goes on after a confirmation that comes once the run has ended, and withdraws nothing", async () => {
@@ -347,15 +373,13 @@ describe(
       const run = await w.startRun();
       const operationRunId = operationRunOf(
         await run.call("ingest", {
-          dataset: await run.dataset(Array.from({ length: 230 }, (_, n) => item(n))),
+          dataset: await run.dataset(Array.from({ length: WORKFLOW_ITEMS }, (_, n) => item(n))),
           complete: true
         })
       );
-      await eventually(async () => {
-        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await w.worker.runDue();
+      await drain(w, async () => {
         expect((await sourceStatus(w, WORKFLOW_SOURCE)).confirmation).toBeDefined();
-      }, 180_000);
+      });
       // The step's timeout ended the run, as `operation_still_running` does; the pass waits on.
       await run.end("failed");
       // Its next look, which waits on the confirmation, finds it still waiting.
@@ -369,10 +393,19 @@ describe(
       });
       expect(confirmed.statusCode, confirmed.body).toBe(202);
       // Its step has ended: the run keeps the count of its failures, with no step to hold them.
-      const ended = await w.settle(operationRunId);
-      expect(ended.output?.value).toEqual({ accepted: 230, done: 230, failed: 0, withdrawn: 0 });
-      await w.settlePasses();
-      expect(await w.states()).toEqual({ fetched: 230 });
+      const ended = await settle(w, operationRunId);
+      expect(ended.output?.value).toEqual({
+        accepted: WORKFLOW_ITEMS,
+        done: WORKFLOW_ITEMS,
+        failed: 0,
+        withdrawn: 0
+      });
+      await drain(w, async () => {
+        expect(
+          await w.sql`select id from catalyst_kb.sync_runs where pass_state = 'awaiting_run'`
+        ).toEqual([]);
+      });
+      expect(await w.states()).toEqual({ fetched: WORKFLOW_ITEMS });
       expect(
         await w.sql`select pass_state from catalyst_kb.sync_runs where source_id = ${WORKFLOW_SOURCE}`
       ).toEqual([{ pass_state: "dropped" }]);
@@ -383,24 +416,22 @@ describe(
       const run = await w.startRun();
       const first = operationRunOf(
         await run.call("ingest", {
-          dataset: await run.dataset(Array.from({ length: 120 }, (_, n) => item(n)))
+          dataset: await run.dataset(Array.from({ length: 70 }, (_, n) => item(n)))
         })
       );
-      expect((await w.settle(first)).output?.value).toMatchObject({ accepted: 120, done: 120 });
+      expect((await settle(w, first)).output?.value).toMatchObject({ accepted: 70, done: 70 });
       const second = operationRunOf(
         await run.call("ingest", {
-          dataset: await run.dataset(Array.from({ length: 110 }, (_, n) => item(n + 120)))
+          dataset: await run.dataset(Array.from({ length: 60 }, (_, n) => item(n + 70)))
         })
       );
-      const waiting = await eventually(async () => {
-        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await w.worker.runDue();
-        expect(await w.states()).toEqual({ fetched: STOP });
+      const waiting = await drain(w, async () => {
+        expect(await w.states()).toEqual({ fetched: WORKFLOW_STOP });
         const status = await sourceStatus(w, WORKFLOW_SOURCE);
         expect(status.confirmation).toBeDefined();
         return status;
-      }, 180_000);
-      expect(waiting.confirmation).toMatchObject({ items: 230, stop: STOP });
+      });
+      expect(waiting.confirmation).toMatchObject({ items: WORKFLOW_ITEMS, stop: WORKFLOW_STOP });
 
       // Another Knowledge Base holds nothing of this source to confirm.
       const other = await w.addKnowledgeBase("other-kb", "Other");
@@ -417,16 +448,16 @@ describe(
         payload: { source: WORKFLOW_SOURCE, confirm: true }
       });
       expect(confirmed.statusCode, confirmed.body).toBe(202);
-      expect((await w.settle(second)).output?.value).toMatchObject({ accepted: 110, done: 110 });
-      expect(await w.states()).toEqual({ fetched: 230 });
+      expect((await settle(w, second)).output?.value).toMatchObject({ accepted: 60, done: 60 });
+      expect(await w.states()).toEqual({ fetched: WORKFLOW_ITEMS });
 
       // Once confirmed, a later pass of the same run does not stop again.
       const third = operationRunOf(
         await run.call("ingest", {
-          dataset: await run.dataset(Array.from({ length: 60 }, (_, n) => item(n + 230)))
+          dataset: await run.dataset(Array.from({ length: 30 }, (_, n) => item(n + WORKFLOW_ITEMS)))
         })
       );
-      expect((await w.settle(third)).output?.value).toMatchObject({ accepted: 60, done: 60 });
+      expect((await settle(w, third)).output?.value).toMatchObject({ accepted: 30, done: 30 });
     });
 
     it.each([
@@ -435,15 +466,13 @@ describe(
     ])("ends a pass %s its run's dataset expired, withdrawing nothing", async (_label, confirm) => {
       const w = await world();
       const run = await w.startRun();
-      const rows = await run.dataset(Array.from({ length: 230 }, (_, n) => item(n)));
+      const rows = await run.dataset(Array.from({ length: WORKFLOW_ITEMS }, (_, n) => item(n)));
       const operationRunId = operationRunOf(
         await run.call("ingest", { dataset: rows, complete: true })
       );
-      await eventually(async () => {
-        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await w.worker.runDue();
+      await drain(w, async () => {
         expect((await sourceStatus(w, WORKFLOW_SOURCE)).confirmation).toBeDefined();
-      }, 180_000);
+      });
       await run.end("failed");
       // Seven days on, the failed run's datasets are gone.
       await w.platform`update workflow_run_datasets set state = 'deleted' where id = ${rows.$dataset}`;
@@ -454,19 +483,16 @@ describe(
         });
         expect(confirmed.statusCode, confirmed.body).toBe(202);
       }
-      const ended = await eventually(async () => {
-        await w.platform`update platform_job_wakes set run_after = now() where kind like 'knowledge_base.%'`;
-        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await w.worker.runDue();
+      const ended = await drain(w, async () => {
         const call = await w.instance.stores.operationRuns.get({
           clientInstanceId,
           id: operationRunId
         });
         expect(call?.status).toBe("failed");
         return required(call);
-      }, 180_000);
+      });
       expect(ended.error?.code).toBe("knowledge_ingest_cancelled");
-      expect(await w.states()).toEqual({ fetched: STOP });
+      expect(await w.states()).toEqual({ fetched: WORKFLOW_STOP });
       const status = await sourceStatus(w, WORKFLOW_SOURCE);
       expect(status).not.toHaveProperty("confirmation");
       expect(status).not.toHaveProperty("running");

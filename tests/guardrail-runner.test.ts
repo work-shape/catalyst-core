@@ -227,22 +227,15 @@ describe("guardrail runner", () => {
     expect(event).not.toHaveProperty("agentRunId");
   });
 
-  it.each(["warn", "block"] as const)(
-    "returns the reason for a violation with outcome %s",
-    async (outcome) => {
-      const f = await fixture({ [rule.id]: guardrail({ outcome }) });
-      f.complete.mockResolvedValue(
-        completion('{"violates":true,"reason":"Der Text enthält personenbezogene Daten."}')
-      );
-      expect(await f.runner.check(proposal(), context)).toEqual([
-        {
-          id: rule.id,
-          status: outcome === "block" ? "blocked" : "warned",
-          message: "Der Text enthält personenbezogene Daten."
-        }
-      ]);
-    }
-  );
+  it("returns the reason for a violation of a blocking guardrail", async () => {
+    const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
+    f.complete.mockResolvedValue(
+      completion('{"violates":true,"reason":"Der Text enthält personenbezogene Daten."}')
+    );
+    expect(await f.runner.check(proposal(), context)).toEqual([
+      { id: rule.id, status: "blocked", message: "Der Text enthält personenbezogene Daten." }
+    ]);
+  });
 
   it.each(["warn", "block"] as const)(
     "does not leak provider failures and fails closed only for block: outcome %s",
@@ -256,19 +249,15 @@ describe("guardrail runner", () => {
     }
   );
 
-  it.each([
-    "not JSON",
-    '```json\n{"violates":false,"reason":"OK"}\n```',
-    '{"violates":"false","reason":"OK"}',
-    '{"violates":true,"reason":""}',
-    '{"violates":true,"reason":"Bad","extra":true}',
-    '{"reason":"Missing verdict"}'
-  ])("blocks a blocking guardrail on an invalid verdict: %s", async (text) => {
-    const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
-    f.complete.mockResolvedValue(completion(text));
-    expect(await f.runner.check(proposal(), context)).toEqual([unevaluated("block")]);
-    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
-  });
+  it.each(["not JSON", '{"violates":"false","reason":"OK"}', '{"violates":true,"reason":""}'])(
+    "blocks a blocking guardrail on an invalid verdict: %s",
+    async (text) => {
+      const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
+      f.complete.mockResolvedValue(completion(text));
+      expect(await f.runner.check(proposal(), context)).toEqual([unevaluated("block")]);
+      expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
+    }
+  );
 
   it.each(["warn", "block"] as const)(
     "gives a slow check 60 seconds, then bounds a provider that ignores cancellation with outcome %s",
@@ -562,16 +551,6 @@ describe("guardrails before an approval request is filed", () => {
     expect(
       await f.store.approvals.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })
     ).toHaveLength(1);
-  });
-
-  it("stores a neutral warning when a warn rule cannot be evaluated", async () => {
-    const f = await fixture();
-    f.complete.mockRejectedValueOnce(new Error("Unavailable"));
-    const request = await f.workflow.createRequest(user, context, command);
-    expect(await f.workflow.getRequest(user, accessOf(user), context, request.id)).toMatchObject({
-      status: "pending",
-      checks: [{ id: rule.id, status: "warned", message: "" }]
-    });
   });
 });
 

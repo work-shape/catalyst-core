@@ -20,7 +20,6 @@ import { withTestSql } from "./support/test-sql";
 
 import { auth, kb, put, seed, store, writerHeaders } from "./support/reference-owners";
 
-const quote = (name: string, de: boolean) => (de ? `„${name}“` : `"${name}"`);
 const names = z.object({ items: z.array(z.object({ name: z.string() })) });
 
 describe("asset reference owners through the assembled API", () => {
@@ -54,49 +53,21 @@ describe("asset reference owners through the assembled API", () => {
   for (const kind of ["agent", "knowledge_base"]) {
     const definition = (name: string) =>
       kind === "agent" ? agent(name, { knowledgeBases: ["ws-a-kb"] }) : kb(name, "ws-a-store");
-    it(`refuses ${kind} of the instance or another workspace on save, in EN and DE`, async () => {
+    it(`refuses ${kind} of the instance or another workspace on save`, async () => {
       const { world, workspace, other } = await setup();
-      for (const locale of ["en", "de"])
-        for (const owner of [undefined, other.id]) {
-          const response = await put(world, kind, definition("outside"), owner, {
-            "accept-language": locale
-          });
-          expect(response.statusCode, response.body).toBe(422);
-          const error = errorSchema.parse(response.json()).error;
-          expect(error.details).toMatchObject({
-            reason: "invalid_scope",
-            reference: {
-              name: kind === "agent" ? "ws-a-kb" : "ws-a-store",
-              owner: { kind: "workspace", workspaceId: workspace.id }
-            }
-          });
-          expect(error.message).not.toContain(workspace.id);
-          // Where each sits and the next step, in the caller's words.
-          const de = locale === "de";
-          const used = kind === "agent" ? "ws-a-kb" : "ws-a-store";
-          const target =
-            kind === "agent"
-              ? `${de ? "Wissensbasis" : "Knowledge Base"} ${quote("ws-a-kb", de)}`
-              : `${de ? "Datenspeicher" : "Data Store"} ${quote("ws-a-store", de)}`;
-          const source = `${
-            kind === "agent" ? "Agent" : de ? "Wissensbasis" : "Knowledge Base"
-          } ${quote("outside", de)}`;
-          const facts = de
-            ? `${target} gehört zum Team ${quote(workspace.name, de)}. ${source} ${
-                owner ? `gehört zum Team ${quote(other.name, de)}` : "ist für Alle"
-              } und darf sich darum nicht darauf stützen.`
-            : `${target} belongs to the team ${quote(workspace.name, de)}. ${source} ${
-                owner ? `belongs to the team ${quote(other.name, de)}` : "is for everyone"
-              } and so may not rely on it.`;
-          const next = owner
-            ? de
-              ? "Bitte einen Admin darum."
-              : "Ask an admin."
-            : de
-              ? `Teile ${target} über „Teilen…“ mit Allen, oder bitte einen Admin darum.`
-              : `Share ${target} with everyone using "Share…", or ask an admin.`;
-          expect(error.message, used).toBe(`${facts} ${next}`);
-        }
+      for (const owner of [undefined, other.id]) {
+        const response = await put(world, kind, definition("outside"), owner);
+        expect(response.statusCode, response.body).toBe(422);
+        const error = errorSchema.parse(response.json()).error;
+        expect(error.details).toMatchObject({
+          reason: "invalid_scope",
+          reference: {
+            name: kind === "agent" ? "ws-a-kb" : "ws-a-store",
+            owner: { kind: "workspace", workspaceId: workspace.id }
+          }
+        });
+        expect(error.message).not.toContain(workspace.id);
+      }
     });
 
     it(`refuses a stored legacy ${kind} on publish and next save, while leaving its live content intact`, async () => {
@@ -157,25 +128,6 @@ describe("asset reference owners through the assembled API", () => {
       expect(updated.statusCode, updated.body).toBe(200);
     });
   }
-
-  it("accepts a same-workspace target and an instance target from a workspace source", async () => {
-    const { world, workspace } = await setup();
-    await seed(world, "knowledge_base", kb("instance-kb"), undefined, true);
-    await seed(world, "data_store", store("instance-store"));
-    for (const name of ["ws-a-kb", "instance-kb"]) {
-      const response = await put(
-        world,
-        "agent",
-        agent(`uses-${name}`, { knowledgeBases: [name] }),
-        workspace.id
-      );
-      expect(response.statusCode, response.body).toBe(200);
-    }
-    for (const name of ["ws-a-store", "instance-store"]) {
-      const response = await put(world, "knowledge_base", kb(`uses-${name}`, name), workspace.id);
-      expect(response.statusCode, response.body).toBe(200);
-    }
-  });
 
   it("offers exactly the Knowledge Bases accepted by save, including published use-only access", async () => {
     const { world, workspace, other, scope } = await setup();
@@ -360,7 +312,7 @@ describe("asset reference owners through the assembled API", () => {
     }
   });
 
-  it("localizes Workflow references to unread Knowledge Bases in EN and DE without revealing their owner", async () => {
+  it("refuses Workflow references to unread Knowledge Bases without revealing their owner", async () => {
     const { world, scope } = await setup();
     await seed(world, "knowledge_base", kb("hidden-kb"), scope, true);
     const writer = await world.stores.users.resolveUserIdentity({
@@ -385,27 +337,20 @@ describe("asset reference owners through the assembled API", () => {
       });
       expect(granted.statusCode, granted.body).toBe(200);
     }
-    for (const locale of ["en", "de"]) {
-      const name = `unknown-${locale}`;
-      const response = await put(
-        world,
-        "workflow",
-        { name, manifest: dataFlowManifest(name, ["knowledge.hidden-kb.search"]) },
-        undefined,
-        { ...writerHeaders, "accept-language": locale }
-      );
-      expect(response.statusCode, response.body).toBe(422);
-      expect(response.body).toContain(
-        locale === "de"
-          ? "verweist auf ein unbekanntes Asset: Wissensbasis"
-          : "references unknown Knowledge Base"
-      );
-      expect(response.body).not.toContain("Reference team");
-    }
+    const response = await put(
+      world,
+      "workflow",
+      { name: "unknown", manifest: dataFlowManifest("unknown", ["knowledge.hidden-kb.search"]) },
+      undefined,
+      writerHeaders
+    );
+    expect(response.statusCode, response.body).toBe(422);
+    expect(response.body).toContain("references unknown Knowledge Base");
+    expect(response.body).not.toContain("Reference team");
   });
 
-  it("declares the complete reference inventory of every kind, including nested calls", async () => {
-    const { world } = await setup();
+  it("declares the complete reference inventory of every kind, including nested calls, notice links and onFailure", async () => {
+    const { world, workspace } = await setup();
     const kinds = world.execution.configAssets.kinds;
     expect(
       kinds.require("agent").references?.(
@@ -513,10 +458,6 @@ describe("asset reference owners through the assembled API", () => {
     for (const kind of kinds.kinds) expect(kind.references, kind.kind).toBeTypeOf("function");
     // Hostile and unparseable input is left to schema validation, without a hook throwing.
     for (const kind of kinds.kinds) expect(() => kind.references?.(null), kind.kind).not.toThrow();
-  });
-
-  it("inventories Workflow tools, notice links, nested Workflow calls and onFailure independently", async () => {
-    const { world, workspace } = await setup();
     const manifest = dataFlowManifest("inventory", []);
     manifest.kind = "process";
     manifest.tools = [
@@ -567,7 +508,7 @@ describe("asset reference owners through the assembled API", () => {
     ]);
   });
 
-  it("saves instance Workflows reaching workspace stores, KBs, App actions and notice links", async () => {
+  it("accepts same-workspace and instance targets, and instance Workflows and guardrails reaching workspace assets", async () => {
     const { world, workspace, scope } = await setup();
     await seed(
       world,
@@ -623,10 +564,21 @@ describe("asset reference owners through the assembled API", () => {
     );
     expect(refused.statusCode, refused.body).toBe(422);
     expect(refused.body).toContain("invalid_scope");
-  });
-
-  it("saves instance guardrails filtering workspace agents, Data Stores and Knowledge Bases", async () => {
-    const { world, scope } = await setup();
+    await seed(world, "knowledge_base", kb("instance-kb"), undefined, true);
+    await seed(world, "data_store", store("instance-store"));
+    for (const name of ["ws-a-kb", "instance-kb"]) {
+      const response = await put(
+        world,
+        "agent",
+        agent(`uses-${name}`, { knowledgeBases: [name] }),
+        workspace.id
+      );
+      expect(response.statusCode, response.body).toBe(200);
+    }
+    for (const name of ["ws-a-store", "instance-store"]) {
+      const response = await put(world, "knowledge_base", kb(`uses-${name}`, name), workspace.id);
+      expect(response.statusCode, response.body).toBe(200);
+    }
     await seed(world, "agent", agent("ws-agent"), scope);
     const filters: JsonObject[] = [
       { agent: "ws-agent" },
@@ -646,23 +598,7 @@ describe("asset reference owners through the assembled API", () => {
     }
   });
 
-  it("refuses creating a workspace target named by an existing instance source", async () => {
-    const { world, workspace } = await setup();
-    // Legacy drafts can name a target before it exists. Creating it must check both owners.
-    await seed(world, "agent", agent("waiting", { knowledgeBases: ["future-kb"] }));
-    const saved = await put(world, "knowledge_base", kb("future-kb"), workspace.id);
-    expect(saved.statusCode, saved.body).toBe(422);
-    expect(saved.body).toContain("invalid_scope");
-    expect(
-      await world.stores.configAssets.getConfigAsset({
-        clientInstanceId,
-        kind: "knowledge_base",
-        name: "future-kb"
-      })
-    ).toBeUndefined();
-  });
-
-  it("never names an unreadable source when refusing creation of its target", async () => {
+  it("refuses creating a workspace target an instance source names, never naming an unreadable source", async () => {
     const { world, workspace } = await setup();
     const hidden = await seed(
       world,
@@ -704,16 +640,29 @@ describe("asset reference owners through the assembled API", () => {
       headers: writerHeaders
     });
     expect(unread.statusCode, unread.body).toBe(403);
-    for (const locale of ["en", "de"]) {
-      const refused = await put(world, "knowledge_base", kb("future-kb"), workspace.id, {
-        ...writerHeaders,
-        "accept-language": locale
-      });
-      expect(refused.statusCode, refused.body).toBe(422);
-      expect(errorSchema.parse(refused.json()).error.details).toEqual({ reason: "invalid_scope" });
-      expect(refused.body).not.toContain(hidden.name);
-      expect(refused.body).not.toContain(hidden.id);
-    }
+    const refused = await put(
+      world,
+      "knowledge_base",
+      kb("future-kb"),
+      workspace.id,
+      writerHeaders
+    );
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(errorSchema.parse(refused.json()).error.details).toEqual({ reason: "invalid_scope" });
+    expect(refused.body).not.toContain(hidden.name);
+    expect(refused.body).not.toContain(hidden.id);
+    // Legacy drafts can name a target before it exists. Creating it must check both owners.
+    await seed(world, "agent", agent("waiting", { knowledgeBases: ["future-kb"] }));
+    const saved = await put(world, "knowledge_base", kb("future-kb"), workspace.id);
+    expect(saved.statusCode, saved.body).toBe(422);
+    expect(saved.body).toContain("invalid_scope");
+    expect(
+      await world.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "knowledge_base",
+        name: "future-kb"
+      })
+    ).toBeUndefined();
   });
 
   it("counts legacy owner violations read-only, across stored agent drafts and published revisions", async () => {

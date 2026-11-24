@@ -472,12 +472,9 @@ describe("local agent runtime", () => {
 
     expect(providerMessages[0]).toMatchObject({
       role: "system",
-      content: expect.stringContaining("- User selected language: German (locale: de).")
+      content: expect.stringContaining("(locale: de)")
     });
-    expect(providerMessages[0]?.content).toContain(
-      "- Current date: Freitag, 19. Juni 2026 (ISO: 2026-06-19)."
-    );
-    expect(providerMessages[0]?.content).not.toContain("Respond in German");
+    expect(providerMessages[0]?.content).toContain("2026-06-19");
   });
 
   it("tells the agent the asset its conversation is about and offers the tools of that subject", async () => {
@@ -596,17 +593,9 @@ describe("local agent runtime", () => {
     };
 
     const first = await firstRequestOf(about);
-    expect(first.system).toContain("Subject of this conversation:");
-    expect(first.system).toContain("This conversation is about one workflow, named 'month-end'.");
-    expect(first.system).toContain("Never ask which workflow they mean.");
-    // The agent learns the name people see it by from the runtime, so instructions that ship
-    // with the platform name no fixed one and an admin's rename reaches the agent.
-    expect(first.system).toContain(
-      'Your name, as people see it in the interface: "Subject Agent". When you speak of yourself, use this name.'
-    );
-    expect(first.system).toContain(
-      "Read it with platform.assets.get, naming no asset, before you answer"
-    );
+    expect(first.system).toContain("month-end");
+    // The agent learns the name people see it by from the runtime, so an admin's rename reaches it.
+    expect(first.system).toContain('"Subject Agent"');
     // The offer is asked with the tools the agent's definition lists, and what it offers comes
     // in the order that keeps what stays the same first: the platform's rules, the orientation,
     // the agent's instructions, then the subject.

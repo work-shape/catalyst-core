@@ -31,43 +31,42 @@ import {
   subjectSchema
 } from "./support/platform-asset-tools";
 
+// One conversation builds what an App needs (BUILD-ALL-1; Platform Access check 60, Workflows
+// check 73). In a conversation about an App the agent creates the Workflow the App needs beside
+// it, keeps saving and test-running that draft, and the conversation stays about the App. An
+// asset that existed before changes only as the subject. The model is the scripted one of the
+// tests, which makes the one tool call each message names. Each case fails without the change:
+// a create in a conversation about an asset was refused, and a save or a test reached the
+// subject only.
+
+const APP = { kind: "app", name: "invoice-desk" };
+const CREATED = "invoice-check";
+const createdConfig = (steps: unknown[] = []) => ({
+  name: CREATED,
+  manifest: {
+    ...manifest(),
+    id: CREATED,
+    name: "Invoice check",
+    steps: [trigger, ...steps, result]
+  }
+});
+
+const createdSchema = z.object({
+  saved: z.literal(true),
+  revision: z.number(),
+  created: z.literal(true),
+  kind: z.string(),
+  name: z.string(),
+  title: z.string(),
+  besideSubject: z.literal(true)
+});
+
 describe("a conversation about a Workflow", () => {
   let sharing = false;
   afterEach(async () => {
     if (!sharing) await resetFileTestDatabase();
   });
-  it("ACCEPT-FIX-13 C2: the agent's skill read carries the same save-approval fact as the skill page", async () => {
-    let holding = false;
-    const t = await createAssetToolsFixture("in_process", [], {
-      centralPolicySettings: () =>
-        holding ? [{ operation: "assets.put", value: "approval", assetKind: "skill" }] : []
-    });
-    const named = { kind: "skill", name: "approval-fact" };
-    await t.ok(
-      t.app.call("assets.put", {
-        params: named,
-        payload: {
-          config: {
-            name: named.name,
-            title: "Approval fact",
-            description: "A synthetic skill",
-            content: "# Skill"
-          },
-          expectedRevision: null
-        }
-      })
-    );
-    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(named))).json());
-    holding = true;
-    const page = z
-      .object({ saveApproval: z.object({ approverNames: z.array(z.string()) }) })
-      .parse((await t.ok(t.app.call("assets.get", { params: named }))).json());
-    const read = await t.call(id, "platform.assets.get");
-    expect(read).toMatchObject({ saveApproval: page.saveApproval });
-    expect(page.saveApproval.approverNames).toEqual([]);
-  });
-
-  it("PR-382 M2: read_skill carries the save-approval fact of the skill page for the reading person", async () => {
+  it("ACCEPT-FIX-13 C2, PR-382 M1 and M2: the agent's skill read, read_skill and platform.context carry the save-approval fact of the skill page", async () => {
     let holding = false;
     const t = await createAssetToolsFixture("in_process", ["skillNames"], {
       skillTool: true,
@@ -89,6 +88,9 @@ describe("a conversation about a Workflow", () => {
         }
       })
     );
+    const { id: aboutSkill } = z
+      .object({ id: z.string() })
+      .parse((await t.ok(t.converse(named))).json());
     // The agent of the conversation holds the skill, as its published definition lists it.
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
     const agent = { kind: "agent", name: "test_agent" };
@@ -119,21 +121,6 @@ describe("a conversation about a Workflow", () => {
       z
         .object({ content: z.string(), saveApproval: z.unknown().optional() })
         .parse(await t.call(id, "read_skill", { name: named.name })).saveApproval;
-    expect(await readSkill()).toBeUndefined();
-    holding = true;
-    const page = z
-      .object({ saveApproval: z.object({ approverNames: z.array(z.string()) }) })
-      .parse((await t.ok(t.app.call("assets.get", { params: named }))).json());
-    expect(await readSkill()).toEqual(page.saveApproval);
-  });
-
-  it("PR-382 M1: platform.context says a skill's create waits for an approval before it is made", async () => {
-    let holding = false;
-    const t = await createAssetToolsFixture("in_process", [], {
-      centralPolicySettings: () =>
-        holding ? [{ operation: "assets.put", value: "approval", assetKind: "skill" }] : []
-    });
-    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
     const kinds = async () =>
       z
         .object({
@@ -143,10 +130,21 @@ describe("a conversation about a Workflow", () => {
         })
         .parse(await t.call(id, "platform.context")).kinds;
     const skillKind = async () => (await kinds()).find((kind) => kind.kind === "skill");
+    expect(await readSkill()).toBeUndefined();
     expect((await skillKind())?.createApproval).toBeUndefined();
+
     holding = true;
+    const page = z
+      .object({ saveApproval: z.object({ approverNames: z.array(z.string()) }) })
+      .parse((await t.ok(t.app.call("assets.get", { params: named }))).json());
+    expect(page.saveApproval.approverNames).toEqual([]);
+    expect(await t.call(aboutSkill, "platform.assets.get")).toMatchObject({
+      saveApproval: page.saveApproval
+    });
+    expect(await readSkill()).toEqual(page.saveApproval);
+    // A skill's create waits for an approval; a kind the setting does not name is created as
+    // before.
     expect((await skillKind())?.createApproval).toEqual({ approverNames: [] });
-    // A kind the setting does not name is created as before.
     expect(
       (await kinds()).find((kind) => kind.kind === "workflow")?.createApproval
     ).toBeUndefined();
@@ -1076,5 +1074,151 @@ describe("a conversation about a Workflow", () => {
       // The same person creates a conversation about nothing.
       expect((await t.converse(undefined, OTHER)).statusCode).toBe(200);
     }, 120_000);
+
+    it("creates, saves and tests a Workflow draft beside its App, and changes no Workflow that existed before", async () => {
+      const t = await shared.workflow("build-all");
+      publishedWorkflows.add("build-all");
+      const about = async (as?: string) => {
+        const { id } = z
+          .object({ id: z.string() })
+          .parse((await t.ok(t.converse(undefined, as))).json());
+        // The conversation is about the App: the App's own content plays no part in the rule.
+        await t.app.stores.conversations.setConversationSubject({
+          clientInstanceId: t.clientInstanceId,
+          conversationId: asConversationId(id),
+          subject: APP
+        });
+        return id;
+      };
+      const subjectOf = async (id: string) =>
+        z
+          .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+          .parse(
+            (
+              await t.ok(t.app.call("conversations.thread.get", { params: { conversationId: id } }))
+            ).json()
+          ).conversation.subject;
+      const id = await about();
+
+      // The create stands beside the App: the conversation stays about the App.
+      const created = createdSchema.parse(
+        await t.call(id, "platform.assets.put", {
+          kind: WORKFLOW_ASSET_KIND,
+          name: CREATED,
+          config: createdConfig()
+        })
+      );
+      expect(created).toMatchObject({ revision: 1, kind: WORKFLOW_ASSET_KIND, name: CREATED });
+      expect(await subjectOf(id)).toEqual(APP);
+      // It is owned by the conversation's workspace, as the App beside it is (WS-OWN-1b).
+      const conversation = await t.app.stores.conversations.getConversation(
+        t.clientInstanceId,
+        asConversationId(id)
+      );
+      const workspaceId = conversation?.collaborationWorkspaceId;
+      expect(workspaceId).toBeDefined();
+      expect(
+        (
+          await t.app.stores.configAssets.getConfigAsset({
+            clientInstanceId: t.clientInstanceId,
+            kind: WORKFLOW_ASSET_KIND,
+            name: CREATED
+          })
+        )?.scope
+      ).toEqual({ kind: "workspace", workspaceId });
+
+      // It keeps checking and saving the draft it created, twice, naming it.
+      expect(
+        await t.call(id, "platform.assets.validate", {
+          kind: WORKFLOW_ASSET_KIND,
+          name: CREATED,
+          config: createdConfig()
+        })
+      ).toEqual({ valid: true, issues: [] });
+      let revision = created.revision;
+      for (const steps of [[], [added]]) {
+        const saved = writeSchema.parse(
+          await t.call(id, "platform.assets.put", {
+            kind: WORKFLOW_ASSET_KIND,
+            name: CREATED,
+            config: createdConfig(steps),
+            expectedRevision: revision
+          })
+        );
+        expect(saved).toEqual({ saved: true, revision: revision + 1 });
+        revision += 1;
+      }
+      expect(await subjectOf(id)).toEqual(APP);
+
+      // And it test-runs the draft as the person, with itself as origin (Workflows check 73).
+      const started = runSchema
+        .extend({ mode: z.literal("test"), operationRunId: z.string() })
+        .parse(
+          await t.call(id, "workflows.test", { workflow: CREATED, input: { note: "Rechnung 7" } })
+        );
+      const draft = await t.app.stores.configAssets.getConfigAsset({
+        clientInstanceId: t.clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name: CREATED
+      });
+      expect(started.definitionRevisionId).toBe(draft?.activeRevisionId);
+      const runs = await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId });
+      expect(runs.find((run) => run.id === started.operationRunId)).toMatchObject({
+        operation: "workflows.test",
+        actor: { kind: "user" },
+        origin: { kind: "agent", conversationId: id, toolName: "workflows.test" }
+      });
+
+      // The published Workflow existed before the conversation: no save or test reaches it
+      // without an open, whatever the model names.
+      const before = await t.asset();
+      const refused = await t.say(
+        id,
+        `/tool platform.assets.put ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: t.WORKFLOW, config: { name: t.WORKFLOW, manifest: t.manifest([added]) }, expectedRevision: before.revision })}`
+      );
+      expect(refused.answer).toContain(`did not create the workflow '${t.WORKFLOW}'`);
+      expect(await t.asset()).toEqual(before);
+      const untested = await t.say(
+        id,
+        `/tool workflows.test ${JSON.stringify({ workflow: t.WORKFLOW, input: { note: "x" } })}`
+      );
+      expect(untested.answer).toContain(
+        "An agent may test only the conversation's subject Workflow"
+      );
+
+      // Another conversation of the same person did not create the draft: it does not reach it.
+      const elsewhere = await about();
+      const foreign = await t.say(
+        elsewhere,
+        `/tool platform.assets.put ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: CREATED, config: createdConfig(), expectedRevision: revision })}`
+      );
+      expect(foreign.answer).toContain(`did not create the workflow '${CREATED}'`);
+
+      // A draft deleted and made anew under its name is another asset: the conversation that
+      // created the first one no longer reaches it.
+      await t.ok(
+        t.app.call("assets.delete", {
+          params: { kind: WORKFLOW_ASSET_KIND, name: CREATED },
+          payload: { expectedRevision: revision, workspaceId }
+        })
+      );
+      await t.ok(
+        t.app.call("assets.put", {
+          params: { kind: WORKFLOW_ASSET_KIND, name: CREATED },
+          // Made again, it names the revision of its delete.
+          payload: { config: createdConfig(), expectedRevision: revision + 1, workspaceId }
+        })
+      );
+      const anew = await t.app.stores.configAssets.getConfigAsset({
+        clientInstanceId: t.clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name: CREATED
+      });
+      const remade = await t.say(
+        id,
+        `/tool platform.assets.put ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: CREATED, config: createdConfig(), expectedRevision: anew?.revision })}`
+      );
+      expect(remade.answer).toContain(`did not create the workflow '${CREATED}'`);
+    }, 180_000);
   });
 });

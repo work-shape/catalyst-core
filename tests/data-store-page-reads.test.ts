@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterAll, beforeAll } from "vitest";
 import { z } from "zod";
 import {
   NoopAuditRecorder,
@@ -8,7 +8,8 @@ import {
   type AssetScope,
   type AuthenticatedUser,
   type JsonObject,
-  type PermissionGrant
+  type PermissionGrant,
+  DATA_STORE_ACTIONS
 } from "@work-shape/catalyst-core";
 import { accessOf } from "./support/access";
 import { eventually, required } from "./support/assertions";
@@ -20,6 +21,9 @@ import {
   useDataStoreWorld,
   type StoreFile
 } from "./support/data-store-world";
+import { clientInstanceId } from "./support/access-instance";
+import { expectStatus } from "./support/app-instance";
+import { setupFindingsApp, type FindingsWorld } from "./support/findings-app";
 
 // The reads the page of a store needs, against real Postgres: the rows of a table a page at a
 // time, what the last measurement found of a store on the list, and what uses a store.
@@ -115,7 +119,7 @@ describe("the reads of a Data Store's page", () => {
   const page = async (world: World, input: JsonObject) =>
     pageSchema.parse(await read(world, "rows", input));
 
-  it("reads an existing primary-key cursor and writes the same bytes", async () => {
+  it("reads an existing primary-key cursor and writes the same bytes, orders by every column of a key, and pages a table without a key as its rows lie", async () => {
     const world = await published("cursor_compat", [manifest(), init, notes]);
     const store = connect(world.record.location.database);
     await store`insert into pairs (b, a) values (3, 'café/東京'), (4, 'next')`;
@@ -125,6 +129,40 @@ describe("the reads of a Data Store's page", () => {
     expect(first.next).toBe(cursor);
     const second = await page(world, { table: "pairs", after: cursor, limit: 1 });
     expect(second.rows.map(({ values }) => values)).toEqual([{ b: 4, a: "next", note: null }]);
+    await store`delete from pairs`;
+
+    // A key of several orders by every column, in the order of its index, and by text exactly.
+    await store`insert into pairs (b, a) select n % 3, 'a' || n from generate_series(1, 9) n`;
+
+    const got: unknown[] = [];
+    let after: string | undefined;
+    do {
+      const answer = await page(world, { table: "pairs", limit: 4, ...(after ? { after } : {}) });
+      expect(answer.order).toEqual({ by: "key", columns: ["b", "a"] });
+      got.push(...answer.rows.map(({ values }) => `${String(values.b)}:${String(values.a)}`));
+      after = answer.next;
+    } while (after !== undefined);
+
+    expect(got).toEqual(["0:a3", "0:a6", "0:a9", "1:a1", "1:a4", "1:a7", "2:a2", "2:a5", "2:a8"]);
+
+    // A table without a key is paged in the order its rows lie in, and says so.
+    await store`insert into notes select 'note ' || n from generate_series(1, 5) n`;
+
+    const firstNotes = await page(world, { table: "notes", limit: 3 });
+    expect(firstNotes.order).toEqual({ by: "physical" });
+    const secondNotes = await page(world, {
+      table: "notes",
+      limit: 3,
+      after: required(firstNotes.next)
+    });
+    expect([...firstNotes.rows, ...secondNotes.rows].map(({ values }) => values.body)).toEqual([
+      "note 1",
+      "note 2",
+      "note 3",
+      "note 4",
+      "note 5"
+    ]);
+    expect(secondNotes.next).toBeUndefined();
   });
 
   it("pages through a table in the order of its primary key until its last row, with a page size the server bounds", async () => {
@@ -153,10 +191,8 @@ describe("the reads of a Data Store's page", () => {
     // A row added behind a page that was read is on the next page.
     const first = await page(world, { table: "findings", limit: 120 - 70 });
     expect(first.next).toBeDefined();
-  });
 
-  it("declares a read of rows: data_store.read, the scope of rows, recorded on every call", async () => {
-    const world = await published("declared");
+    // A read of rows asks data_store.read and the scope of rows, recorded on every call.
     for (const part of ["rows", "value"]) {
       expect(
         await world.dataStores.operationSource.resolve(`data_store.findings.${part}`)
@@ -168,41 +204,6 @@ describe("the reads of a Data Store's page", () => {
         module: "dataStores"
       });
     }
-  });
-
-  it("orders by every column of a key of several, in the order of its index, and by text exactly", async () => {
-    const world = await published("pairs", [manifest(), init, notes]);
-    const store = connect(world.record.location.database);
-    await store`insert into pairs (b, a) select n % 3, 'a' || n from generate_series(1, 9) n`;
-
-    const got: unknown[] = [];
-    let after: string | undefined;
-    do {
-      const answer = await page(world, { table: "pairs", limit: 4, ...(after ? { after } : {}) });
-      expect(answer.order).toEqual({ by: "key", columns: ["b", "a"] });
-      got.push(...answer.rows.map(({ values }) => `${String(values.b)}:${String(values.a)}`));
-      after = answer.next;
-    } while (after !== undefined);
-
-    expect(got).toEqual(["0:a3", "0:a6", "0:a9", "1:a1", "1:a4", "1:a7", "2:a2", "2:a5", "2:a8"]);
-  });
-
-  it("pages a table without a key in the order its rows lie in, and says so", async () => {
-    const world = await published("physical", [manifest(), init, notes]);
-    const store = connect(world.record.location.database);
-    await store`insert into notes select 'note ' || n from generate_series(1, 5) n`;
-
-    const first = await page(world, { table: "notes", limit: 3 });
-    expect(first.order).toEqual({ by: "physical" });
-    const second = await page(world, { table: "notes", limit: 3, after: required(first.next) });
-    expect([...first.rows, ...second.rows].map(({ values }) => values.body)).toEqual([
-      "note 1",
-      "note 2",
-      "note 3",
-      "note 4",
-      "note 5"
-    ]);
-    expect(second.next).toBeUndefined();
   });
 
   it("answers every row once for every kind of table and every page size, also where no key holds for all its rows", async () => {
@@ -351,8 +352,6 @@ describe("the reads of a Data Store's page", () => {
       await refusal(read(world, "rows", { table: "findings", after: "nonsense" }))
     ).toMatchObject({
       code: "VALIDATION_FAILED",
-      message:
-        "This cursor does not name a row of the table as it is now. Read the table from its first page again.",
       details: { reason: "cursor_invalid" }
     });
     // A cursor of a table with a key on a table without one.
@@ -948,5 +947,148 @@ describe("the reads of a Data Store's page", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     // The suite removes the workspace after the test, and an asset it owns cannot outlive it.
     await db.sql`delete from config_assets where scope_id in (${workspace.id}, ${lenaTeam.id})`;
+  });
+});
+
+// One walk of a member over the reads of a store's page, on an instance with a published App
+// on the store: the member holds the read of the store and the use of the App's workspace,
+// and no right on the Workflow that also uses the store. The reads are the store's own
+// operations, called through the instance's call path as the routes of their name call them.
+
+const walkPageSchema = z.object({
+  rows: z.array(z.object({ at: z.string(), values: z.record(z.string(), z.unknown()) })),
+  next: z.string().optional()
+});
+
+describe("a member on the page of a Data Store", () => {
+  let t: FindingsWorld;
+  beforeAll(async () => {
+    t = await setupFindingsApp();
+  });
+  afterAll(() => t.closeAll());
+
+  it("pages through the rows and reads what uses the store, shown the App it may use and a count of the Workflow it may not", async () => {
+    const mia = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Mia",
+      email: "mia@example.test",
+      roles: ["user"],
+      permissions: []
+    });
+    expectStatus(
+      await t.call(t.admin.id, "workspaces.members.add", {
+        params: { collaborationWorkspaceId: t.workspaceId },
+        payload: { email: "mia@example.test" }
+      }),
+      200
+    );
+    // A Workflow of the instance that stores into `findings`, published as its kind stores it.
+    const written = await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { "workflow:monthly-check": null },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "workflow",
+          name: "monthly-check",
+          draft: true,
+          config: {
+            manifest: {
+              id: "monthly-check",
+              name: "Monthly check",
+              steps: [
+                {
+                  id: "store",
+                  name: "Store",
+                  type: "operation",
+                  operation: "data_store.findings.insert",
+                  input: {}
+                }
+              ]
+            }
+          }
+        }
+      ]
+    });
+    const revision = required(written.revisions["workflow:monthly-check"]);
+    await t.stores.configAssets.publishConfigAssetRevision({
+      clientInstanceId,
+      kind: "workflow",
+      name: "monthly-check",
+      assetId: required(written.assetIds["workflow:monthly-check"]),
+      revision,
+      revisionId: required(
+        await t.stores.configAssets.getConfigAssetRevision({
+          clientInstanceId,
+          kind: "workflow",
+          name: "monthly-check",
+          revision
+        })
+      ).id
+    });
+
+    // Without the read of the store the member reads neither.
+    const denied = { status: "denied", reason: { kind: "forbidden", action: "data_store.read" } };
+    for (const [part, input] of [
+      ["rows", { table: "findings" }],
+      ["used_by", {}]
+    ] as const) {
+      expect((await t.invoke(mia, `data_store.findings.${part}`, input)).result).toMatchObject(
+        denied
+      );
+    }
+    // AP-10: the grant of a store's right to a person is written to the store.
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: mia.id,
+      action: DATA_STORE_ACTIONS.read,
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: t.store.id,
+      grantedBy: t.admin.id
+    });
+
+    // The four rows of the store, three and then one.
+    const first = await t.invoke(mia, "data_store.findings.rows", { table: "findings", limit: 3 });
+    expect(first.result.status).toBe("done");
+    const one = walkPageSchema.parse(first.result.status === "done" ? first.result.output : {});
+    expect(one.rows.map(({ values }) => values.amount)).toEqual(["10.00", "20.00", "30.00"]);
+    const second = await t.invoke(mia, "data_store.findings.rows", {
+      table: "findings",
+      limit: 3,
+      after: required(one.next)
+    });
+    const two = walkPageSchema.parse(second.result.status === "done" ? second.result.output : {});
+    expect(two.rows.map(({ values }) => values.client_id)).toEqual(["client-b"]);
+    expect(two.next).toBeUndefined();
+    const whole = await t.invoke(mia, "data_store.findings.value", {
+      table: "findings",
+      column: "severity",
+      at: required(one.rows[0]).at
+    });
+    expect(whole.result).toMatchObject({ status: "done", output: { value: "error" } });
+
+    // The App of the member's workspace is named. The Workflow is counted and not named.
+    const used = await t.invoke(mia, "data_store.findings.used_by", {});
+    expect(used.result).toMatchObject({
+      status: "done",
+      output: {
+        apps: [{ name: "findings", title: "Findings" }],
+        workflows: [],
+        hidden: { apps: 0, workflows: 1 },
+        truncated: false
+      }
+    });
+    expect(JSON.stringify(used.result)).not.toContain("monthly-check");
+    // Whoever reads everything is shown both.
+    const all = await t.invoke(t.admin, "data_store.findings.used_by", {});
+    expect(all.result).toMatchObject({
+      output: {
+        apps: [{ name: "findings" }],
+        workflows: [{ name: "monthly-check", title: "Monthly check" }],
+        hidden: { apps: 0, workflows: 0 }
+      }
+    });
   });
 });

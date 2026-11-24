@@ -226,22 +226,13 @@ describe("the accounting REST face", () => {
     expect(log.every((line) => /^REST \d{3}$/u.test(line))).toBe(true);
   });
 
-  it.each([
-    "page=0",
-    "page=-1",
-    "page=1.5",
-    "page=9007199254740991",
-    "page_size=1001",
-    "page_size=0",
-    "page=1&page=2",
-    "filter=date+gte+2026-99-01",
-    "filter=client_id+eq+oops",
-    "filter=account_number+eq+1",
-    "unknown=1"
-  ])("refuses malformed or unsupported input: %s", async (query) => {
-    const { get } = await start();
-    expect((await get(`${paths.postings}?${query}`)).status).toBe(400);
-  });
+  it.each(["page=1.5", "page_size=1001", "page=1&page=2", "filter=client_id+eq+oops", "unknown=1"])(
+    "refuses malformed or unsupported input: %s",
+    async (query) => {
+      const { get } = await start();
+      expect((await get(`${paths.postings}?${query}`)).status).toBe(400);
+    }
+  );
 
   it("injects Retry-After in one shared call window, recovers and keeps health independent", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });

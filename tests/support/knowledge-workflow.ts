@@ -245,26 +245,6 @@ export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
       return { runId, dataset, call, end, endStep, lastStep: () => required(last) };
     }
 
-    /** Runs the source jobs until the ingest Operation Run ends, and answers its output. */
-    async function settle(operationRunId: string) {
-      return eventually(async () => {
-        await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await world.worker.runDue();
-        const run = await stores.operationRuns.get({ clientInstanceId, id: operationRunId });
-        expect(run?.status, JSON.stringify(run?.error)).toBe("done");
-        return required(run);
-      }, 180_000);
-    }
-    /** Runs the source jobs until every complete pass of the source has been decided. */
-    async function settlePasses() {
-      await eventually(async () => {
-        await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
-        await world.worker.runDue();
-        const open =
-          await world.sql`select id from catalyst_kb.sync_runs where source_id=${SOURCE} and pass_state in ('awaiting_run')`;
-        expect(open).toEqual([]);
-      }, 180_000);
-    }
     async function states() {
       const rows =
         await world.sql`select state, count(*)::int as n from catalyst_kb.source_items where source_id=${SOURCE} group by state order by state`;
@@ -329,8 +309,6 @@ export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
       principal,
       grant,
       startRun,
-      settle,
-      settlePasses,
       states,
       workflowAsset,
       writeWorkflow

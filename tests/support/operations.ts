@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   apiOperations,
-  createOpenApiDocument,
   buildApiPath,
   defineOperation,
   defineRegisteredOperation,
@@ -383,44 +382,6 @@ export interface TestRequest {
 export function testRequest(operation: TestOperationName, input: TestCallInput = {}): TestRequest {
   return { operation, input };
 }
-
-export function openApiJsonOperation(operation: keyof typeof apiOperations): {
-  requestBody: { content: { "application/json": { schema: { required?: string[] } } } };
-  responses: Record<
-    string,
-    { content: { "application/json": { schema: { required?: string[] } } } }
-  >;
-} {
-  const descriptor = apiOperations[operation];
-  const path = descriptor.path.replaceAll(/:([A-Za-z][\w]*)/gu, "{$1}");
-  const document = createOpenApiDocument();
-  // A named schema stands in the document as a reference; a test reads the schema itself.
-  const resolved: unknown = JSON.parse(
-    JSON.stringify(document.paths[path]?.[descriptor.method.toLowerCase()]),
-    (_key, value: unknown) => {
-      const reference = z.object({ $ref: z.string() }).safeParse(value);
-      if (!reference.success) return value;
-      const name = reference.data.$ref.split("/").at(-1) ?? "";
-      // An error answer is a shared response of the document; a test here reads successes.
-      return reference.data.$ref.includes("/schemas/")
-        ? document.components.schemas[name]
-        : undefined;
-    }
-  );
-  return openApiJsonOperationSchema.parse(resolved);
-}
-
-const jsonContentSchema = z.object({
-  content: z.object({
-    "application/json": z.object({
-      schema: z.looseObject({ required: z.array(z.string()).optional() })
-    })
-  })
-});
-const openApiJsonOperationSchema = z.object({
-  requestBody: jsonContentSchema,
-  responses: z.record(z.string(), jsonContentSchema)
-});
 
 // Fixed expectations remain independent of the path builder under test.
 export const contractPathFixtures = {

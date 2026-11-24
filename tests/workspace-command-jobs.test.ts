@@ -4,6 +4,7 @@ import { AGENT_RUN_IDLE_LIMIT_MS } from "@work-shape/catalyst-agent-runtime";
 import {
   JOB_UNCLAIMED_MS,
   JOB_WORKER_CHECK_INTERVAL_MS,
+  OperationExecutionStop,
   type PlatformStores,
   type WorkspaceCommand
 } from "@work-shape/catalyst-core";
@@ -507,6 +508,35 @@ describe("workspace commands on the job executor", () => {
       from workspace_commands where id = ${command.id}`;
     return required(row);
   }
+
+  it.each(["timeout", "aborted"] as const)(
+    "uses the executor's %s reason even before the wait deadline",
+    async (kind) => {
+      const fixture = await createFixture(`executor_${kind}`);
+      const queued = await fixture.enqueue("sleep 60");
+      const client = createWorkspaceCommandClient({
+        stores: db.store,
+        now: () => new Date().toISOString()
+      });
+      const result = await client.await(
+        { command: queued },
+        {
+          signal: AbortSignal.abort(new OperationExecutionStop(kind, new Error("probe"))),
+          deadline: new Date(Date.now() + 60_000)
+        }
+      );
+      const reason =
+        kind === "timeout"
+          ? "Workspace command exceeded the tool execution deadline"
+          : "Workspace command was cancelled with its agent run";
+      expect(result).toMatchObject({
+        status: kind === "timeout" ? "timed_out" : "cancelled",
+        reason,
+        command: { id: queued.id, status: "cancelled", cancellationReason: reason }
+      });
+      expect(await fixture.command(queued)).toMatchObject({ cancellationReason: reason });
+    }
+  );
 });
 
 describe("a workspace command no worker takes", () => {

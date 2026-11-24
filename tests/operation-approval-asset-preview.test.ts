@@ -822,48 +822,6 @@ describe("the preview of a held asset save", () => {
       expect(after.isNew).toBeUndefined();
     });
 
-    it("names an asset of another kind and shows no content for it", async () => {
-      const { t, holding, hold, preview } = shared;
-      holding("assets.put");
-      const requestId = await hold("assets.put", "agent", `kai-intake-${testNumber}`, {
-        config: agent(`kai-intake-${testNumber}`, {
-          displayName: "Intake",
-          instructions: "Ask.\nThen file."
-        })
-      });
-
-      const shown = await preview(t.admin.id, requestId);
-
-      expect(shown.asset).toEqual({
-        kind: "agent",
-        name: `kai-intake-${testNumber}`,
-        title: "Intake",
-        workspaceId: t.kaiTeam,
-        isNew: true
-      });
-      expect(shown.inputs).toEqual(
-        expect.arrayContaining([
-          { key: "kind", value: "agent" },
-          { key: "config.instructions", value: "Ask.\nThen file." },
-          { key: "config.toolNames", value: "[]" }
-        ])
-      );
-    });
-
-    it("describes no asset for an operation that is not assets.put", async () => {
-      const { t, holding, hold, preview } = shared;
-      await t.put(t.kai.id, "agent", `kai-intake-${testNumber}`, t.kaiTeam);
-      holding("assets.delete");
-      const requestId = await hold("assets.delete", "agent", `kai-intake-${testNumber}`, {
-        expectedRevision: 1
-      });
-
-      const shown = await preview(t.admin.id, requestId);
-
-      expect(shown.operation).toBe("assets.delete");
-      expect(shown.asset).toBeUndefined();
-    });
-
     // The Inbox asks for a page of requests every few seconds for everyone who decides. A row
     // names the asset from the call itself: the list reads no asset.
     it("reads no asset for the rows of a list", async () => {

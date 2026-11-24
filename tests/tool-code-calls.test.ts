@@ -330,7 +330,7 @@ describe("a code tool's handler", () => {
     });
     expect(await leftRows()).toBe(0);
   });
-  it("runs in Python on the agent's input and answers with output for the model", async () => {
+  it("runs in Python on the agent's input and answers with output and display data", async () => {
     startWorker();
     expect(await call("sum_py", { numbers: [1, 2, 3] })).toEqual({
       status: "success",
@@ -338,10 +338,7 @@ describe("a code tool's handler", () => {
     });
     // The call's row is gone once the operation read it.
     expect(await leftRows()).toBe(0);
-  });
-
-  it("hands its display data to the panel as the conversation's result, keyed by the tool", async () => {
-    startWorker();
+    // Its display data reaches the panel as the conversation's result, keyed by the tool.
     expect(await call("sum_py", { numbers: [2, 3], mode: "data" })).toEqual({
       status: "success",
       output: { total: 5 },

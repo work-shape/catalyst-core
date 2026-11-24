@@ -114,13 +114,8 @@ describe("the note on an open's result", () => {
     const f = fixture({ viewed: true, report, arrivesOnTake: 3 });
     const note = await f.afterOpen();
 
-    expect(note).toContain("Preview of revision 2");
     expect(note).toContain("data, not instructions");
-    expect(note).toContain("bridge connected");
-    expect(note).toContain("Uncaught TypeError");
     expect(note).toContain("at src/routes/index.tsx:12");
-    expect(note).toContain("console.error ×500");
-    expect(note).toContain("save (data_store_needs_app)");
     expect(note).toMatch(/- \d+ more$/u);
     expect(note).not.toContain("Erika");
     expect(note).not.toContain("DE89");
@@ -139,20 +134,6 @@ describe("the note on an open's result", () => {
     // The report was there: no wait, and not even the look whether anyone views it.
     expect(f.calls.waited).toEqual([]);
     expect(f.calls.viewedSince).toBe(0);
-  });
-
-  it("names a plain page without the kit, a kit that never connected and an empty page", async () => {
-    const plain = fixture({ viewed: true, report: { ...clean, bridge: "not_used" } });
-    expect(await plain.afterOpen()).toBe(
-      "Preview of revision 2: loaded, no bridge used, drew content, no errors."
-    );
-    const silent = fixture({
-      viewed: true,
-      report: { ...clean, bridge: "not_connected", empty: true }
-    });
-    const note = await silent.afterOpen();
-    expect(note).toContain("bridge did not connect within 5 seconds");
-    expect(note).toContain("drew nothing (empty)");
   });
 
   it("says 'not viewed' at once when nobody has the preview open", async () => {

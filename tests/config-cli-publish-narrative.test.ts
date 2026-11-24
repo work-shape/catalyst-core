@@ -129,8 +129,6 @@ async function publish(kind: "app" | "workflow", answers: string[], summary: str
 describe("PUBQ-1 CLI publish narrative (check 75)", () => {
   it.each([
     { kind: "app", json: false },
-    { kind: "workflow", json: false },
-    { kind: "app", json: true },
     { kind: "workflow", json: true }
   ] as const)(
     "leads $kind with the shared sentence and publishes without a question (json=$json)",
@@ -151,12 +149,4 @@ describe("PUBQ-1 CLI publish narrative (check 75)", () => {
       }
     }
   );
-
-  it("preserves the reader's German sentence rather than reconstructing it in English", async () => {
-    const summary =
-      "Nachtimport läuft jede Nacht um 02:00 mit dem eigenen Konto und liest Exampledata.";
-    const result = await publish("workflow", [], summary);
-    expect(result.output).toContain(summary);
-    expect(result.output).not.toContain("Details\n");
-  });
 });

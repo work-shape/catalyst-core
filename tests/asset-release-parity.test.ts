@@ -122,25 +122,6 @@ describe("where the agents of a release start", () => {
 });
 
 describe("a definition in a release", () => {
-  it("is refused for a model setting the instance cannot run, where an interactive save drops it", async () => {
-    const t = await setup();
-    const fast = { modelProviderId: undefined, modelBindingId: "plain", fastMode: true };
-
-    const refused = await syncAsService(t, [putAgent("rel-old", fast, 1)]);
-    expect(refused.statusCode).toBe(422);
-    // The refusal names the setting, in the words of the one check of the set.
-    expect(JSON.stringify(errorSchema.parse(refused.json()).error.details)).toContain("fast mode");
-    expect(await t.stored("agent", "rel-old")).toMatchObject({ revision: 1 });
-
-    // The superadmin's save through the same operation is adjusted, as it always was.
-    const saved = await syncAs(t, t.root.id, [putAgent("team-old", fast, 1)]);
-    expect(saved.statusCode, saved.body).toBe(200);
-    await publishAgentDraft({ ...t, admin: t.root }, "team-old", t.team);
-    const config = (await t.stored("agent", "team-old"))?.config;
-    expect(config).toMatchObject({ modelBindingId: "plain" });
-    expect(config).not.toHaveProperty("fastMode");
-  });
-
   it("is refused for a kind no release carries, by the kind's name", async () => {
     const widgetKind = {
       ...defineAssetKind({
@@ -211,53 +192,71 @@ describe("the default agent of a release", () => {
     expect(await defaultAgentOf(t)).toBe("assistant");
     expect(await t.stored("agent", "rel-intake")).toMatchObject({ status: "deleted" });
     expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "active" });
-  });
-
-  it("is refused against another default than the caller read, for a name that is no agent, and for anyone without the release right", async () => {
-    const t = await setup();
-
-    const stale = await releaseAsService(t, {
-      items: [],
-      defaultAgentName: "rel-old",
-      expectedDefaultAgentName: "somebody"
-    });
-    expect(stale.statusCode).toBe(409);
-    expect(errorSchema.parse(stale.json()).error.details).toEqual({
-      reason: "default_agent_changed",
-      currentDefaultAgentName: "assistant"
-    });
-    // The expectation is checked also where the batch leaves the default as it is.
-    const before = await t.version();
-    const staleUpdate = await releaseAsService(t, {
-      items: [putSkill("rel-guide", "Pushed.", 1)],
-      expectedDefaultAgentName: "somebody"
-    });
-    expect(staleUpdate.statusCode).toBe(409);
-    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
-    expect(await t.version()).toBe(before);
-    const current = await releaseAsService(t, {
-      items: [putSkill("rel-guide", "Pushed.", 1)],
-      expectedDefaultAgentName: "assistant"
-    });
-    expect(current.statusCode, current.body).toBe(200);
-    expect(await defaultAgentOf(t)).toBe("assistant");
-    const nobody = await releaseAsService(t, { items: [], defaultAgentName: "nobody" });
-    expect(nobody.statusCode).toBe(422);
-    const empty = await releaseAsService(t, { items: [] });
-    expect(errorSchema.parse(empty.json()).error).toMatchObject({
-      code: "VALIDATION_FAILED",
-      message: "A batch needs an item or a default agent"
-    });
-    // An administrator changes the default through the operation that is his.
-    for (const userId of [t.admin.id, t.root.id]) {
-      const refused = await syncAs(t, userId, [], { defaultAgentName: "rel-old" });
-      expect(refused.statusCode).toBe(403);
-      expect(errorSchema.parse(refused.json()).error.details).toEqual({
-        action: "assets.release",
-        reason: "no_grant"
+    // Is refused against another default than the caller read, for a name that is no agent, and for anyone without the release right.
+    {
+      const stale = await releaseAsService(t, {
+        items: [],
+        defaultAgentName: "rel-old",
+        expectedDefaultAgentName: "somebody"
       });
+      expect(stale.statusCode).toBe(409);
+      expect(errorSchema.parse(stale.json()).error.details).toEqual({
+        reason: "default_agent_changed",
+        currentDefaultAgentName: "assistant"
+      });
+      // The expectation is checked also where the batch leaves the default as it is.
+      const before = await t.version();
+      const staleUpdate = await releaseAsService(t, {
+        items: [putSkill("rel-guide", "Pushed.", 1)],
+        expectedDefaultAgentName: "somebody"
+      });
+      expect(staleUpdate.statusCode).toBe(409);
+      expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
+      expect(await t.version()).toBe(before);
+      const current = await releaseAsService(t, {
+        items: [putSkill("rel-guide", "Pushed.", 1)],
+        expectedDefaultAgentName: "assistant"
+      });
+      expect(current.statusCode, current.body).toBe(200);
+      expect(await defaultAgentOf(t)).toBe("assistant");
+      const nobody = await releaseAsService(t, { items: [], defaultAgentName: "nobody" });
+      expect(nobody.statusCode).toBe(422);
+      const empty = await releaseAsService(t, { items: [] });
+      expect(errorSchema.parse(empty.json()).error).toMatchObject({
+        code: "VALIDATION_FAILED",
+        message: "A batch needs an item or a default agent"
+      });
+      // An administrator changes the default through the operation that is his.
+      for (const userId of [t.admin.id, t.root.id]) {
+        const refused = await syncAs(t, userId, [], { defaultAgentName: "rel-old" });
+        expect(refused.statusCode).toBe(403);
+        expect(errorSchema.parse(refused.json()).error.details).toEqual({
+          action: "assets.release",
+          reason: "no_grant"
+        });
+      }
+      expect(await defaultAgentOf(t)).toBe("assistant");
     }
-    expect(await defaultAgentOf(t)).toBe("assistant");
+    // Is refused for a model setting the instance cannot run, where an interactive save drops it.
+    {
+      const fast = { modelProviderId: undefined, modelBindingId: "plain", fastMode: true };
+
+      const refused = await syncAsService(t, [putAgent("rel-old", fast, 1)]);
+      expect(refused.statusCode).toBe(422);
+      // The refusal names the setting, in the words of the one check of the set.
+      expect(JSON.stringify(errorSchema.parse(refused.json()).error.details)).toContain(
+        "fast mode"
+      );
+      expect(await t.stored("agent", "rel-old")).toMatchObject({ revision: 1 });
+
+      // The superadmin's save through the same operation is adjusted, as it always was.
+      const saved = await syncAs(t, t.root.id, [putAgent("team-old", fast, 1)]);
+      expect(saved.statusCode, saved.body).toBe(200);
+      await publishAgentDraft({ ...t, admin: t.root }, "team-old", t.team);
+      const config = (await t.stored("agent", "team-old"))?.config;
+      expect(config).toMatchObject({ modelBindingId: "plain" });
+      expect(config).not.toHaveProperty("fastMode");
+    }
   });
 });
 
@@ -342,35 +341,34 @@ describe("the size of a batch", () => {
 
     const overRelease = await syncAsService(t, skills(ASSET_RELEASE_SYNC_MAX_ITEMS + 1));
     expect(overRelease.statusCode).toBe(422);
-  });
+    // Names the put of each of 2,000 refusals without a pass over the batch for each.
+    {
+      const agents = Array.from({ length: ASSET_RELEASE_SYNC_MAX_ITEMS }, (_, index) =>
+        putAgent(`rel-bulk-${index}`, { reasoningEffort: "boundless" })
+      );
 
-  it("names the put of each of 2,000 refusals without a pass over the batch for each", async () => {
-    const t = await setup();
-    const agents = Array.from({ length: ASSET_RELEASE_SYNC_MAX_ITEMS }, (_, index) =>
-      putAgent(`rel-bulk-${index}`, { reasoningEffort: "boundless" })
-    );
+      const timed = async (batch: typeof agents) => {
+        const started = performance.now();
+        const response = await syncAsService(t, batch);
+        return { response, elapsed: performance.now() - started };
+      };
+      // A tenth of the batch first, as the measure of this machine under its load of the moment.
+      const tenth = await timed(agents.slice(0, ASSET_RELEASE_SYNC_MAX_ITEMS / 10));
+      expect(tenth.response.statusCode).toBe(422);
+      const { response: refused, elapsed } = await timed(agents);
 
-    const timed = async (batch: typeof agents) => {
-      const started = performance.now();
-      const response = await syncAsService(t, batch);
-      return { response, elapsed: performance.now() - started };
-    };
-    // A tenth of the batch first, as the measure of this machine under its load of the moment.
-    const tenth = await timed(agents.slice(0, ASSET_RELEASE_SYNC_MAX_ITEMS / 10));
-    expect(tenth.response.statusCode).toBe(422);
-    const { response: refused, elapsed } = await timed(agents);
-
-    expect(refused.statusCode).toBe(422);
-    const { items } = refusedItems(refused);
-    expect(items).toHaveLength(ASSET_RELEASE_SYNC_MAX_ITEMS);
-    // Each refusal is on its own put, in the order of the batch.
-    expect(items.map((item) => item.name)).toEqual(agents.map((_, index) => `rel-bulk-${index}`));
-    expect(new Set(items.map((item) => [item.status, item.code].join()))).toEqual(
-      new Set(["refused,VALIDATION_FAILED"])
-    );
-    expect(items[0]?.message).toContain("reasoningEffort");
-    // Ten times the items in about ten times the time. Generous: a pass over the batch for
-    // each item would be a hundred times.
-    expect(elapsed).toBeLessThan(60 * Math.max(tenth.elapsed, 100));
+      expect(refused.statusCode).toBe(422);
+      const { items } = refusedItems(refused);
+      expect(items).toHaveLength(ASSET_RELEASE_SYNC_MAX_ITEMS);
+      // Each refusal is on its own put, in the order of the batch.
+      expect(items.map((item) => item.name)).toEqual(agents.map((_, index) => `rel-bulk-${index}`));
+      expect(new Set(items.map((item) => [item.status, item.code].join()))).toEqual(
+        new Set(["refused,VALIDATION_FAILED"])
+      );
+      expect(items[0]?.message).toContain("reasoningEffort");
+      // Ten times the items in about ten times the time. Generous: a pass over the batch for
+      // each item would be a hundred times.
+      expect(elapsed).toBeLessThan(60 * Math.max(tenth.elapsed, 100));
+    }
   }, 120_000);
 });

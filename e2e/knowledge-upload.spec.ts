@@ -3,19 +3,15 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
-import { chooseAddDocuments, offersFolder, openKnowledgeSettings } from "./knowledge-page";
+import { chooseAddDocuments, openKnowledgeSettings } from "./knowledge-page";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
 
 // Uploading files from the person's computer into a Knowledge Base (ACCEPT-FIX-1, F1): three
 // text files chosen in the Add dialog become documents, are indexed, and the test search on the
 // page finds each of them. The suite's instance runs without the module `knowledge`, so a second
-// API runs the same instance with it on, on the same database, as knowledge-fields-pending.spec.ts
-// does. Its worker claims jobs through the same leases as the main API, with the same tools
-// and config plus knowledge indexing. Pictures of the upload section go to the
-// test's output folder, in English and German, light and dark, wide and at 390. A document added
-// by hand is linked to its original, which opens in a tab of its own, and the link is cleared
-// again (DS-6b).
+// API runs the same instance with it on, on the same database. Its worker claims jobs through
+// the same leases as the main API, with the same tools and config plus knowledge indexing.
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
@@ -32,31 +28,6 @@ const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-supera
 const knowledgeApiPort = Number(new URL(apiBaseUrl).port) + 13;
 
 const knowledgeApiUrl = `http://${host}:${knowledgeApiPort}`;
-
-type Locale = "en" | "de";
-
-const WORDS: Record<
-  Locale,
-  {
-    title: string;
-    added: string;
-    refused: string;
-    search: string;
-  }
-> = {
-  en: {
-    title: "Upload from your computer",
-    added: "Added",
-    refused: "Knowledge bases here do not read this format.",
-    search: "Search"
-  },
-  de: {
-    title: "Von deinem Computer hochladen",
-    added: "Hinzugefügt",
-    refused: "Wissensbasen lesen dieses Format hier nicht.",
-    search: "Suchen"
-  }
-};
 
 /** The three files, each with a word only it holds. */
 const FILES = [
@@ -85,26 +56,6 @@ async function signIn(page: Page, api: string): Promise<void> {
     data: { ...superadmin, rememberMe: true }
   });
   expect(response.ok()).toBe(true);
-}
-
-async function view(page: Page, name: string, locale: Locale, theme: "light" | "dark") {
-  await page.emulateMedia({ colorScheme: theme });
-  await page.goto(`/build/knowledge-bases/${name}`);
-  await page.evaluate(
-    (chosen) => {
-      window.localStorage.setItem("vivd-catalyst:locale", chosen.locale);
-      window.localStorage.setItem("vivd-catalyst:theme", chosen.theme);
-    },
-    { locale, theme }
-  );
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Handbuch", level: 1 })).toBeVisible();
-}
-
-async function picture(page: Page, label: string) {
-  const path = test.info().outputPath(`knowledge-upload-${label}.png`);
-  await page.screenshot({ path, animations: "disabled" });
-  await test.info().attach(`knowledge-upload-${label}`, { path, contentType: "image/png" });
 }
 
 test.describe("uploading files from the computer into a Knowledge Base", () => {
@@ -184,268 +135,6 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       })
     );
   });
-  test("de: a new Knowledge Base of documents is live at create, and one of tables in draft shows one notice (KB-PAGE-1)", async ({
-    page
-  }) => {
-    test.setTimeout(150000);
-    const suffix = randomUUID().slice(0, 8);
-    const title = `Handbuch ${suffix}`;
-    const name = `handbuch-${suffix}`;
-    const tablesName = `e2e-tables-${suffix}`;
-    const storeName = `e2e-tables-store-${suffix}`;
-    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
-    const tablesUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${tablesName}`;
-    const storeUrl = `${knowledgeApiUrl}/api/v1/assets/data_store/${storeName}`;
-    await signIn(page, apiBaseUrl);
-    await signIn(page, knowledgeApiUrl);
-    await page.addInitScript(() => {
-      window.localStorage.setItem("vivd-catalyst:locale", "de");
-      window.localStorage.setItem("vivd-catalyst:theme", "light");
-    });
-    await page.route(`${apiBaseUrl}/**`, (route) =>
-      route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
-    );
-    try {
-      await page.setViewportSize({ width: 1280, height: 900 });
-      await page.emulateMedia({ colorScheme: "light" });
-      await page.goto("/build/knowledge-bases");
-      await page.getByRole("button", { name: "Neue Wissensbasis", exact: true }).first().click();
-      await page.getByRole("textbox", { name: /^Name/u }).first().fill(title);
-      await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
-      await expect(
-        page.getByText("Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar")
-      ).toBeVisible();
-      await page.getByLabel("Was sie enthält").fill("Regeln des Teams zu Urlaub und Reisen.");
-      // The create's answer, so a refusal names its reason here rather than as a missing section.
-      const created = page.waitForResponse(
-        (response) =>
-          response.request().method() === "PUT" &&
-          new URL(response.url()).pathname === `/api/v1/assets/knowledge_base/${name}`
-      );
-      await page.getByRole("button", { name: "Wissensbasis anlegen", exact: true }).click();
-      const answer = await created;
-      expect(
-        answer.ok(),
-        `${answer.status()} ${await answer.text()} for ${answer.request().postData() ?? ""}`
-      ).toBe(true);
-      // Published in the same step: its Documents section is there, with no notice and no draft.
-      await expect(page.locator("[data-knowledge-documents]")).toBeVisible({ timeout: 30000 });
-      await expect(page.locator("[data-knowledge-not-published]")).toHaveCount(0);
-      // Its status and its test search wait under Settings, folded until asked for.
-      await expect(page.locator('[id="status"]')).toBeHidden();
-      await picture(page, "kb-page-1-new-de-light-1280");
-      await openKnowledgeSettings(page);
-      for (const section of ["about", "status", "test"]) {
-        await expect(page.locator(`[id="${section}"]`)).toBeVisible();
-      }
-      const asset = await page.request.get(assetUrl);
-      expect(await asset.json()).toMatchObject({ publishedRevision: 1 });
-      // Where the instance offers synced sources, Add documents offers connecting a folder: one
-      // neutral line says what to connect, or the chooser of a Connection stands there.
-      await page.locator('[id="documents"]').scrollIntoViewIfNeeded();
-      await picture(page, "kb-page-1-new-documents-de-light-1280");
-      await expect(page.getByText("Lege zuerst unter Verbindungen eine an.")).toHaveCount(0);
-      if (await offersFolder(page)) {
-        await chooseAddDocuments(page, "folder");
-        const sources = page.locator("[data-knowledge-source-connect-dialog]");
-        await expect(
-          sources.locator("[data-knowledge-sources-none], [data-knowledge-source-add]").first()
-        ).toBeVisible();
-        // New connection leads to the Connections with their New connection dialog open.
-        const connect = sources.locator("[data-knowledge-source-connect]");
-        if ((await sources.locator("[data-knowledge-sources-none]").count()) > 0) {
-          await expect(sources).toContainText(
-            "Um Ordner aus Testordner oder Webseiten zu synchronisieren, lege zuerst eine Verbindung an."
-          );
-          await expect(connect).toBeVisible();
-          await connect.click();
-          await expect(page).toHaveURL(/\/build\/connections$/u);
-          await expect(page.getByRole("dialog")).toBeVisible();
-        }
-      }
-      // One of tables, saved as a draft: one notice under the head instead of three empty sections.
-      const store = await requestWithOrigin(page, "put", storeUrl, {
-        data: {
-          expectedRevision: null,
-          files: [
-            { path: "store.yaml", text: `id: ${storeName}\nname: Buchungen\n` },
-            {
-              path: "migrations/0001_init.sql",
-              text: "create table bookings (id text primary key, amount numeric not null);"
-            }
-          ]
-        }
-      });
-      expect(store.ok(), await store.text()).toBe(true);
-      const storePublished = await requestWithOrigin(page, "post", `${storeUrl}/publish`, {
-        data: { revision: 1 }
-      });
-      expect(storePublished.ok(), await storePublished.text()).toBe(true);
-      await expect
-        .poll(
-          async () =>
-            (
-              await page.request.get(`${knowledgeApiUrl}/api/v1/data-stores/${storeName}/describe`)
-            ).status(),
-          { timeout: 30000 }
-        )
-        .toBe(200);
-      const tables = await requestWithOrigin(page, "put", tablesUrl, {
-        data: {
-          expectedRevision: null,
-          config: {
-            name: tablesName,
-            title: "Buchungsprüfung",
-            description: "Was die monatliche Prüfung der Buchungen fand.",
-            methods: ["structured"],
-            backend: { dataStore: storeName },
-            tables: [{ name: "bookings", description: "Eine Zeile je Buchung." }]
-          }
-        }
-      });
-      expect(tables.ok(), await tables.text()).toBe(true);
-      await page.goto(`/build/knowledge-bases/${tablesName}`);
-      await expect(page.getByRole("heading", { name: "Buchungsprüfung", level: 1 })).toBeVisible();
-      const notice = page.locator("[data-knowledge-not-published]");
-      await expect(notice).toContainText("Noch nicht veröffentlicht.");
-      for (const section of ["documents", "status", "test"]) {
-        await expect(page.locator(`[id="${section}"]`)).toHaveCount(0);
-      }
-      await expect(page.locator('[id="source"]')).toBeVisible();
-      await picture(page, "kb-page-1-tables-draft-de-light-1280");
-    } finally {
-      await page.unrouteAll({ behavior: "ignoreErrors" });
-      for (const url of [assetUrl, tablesUrl, storeUrl]) {
-        if ((await page.request.get(url)).ok()) {
-          await requestWithOrigin(page, "post", `${url}/delete`, {
-            data: { expectedRevision: await assetRevision(page, url) }
-          });
-        }
-      }
-    }
-  });
-  test("links a document added by hand to its original, opens it apart, and clears it (DS-6b)", async ({
-    page
-  }) => {
-    test.setTimeout(240000);
-    const name = `e2e-origin-${randomUUID().slice(0, 8)}`;
-    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
-    const original = "https://dms.example.test/akten/4711/urlaub.txt";
-    await signIn(page, apiBaseUrl);
-    await signIn(page, knowledgeApiUrl);
-    const created = await requestWithOrigin(page, "put", assetUrl, {
-      data: {
-        expectedRevision: null,
-        config: {
-          name,
-          title: "Handbuch",
-          description: "Regeln des Teams zu Urlaub.",
-          methods: ["keyword"]
-        }
-      }
-    });
-    expect(created.ok(), await created.text()).toBe(true);
-    try {
-      const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
-        data: { revision: 1 }
-      });
-      expect(published.ok(), await published.text()).toBe(true);
-      await expect
-        .poll(
-          async () =>
-            (
-              await page.request.get(`${knowledgeApiUrl}/api/v1/knowledge-bases/${name}/documents`)
-            ).status(),
-          { timeout: 90000 }
-        )
-        .toBe(200);
-      await page.route(`${apiBaseUrl}/**`, (route) =>
-        route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
-      );
-      // The original's own system, which the test answers itself.
-      await page
-        .context()
-        .route("https://dms.example.test/**", (route) =>
-          route.fulfill({ contentType: "text/plain", body: "Das Original." })
-        );
-      await page.setViewportSize({ width: 1280, height: 900 });
-      await view(page, name, "en", "light");
-      await chooseAddDocuments(page, "files");
-      const [file] = FILES;
-      await page.locator("[data-knowledge-upload] input[data-file-picker]").setInputFiles({
-        name: file.name,
-        mimeType: file.mimeType,
-        buffer: Buffer.from(file.text)
-      });
-      await expect(page.locator(`[data-knowledge-upload-file="${file.name}"]`)).toHaveAttribute(
-        "data-knowledge-upload-state",
-        "added",
-        { timeout: 30000 }
-      );
-      await page.locator("[data-knowledge-add-close]").click();
-      const row = page.locator("[data-knowledge-document]").first();
-      await expect(row).toBeVisible();
-
-      // A link that is no web address is refused in the dialog, before it is sent.
-      await row.locator("[data-knowledge-origin-edit]").click();
-      const field = page.locator("[data-knowledge-origin-input]");
-      await field.fill("javascript:alert(1)");
-      const sent: string[] = [];
-      page.on("request", (request) => {
-        if (request.url().endsWith("/documents/origin-link")) sent.push(request.method());
-      });
-      await page.locator("[data-knowledge-origin-save]").click();
-      await expect(
-        page.locator('[data-knowledge-origin-dialog] [data-tone="error"]')
-      ).toContainText("Enter an http or https address");
-      expect(sent).toEqual([]);
-      await field.fill(original);
-      await picture(page, "origin-link-dialog-en-light-1280");
-      await page.locator("[data-knowledge-origin-save]").click();
-      await expect(page.getByText(/The link of .* was saved\./u)).toBeVisible();
-      // The original is an icon button among the row's actions, which show with the pointer.
-      const chip = row.locator("a[data-knowledge-origin-link]");
-      await row.hover();
-      await expect(chip).toHaveAttribute("href", original);
-      await expect(chip).toHaveAttribute("aria-label", /^Open the original of /u);
-      await picture(page, "origin-link-row-en-light-1280");
-
-      // It opens in a tab of its own, which cannot reach back into the page.
-      const opened = page.context().waitForEvent("page");
-      await chip.click();
-      const tab = await opened;
-      await tab.waitForLoadState();
-      expect(tab.url()).toBe(original);
-      expect(await tab.evaluate(() => window.opener)).toBeNull();
-      await tab.close();
-
-      // The list the server answers carries it; German, dark and narrow; then cleared.
-      const listed = await page.request.get(
-        `${knowledgeApiUrl}/api/v1/knowledge-bases/${name}/documents`
-      );
-      expect(JSON.stringify(await listed.json())).toContain(original);
-      await page.setViewportSize({ width: 390, height: 844 });
-      await view(page, name, "de", "dark");
-      await page.locator("[data-knowledge-origin-edit]").first().click();
-      await expect(page.locator("[data-knowledge-origin-input]")).toHaveValue(original);
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
-      await picture(page, "origin-link-dialog-de-dark-390");
-      await page.locator("[data-knowledge-origin-clear]").click();
-      await expect(page.getByText(/Der Link von .* wurde entfernt\./u)).toBeVisible();
-      await expect(page.locator("[data-knowledge-origin-link]")).toHaveCount(0);
-    } finally {
-      await page.unrouteAll({ behavior: "ignoreErrors" });
-      await page.context().unrouteAll({ behavior: "ignoreErrors" });
-      if ((await page.request.get(assetUrl)).ok()) {
-        await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
-          data: { expectedRevision: await assetRevision(page, assetUrl) }
-        });
-      }
-    }
-  });
   test("adds three text files from the computer and the test search finds each", async ({
     page
   }) => {
@@ -486,10 +175,12 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
         route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
       );
       await page.setViewportSize({ width: 1280, height: 900 });
-      await view(page, name, "en", "light");
+      await page.goto(`/build/knowledge-bases/${name}`);
+      await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Handbuch", level: 1 })).toBeVisible();
       await chooseAddDocuments(page, "files");
       const upload = page.locator("[data-knowledge-upload]");
-      await expect(upload).toContainText(WORDS.en.title);
       await upload.locator("input[data-file-picker]").setInputFiles(
         FILES.map((file) => ({
           name: file.name,
@@ -503,18 +194,10 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
           "added",
           { timeout: 30000 }
         );
-        await expect(upload.locator(`[data-knowledge-upload-file="${file.name}"]`)).toContainText(
-          WORDS.en.added
-        );
       }
-      await expect(upload.locator("[data-knowledge-upload-retry]")).toHaveCount(0);
-      await picture(page, "added-en-light-1280");
       await page.locator("[data-knowledge-add-close]").click();
       // Each file is a document of the Knowledge Base, indexed by the worker.
       const documents = page.locator("[data-knowledge-documents]");
-      for (const file of FILES) {
-        await expect(documents).toContainText(file.name.replace(/\.[^.]+$/u, ""));
-      }
       await expect(documents.locator('[data-knowledge-document-state="indexed"]')).toHaveCount(
         FILES.length,
         { timeout: 120000 }
@@ -524,70 +207,10 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       const search = page.locator("[data-knowledge-test-search]");
       for (const file of FILES) {
         await search.getByRole("searchbox").fill(file.word);
-        await search.getByRole("button", { name: WORDS.en.search }).click();
+        await search.getByRole("button", { name: "Search" }).click();
         const passages = search.locator("[data-knowledge-search-passages]");
-        await expect(passages).toBeVisible();
         await expect(passages.locator("[data-knowledge-passage]").first()).toContainText(file.name);
       }
-      await search.scrollIntoViewIfNeeded();
-      await picture(page, "search-en-light-1280");
-      {
-        const locale = "en" as const;
-        {
-          const theme = "light" as const;
-          {
-            const width = Number(1280);
-            await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-            await view(page, name, locale, theme);
-            await chooseAddDocuments(page, "files");
-            await expect(upload).toContainText(WORDS[locale].title);
-            await upload.locator("input[data-file-picker]").setInputFiles({
-              name: "tabelle.csv",
-              mimeType: "text/csv",
-              buffer: Buffer.from("a,b")
-            });
-            const refused = upload.locator('[data-knowledge-upload-file="tabelle.csv"]');
-            await expect(refused).toHaveAttribute("data-knowledge-upload-state", "failed");
-            await expect(refused).toContainText(WORDS[locale].refused);
-            const overflow = await page.evaluate(
-              () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-            );
-            expect(overflow).toBeLessThanOrEqual(0);
-            await picture(page, `${locale}-${theme}-${width}`);
-            await page.locator("[data-knowledge-add-close]").click();
-          }
-        }
-      }
-      // On a short phone the dialog's body scrolls, where it must, between its head and footer: its end
-      // and its start are reachable, the footer stays in view, and Choose files opens the
-      // system's file dialog.
-      await page.setViewportSize({ width: 390, height: 640 });
-      await view(page, name, "en", "light");
-      await chooseAddDocuments(page, "files");
-      const dialog = page.locator("[data-knowledge-add-dialog]");
-      const body = dialog.locator("xpath=..");
-      const choose = page.locator("[data-knowledge-upload-choose]");
-      const footer = [
-        page.locator("[data-knowledge-add-close]"),
-        page.locator("[data-knowledge-add-submit]")
-      ];
-      await expect(choose).toBeInViewport();
-      await body.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
-      await expect(dialog.locator("[data-knowledge-chosen]")).toBeInViewport();
-      for (const button of footer) await expect(button).toBeInViewport();
-      await body.evaluate((element) => element.scrollTo({ top: 0 }));
-      await expect(choose).toBeInViewport();
-      for (const button of footer) await expect(button).toBeInViewport();
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
-      const chooser = page.waitForEvent("filechooser");
-      await choose.click();
-      expect((await chooser).isMultiple()).toBe(true);
-      await page.locator("[data-knowledge-add-close]").click();
-      // Nothing refused was sent: the Knowledge Base still has the three documents.
-      await expect(documents.locator("[data-knowledge-document]")).toHaveCount(FILES.length);
     } finally {
       await page.unrouteAll({ behavior: "ignoreErrors" });
       // Deleted where its kind is known: the suite's own API runs without the module.

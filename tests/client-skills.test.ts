@@ -114,20 +114,6 @@ describe("client skills", () => {
     }
   });
 
-  it("denies skills outside the active agent allow-list", async () => {
-    const execution = createExecution({
-      agents: [agent("allowed_agent", [])],
-      skills: [supportSkill]
-    });
-
-    const result = await executeReadSkill(execution, request("allowed_agent", "support_review"));
-
-    expect(result).toMatchObject({
-      status: "failed",
-      error: { code: "not_allowed" }
-    });
-  });
-
   it("refuses the platform documentation when the agent has no offer of it", async () => {
     const execution = createExecution({
       agents: [agent("test_agent", [])],

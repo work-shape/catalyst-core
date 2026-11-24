@@ -54,7 +54,7 @@ describe("the Workflows row the platform context names", () => {
       .parse((await t.expectOk(userId, "workflows.list")).json())
       .items.map(({ id }) => id);
 
-  it("names no row to a member who is listed no Workflow, and the row once one is listed", async () => {
+  it("names no row to a member who is listed no Workflow, and the row once one is listed, to read or to start", async () => {
     const t = await ready();
     const revision = await draft(t);
     const notify = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
@@ -70,17 +70,10 @@ describe("the Workflows row the platform context names", () => {
     // Another member, who holds nothing on it, is listed nothing and shown no row.
     expect(await listedTo(t, t.lena.id)).toEqual([]);
     expect(await sectionsOf(t, t.lena.id)).toEqual([]);
-  });
-
-  it("names the row to a member who may only start the published Workflow, as the list does", async () => {
-    const t = await ready();
-    await publish(t, await draft(t));
-    await t.grant(t.kai.id, WORKFLOW_ACTIONS.use, {
-      assetId: await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY)
-    });
-
-    expect(await listedTo(t, t.kai.id)).toEqual([NOTIFY]);
-    expect(await sectionsOf(t, t.kai.id)).toEqual(["workflows"]);
+    // A right only to start the published Workflow names the row, as the list does.
+    await t.grant(t.lena.id, WORKFLOW_ACTIONS.use, { assetId: notify });
+    expect(await listedTo(t, t.lena.id)).toEqual([NOTIFY]);
+    expect(await sectionsOf(t, t.lena.id)).toEqual(["workflows"]);
   });
 
   it("names the empty row to whoever may write a Workflow, on the instance or on one Workflow", async () => {

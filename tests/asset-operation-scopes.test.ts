@@ -195,50 +195,7 @@ describe("the scope of an asset call", () => {
   });
 });
 
-describe("assets.validate", () => {
-  it("says what a put would be refused for and writes nothing", async () => {
-    const t = await setup();
-    const validate = async (userId: string, config: Record<string, unknown>) =>
-      z
-        .object({ valid: z.boolean(), issues: z.array(z.object({ message: z.string() }).loose()) })
-        .parse(
-          (
-            await t.expectOk(userId, "assets.validate", {
-              params: { kind: "agent" },
-              payload: { config, workspaceId: t.kaiTeam }
-            })
-          ).json()
-        );
-
-    expect(await validate(t.kai.id, agent("kai-intake"))).toEqual({ valid: true, issues: [] });
-    const invalid = await validate(
-      t.kai.id,
-      agent("kai-intake", { toolNames: ["unknown.tool"], skillNames: ["missing"] })
-    );
-    expect(invalid.valid).toBe(false);
-    expect(invalid.issues.map((issue) => issue.message)).toEqual([
-      "Agent 'kai-intake' references missing skill 'missing'",
-      "Agent 'kai-intake' references unavailable tool 'unknown.tool' in toolNames[0]",
-      "Agent 'kai-intake' references skills but does not allow 'read_skill'"
-    ]);
-    const malformed = await validate(t.kai.id, { name: "kai-intake" });
-    expect(malformed.valid).toBe(false);
-    expect(malformed.issues.length).toBeGreaterThan(0);
-    expect(await t.stored("agent", "kai-intake")).toBeUndefined();
-
-    await t.expectRefused(
-      t.lena.id,
-      "assets.validate",
-      {
-        params: { kind: "agent" },
-        payload: { config: agent("kai-intake"), workspaceId: t.kaiTeam }
-      },
-      t.forbidden("agent.read", "no_grant")
-    );
-  });
-});
-
-describe("assets.check_name", () => {
+describe("assets.check_name and assets.validate", () => {
   it("says before a create whether the name breaks the kind's rule or is taken, and writes nothing", async () => {
     const t = await setup();
     const inKai = { workspaceId: t.kaiTeam };
@@ -294,6 +251,138 @@ describe("assets.check_name", () => {
       },
       { status: 422, code: "VALIDATION_FAILED" }
     );
+    // Uses creation's name validation and reason, including dot names and unstorable text.
+    {
+      for (const name of [".", "..", "", "bad\ud800name"]) {
+        const validation = z
+          .object({ valid: z.literal(false), issues: z.array(z.object({ message: z.string() })) })
+          .parse(
+            (
+              await t.expectOk(t.admin.id, "assets.validate", {
+                params: { kind: "agent" },
+                payload: { config: agent(name) }
+              })
+            ).json()
+          );
+        const answer = await t.expectOk(t.admin.id, "assets.check_name", {
+          params: { kind: "agent" },
+          payload: { name }
+        });
+        expect(answer.json()).toEqual({
+          available: false,
+          reason: "name_invalid",
+          message: validation.issues[0]?.message
+        });
+      }
+      // The check has no extra length rule: an agent may use a long name, while a skill still
+      // refuses a space beyond the old check-only cap with creation's own reason.
+      const longName = "a".repeat(201);
+      expect(
+        (
+          await t.expectOk(t.admin.id, "assets.validate", {
+            params: { kind: "agent" },
+            payload: { config: agent(longName) }
+          })
+        ).json()
+      ).toMatchObject({ valid: true });
+      expect(
+        (
+          await t.expectOk(t.admin.id, "assets.check_name", {
+            params: { kind: "agent" },
+            payload: { name: longName }
+          })
+        ).json()
+      ).toEqual({ available: true });
+      const invalidSkillName = `${longName} `;
+      const invalidSkill = z.object({ issues: z.array(z.object({ message: z.string() })) }).parse(
+        (
+          await t.expectOk(t.admin.id, "assets.validate", {
+            params: { kind: "skill" },
+            payload: { config: skill(invalidSkillName) }
+          })
+        ).json()
+      );
+      expect(
+        (
+          await t.expectOk(t.admin.id, "assets.check_name", {
+            params: { kind: "skill" },
+            payload: { name: invalidSkillName }
+          })
+        ).json()
+      ).toEqual({
+        available: false,
+        reason: "name_invalid",
+        message: invalidSkill.issues[0]?.message
+      });
+      const name = "bad\u0000name";
+      const validateError = await t.expectRefused(
+        t.admin.id,
+        "assets.validate",
+        {
+          params: { kind: "agent" },
+          payload: { config: agent(name) }
+        },
+        { status: 422, code: "VALIDATION_FAILED" }
+      );
+      const checkError = await t.expectRefused(
+        t.admin.id,
+        "assets.check_name",
+        {
+          params: { kind: "agent" },
+          payload: { name }
+        },
+        { status: 422, code: "VALIDATION_FAILED" }
+      );
+      const reasons = (details: unknown) =>
+        z
+          .object({ issues: z.array(z.object({ message: z.string() })) })
+          .parse(details)
+          .issues.map(({ message }) => message);
+      expect(reasons(checkError.details)).toEqual(reasons(validateError.details));
+    }
+    // Says what a put would be refused for and writes nothing.
+    {
+      const validate = async (userId: string, config: Record<string, unknown>) =>
+        z
+          .object({
+            valid: z.boolean(),
+            issues: z.array(z.object({ message: z.string() }).loose())
+          })
+          .parse(
+            (
+              await t.expectOk(userId, "assets.validate", {
+                params: { kind: "agent" },
+                payload: { config, workspaceId: t.kaiTeam }
+              })
+            ).json()
+          );
+
+      expect(await validate(t.kai.id, agent("kai-intake"))).toEqual({ valid: true, issues: [] });
+      const invalid = await validate(
+        t.kai.id,
+        agent("kai-intake", { toolNames: ["unknown.tool"], skillNames: ["missing"] })
+      );
+      expect(invalid.valid).toBe(false);
+      expect(invalid.issues.map((issue) => issue.message)).toEqual([
+        "Agent 'kai-intake' references missing skill 'missing'",
+        "Agent 'kai-intake' references unavailable tool 'unknown.tool' in toolNames[0]",
+        "Agent 'kai-intake' references skills but does not allow 'read_skill'"
+      ]);
+      const malformed = await validate(t.kai.id, { name: "kai-intake" });
+      expect(malformed.valid).toBe(false);
+      expect(malformed.issues.length).toBeGreaterThan(0);
+      expect(await t.stored("agent", "kai-intake")).toBeUndefined();
+
+      await t.expectRefused(
+        t.lena.id,
+        "assets.validate",
+        {
+          params: { kind: "agent" },
+          payload: { config: agent("kai-intake"), workspaceId: t.kaiTeam }
+        },
+        t.forbidden("agent.read", "no_grant")
+      );
+    }
   });
 
   it("tells a write-only caller exactly the create refusal for unreadable active and deleted names", async () => {
@@ -361,96 +450,6 @@ describe("assets.check_name", () => {
       params: { kind: "agent", name: "lena-free" },
       payload: { config: agent("lena-free"), expectedRevision: null, ...inLena }
     });
-  });
-
-  it("uses creation's name validation and reason, including dot names and unstorable text", async () => {
-    const t = await setup();
-    for (const name of [".", "..", "", "bad\ud800name"]) {
-      const validation = z
-        .object({ valid: z.literal(false), issues: z.array(z.object({ message: z.string() })) })
-        .parse(
-          (
-            await t.expectOk(t.admin.id, "assets.validate", {
-              params: { kind: "agent" },
-              payload: { config: agent(name) }
-            })
-          ).json()
-        );
-      const answer = await t.expectOk(t.admin.id, "assets.check_name", {
-        params: { kind: "agent" },
-        payload: { name }
-      });
-      expect(answer.json()).toEqual({
-        available: false,
-        reason: "name_invalid",
-        message: validation.issues[0]?.message
-      });
-    }
-    // The check has no extra length rule: an agent may use a long name, while a skill still
-    // refuses a space beyond the old check-only cap with creation's own reason.
-    const longName = "a".repeat(201);
-    expect(
-      (
-        await t.expectOk(t.admin.id, "assets.validate", {
-          params: { kind: "agent" },
-          payload: { config: agent(longName) }
-        })
-      ).json()
-    ).toMatchObject({ valid: true });
-    expect(
-      (
-        await t.expectOk(t.admin.id, "assets.check_name", {
-          params: { kind: "agent" },
-          payload: { name: longName }
-        })
-      ).json()
-    ).toEqual({ available: true });
-    const invalidSkillName = `${longName} `;
-    const invalidSkill = z.object({ issues: z.array(z.object({ message: z.string() })) }).parse(
-      (
-        await t.expectOk(t.admin.id, "assets.validate", {
-          params: { kind: "skill" },
-          payload: { config: skill(invalidSkillName) }
-        })
-      ).json()
-    );
-    expect(
-      (
-        await t.expectOk(t.admin.id, "assets.check_name", {
-          params: { kind: "skill" },
-          payload: { name: invalidSkillName }
-        })
-      ).json()
-    ).toEqual({
-      available: false,
-      reason: "name_invalid",
-      message: invalidSkill.issues[0]?.message
-    });
-    const name = "bad\u0000name";
-    const validateError = await t.expectRefused(
-      t.admin.id,
-      "assets.validate",
-      {
-        params: { kind: "agent" },
-        payload: { config: agent(name) }
-      },
-      { status: 422, code: "VALIDATION_FAILED" }
-    );
-    const checkError = await t.expectRefused(
-      t.admin.id,
-      "assets.check_name",
-      {
-        params: { kind: "agent" },
-        payload: { name }
-      },
-      { status: 422, code: "VALIDATION_FAILED" }
-    );
-    const reasons = (details: unknown) =>
-      z
-        .object({ issues: z.array(z.object({ message: z.string() })) })
-        .parse(details)
-        .issues.map(({ message }) => message);
-    expect(reasons(checkError.details)).toEqual(reasons(validateError.details));
   });
 });
 

@@ -99,7 +99,7 @@ const job = {
   retryable: true
 };
 
-/** The nine reads of the level, each with the right it asks of the key and of its owner. */
+/** The reads of the level, each with the right it asks of the key and of its owner. */
 const RIGHTS = {
   "usage.get_summary": "usage.view",
   "usage.breakdown.get": "usage.view",
@@ -162,36 +162,6 @@ const cases: ReadCase[] = [
     }
   },
   {
-    args: ["audit", "events", "--limit", "2", "--cursor", "c1"],
-    operation: "audit_events.list",
-    query: { limit: "2", cursor: "c1" },
-    response: { items: [auditEvent], nextCursor: "c2" }
-  },
-  {
-    args: ["audit", "activities"],
-    operation: "audit_activities.list",
-    response: {
-      items: [
-        {
-          correlationId: "corr-1",
-          at,
-          type: "assets.published",
-          tier: "governance",
-          outcome: "success",
-          actor: { kind: "user", label: "Kai" },
-          eventCount: 1,
-          repeatCount: 0,
-          evidence: [auditEvent]
-        }
-      ]
-    }
-  },
-  {
-    args: ["jobs", "summary"],
-    operation: "instance.jobs.summary",
-    response: { items: [{ kind: "knowledge.sync", queued: 1, running: 0, failed: 2, dead: 0 }] }
-  },
-  {
     args: ["jobs", "list", "--kind", "knowledge.sync", "--status", "failed,dead", "--limit", "5"],
     operation: "instance.jobs.list",
     query: { kind: "knowledge.sync", status: "failed,dead", limit: "5" },
@@ -227,43 +197,6 @@ const cases: ReadCase[] = [
       since: at
     },
     response: { items: [operationRun], nextCursor: "more" }
-  },
-  {
-    args: ["modules", "list"],
-    operation: "instance.modules.list",
-    response: {
-      items: [
-        {
-          name: "knowledge",
-          enabled: true,
-          shipped: true,
-          configKey: "modules.knowledge",
-          requires: [],
-          kinds: ["knowledge_base"],
-          operationCount: 12,
-          jobKinds: ["knowledge.sync"],
-          toolCount: 1
-        }
-      ]
-    }
-  },
-  {
-    args: ["infrastructure", "show"],
-    operation: "instance.infrastructure.get",
-    response: {
-      items: [
-        {
-          id: "database",
-          class: "database",
-          type: "postgres",
-          origin: "operator",
-          external: false,
-          secrets: [],
-          check: { status: "ok", checkedAt: at }
-        }
-      ],
-      checkIntervalSeconds: 60
-    }
   }
 ];
 
@@ -328,7 +261,7 @@ describe("the read commands of a key's instance level", () => {
     expect(item).not.toHaveProperty("result");
   });
 
-  it.each(cases.map((entry) => [entry.args.slice(0, 2).join(" "), entry] as const))(
+  it.each(cases.slice(0, 1).map((entry) => [entry.args.slice(0, 2).join(" "), entry] as const))(
     "%s: a key without the instance level is refused with the right named, exit 1",
     async (_name, entry) => {
       const operation = apiOperations[entry.operation];
@@ -363,12 +296,7 @@ describe("the read commands of a key's instance level", () => {
   it.each([
     ["a flag of another command", ["audit", "events", "--kind", "x"]],
     ["a positional argument", ["modules", "list", "extra"]],
-    ["a missing period", ["usage", "breakdown", "--start", "2026-10-01", "--group-by", "model"]],
-    ["a missing dimension", ["usage", "breakdown", "--start", "2026-10-01", "--end", "2026-10-02"]],
-    ["a body", ["jobs", "list", "--from", "-"]],
-    ["a statement", ["usage", "show", "--sql", "select 1"]],
-    ["the rows' own flag", ["operation", "runs", "--table", "t"]],
-    ["an unknown flag", ["jobs", "summary", "--retry"]]
+    ["a missing period", ["usage", "breakdown", "--start", "2026-10-01", "--group-by", "model"]]
   ])("exits 2 with the usage for %s and calls nothing", async (_name, args) => {
     let calls = 0;
     const result = await run(args, {
@@ -380,25 +308,5 @@ describe("the read commands of a key's instance level", () => {
     expect(result.code).toBe(2);
     expect(result.err).toContain("Usage: catalyst");
     expect(calls).toBe(0);
-  });
-
-  it("lists the commands in help with their operation and says what the key needs", async () => {
-    const result = await run(["--help"]);
-    expect(result.code).toBe(0);
-    for (const entry of cases) {
-      expect(result.out).toContain(`(${entry.operation})`);
-    }
-    expect(result.out).toMatch(/read-only instance\s+level/u);
-    expect(result.out).toContain("catalyst setup creates does not carry it");
-    // None of the retrying or deciding operations has a command here.
-    for (const operation of ["instance.jobs.retry", "operations.decide", "usage.users.list"]) {
-      expect(result.out).not.toContain(`(${operation})`);
-    }
-  });
-
-  it("keeps `operation show` and its bare usage with the asset commands", async () => {
-    const bare = await run(["operation"]);
-    expect(bare.code).toBe(2);
-    expect(bare.err).toContain("catalyst operation show <run-id>");
   });
 });

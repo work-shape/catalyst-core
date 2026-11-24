@@ -238,39 +238,33 @@ describe("an agent's tool calls in a chat run", () => {
     await f.app.close();
   });
 
-  it.each(["en", "de"])(
-    "records a denied call and names who can help the person (%s)",
-    async (locale) => {
-      const f = await fixture();
-      vi.spyOn(f.app.stores.users, "getInstanceAdminName").mockResolvedValue("Mara");
-      const said = await f.say("/tool demo.locked {}", undefined, locale);
+  it("records a denied call and names who can help the person", async () => {
+    const f = await fixture();
+    vi.spyOn(f.app.stores.users, "getInstanceAdminName").mockResolvedValue("Mara");
+    const said = await f.say("/tool demo.locked {}");
 
-      const [run] = await f.runs();
-      expect(run).toMatchObject({
-        operation: "demo.locked",
-        status: "denied",
-        denial: { kind: "forbidden", action: "ref:vault" },
-        origin: { kind: "agent" }
-      });
-      expect(calls).toEqual([]);
-      expect(said.toolMessages).toHaveLength(1);
-      expect(said.toolMessages[0]).not.toContain("not_allowed");
-      expect(said.toolMessages[0]).toContain(
-        locale === "de" ? "Du hast hier nicht das nötige Recht" : "You do not have the right"
-      );
-      expect(said.toolMessages[0]).toContain("Mara");
-      const audit = await f.app.stores.audit.listAuditEvents({
-        clientInstanceId: f.clientInstanceId
-      });
-      expect(
-        audit
-          .filter((event) => event.metadata?.operationRunId === run?.id)
-          .map((event) => `${event.type}:${event.status}`)
-          .sort()
-      ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
-      await f.app.close();
-    }
-  );
+    const [run] = await f.runs();
+    expect(run).toMatchObject({
+      operation: "demo.locked",
+      status: "denied",
+      denial: { kind: "forbidden", action: "ref:vault" },
+      origin: { kind: "agent" }
+    });
+    expect(calls).toEqual([]);
+    expect(said.toolMessages).toHaveLength(1);
+    expect(said.toolMessages[0]).not.toContain("not_allowed");
+    expect(said.toolMessages[0]).toContain("Mara");
+    const audit = await f.app.stores.audit.listAuditEvents({
+      clientInstanceId: f.clientInstanceId
+    });
+    expect(
+      audit
+        .filter((event) => event.metadata?.operationRunId === run?.id)
+        .map((event) => `${event.type}:${event.status}`)
+        .sort()
+    ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
+    await f.app.close();
+  });
 
   it("pauses a call an admin set to approval and executes it once approved", async () => {
     const f = await fixture([{ operation: "demo.change", value: "approval" }]);

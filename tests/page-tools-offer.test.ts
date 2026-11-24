@@ -78,7 +78,7 @@ describe("the tools a conversation is offered to build an App", () => {
     expect(names).not.toContain("workspace.exec");
   });
 
-  it("leave out a file tool the release turned off, and offer nothing where no folder can be written", async () => {
+  it("leave out a file tool the release turned off, and offer nothing where no folder can be written or the module is off", async () => {
     expect(await offered({ apps: true, release: ["workspace.write_file"] })).toEqual(
       expect.arrayContaining(["workspace.open", "app.save", "workspace.write_file"])
     );
@@ -88,15 +88,14 @@ describe("the tools a conversation is offered to build an App", () => {
 
     const withoutWrite = await offered({ apps: true, release: [] });
     expect(withoutWrite.filter((name) => PAGE_TOOLS.includes(name))).toEqual([]);
-  });
 
-  it("are none with the apps module off", async () => {
-    const names = await offered({
+    // None with the apps module off.
+    const moduleOff = await offered({
       apps: false,
       release: ["workspace.open", "workspace.write_file", "workspace.edit_file"]
     });
 
-    expect(names.filter((name) => PAGE_TOOLS.includes(name))).toEqual([]);
+    expect(moduleOff.filter((name) => PAGE_TOOLS.includes(name))).toEqual([]);
   });
 
   // Check 53 and 54 of apps-and-pages: only the new names are offered. Fails without OPEN-1:

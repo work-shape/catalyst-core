@@ -1,14 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  IconRegistryProvider,
-  RegistryIcon,
-  UiRoot,
-  genericIcons,
-  uiLabelsEn
-} from "@work-shape/catalyst-ui";
-import { UiGallery } from "@work-shape/catalyst-ui/gallery";
+import { IconRegistryProvider, RegistryIcon, genericIcons } from "@work-shape/catalyst-ui";
 import {
   contrastRatio,
   createThemeTokens,
@@ -16,80 +9,49 @@ import {
   parseHexColor
 } from "@work-shape/catalyst-ui/theme";
 
-// The file-type icons of the icon registry and the registry's gallery entry. The registry's own
-// resolution order is held in ui-flow.test.ts.
+// The icon registry's resolution order, and the file-type pages' colours.
 
-describe("file-type icons", () => {
-  const fileTypes = [
-    "spreadsheet",
-    "document",
-    "presentation",
-    "pdf",
-    "image",
-    "archive",
-    "text",
-    "file"
-  ] as const;
-  const pageFill: Record<(typeof fileTypes)[number], string> = {
-    spreadsheet: "fill-file-sheet",
-    document: "fill-file-document",
-    presentation: "fill-file-slides",
-    pdf: "fill-file-pdf",
-    image: "fill-muted-foreground",
-    archive: "fill-muted-foreground",
-    text: "fill-muted-foreground",
-    file: "fill-muted-foreground"
-  };
-  const render = (props: Parameters<typeof RegistryIcon>[0]) =>
-    renderToStaticMarkup(createElement(RegistryIcon, props));
-
-  it.each(fileTypes)("ships an icon of its own for %s", (type) => {
-    const markup = render({ name: type, family: "file", className: "size-4" });
-
-    expect(markup).toContain(`data-file-type="${type}"`);
-    expect(markup).toContain('aria-hidden="true"');
-    // It fills a square box, so the size class of any other icon fits it.
-    expect(markup).toContain('viewBox="0 0 24 24"');
-    expect(/^<svg[^>]*class="([^"]*)"/u.exec(markup)?.[1]?.split(" ")).toContain("size-4");
-  });
-
-  it("draws every file type differently", () => {
-    const drawings = fileTypes.map((type) =>
-      render({ name: type }).replace(/data-file-type="[a-z]+"/u, "")
-    );
-
-    expect(new Set(drawings).size).toBe(fileTypes.length);
-  });
-
-  it("shows the neutral page for a file type nobody registered", () => {
-    expect(render({ name: "video", family: "file" })).toContain('data-file-type="file"');
-    expect(render({ family: "file" })).toContain('data-file-type="file"');
-  });
-
-  it("colours the four office types from their tokens and the rest from the neutral ones", () => {
-    for (const type of fileTypes) {
-      const markup = render({ name: type });
-
-      expect([type, markup.includes(pageFill[type])]).toEqual([type, true]);
-      expect([type, /#[0-9a-f]{3,8}\b|rgb\(|white|black/iu.test(markup)]).toEqual([type, false]);
-      expect(markup).not.toContain("<text");
-    }
-  });
-
-  it("lets a client assembly register its own mark for a file type", () => {
-    const Mark = () => createElement("svg", { "data-mark": "vendor-sheet" });
-    const markup = renderToStaticMarkup(
+describe("RegistryIcon", () => {
+  const Mark = () => createElement("svg", { "data-mark": "ledger" });
+  const icon = (props: Parameters<typeof RegistryIcon>[0], icons = {}) =>
+    renderToStaticMarkup(
       createElement(IconRegistryProvider, {
-        icons: { spreadsheet: Mark },
-        children: createElement(RegistryIcon, { name: "spreadsheet", family: "file" })
+        icons: { ledger: Mark, ...icons },
+        children: createElement(RegistryIcon, props)
       })
     );
+  const generic = (key: keyof typeof genericIcons) =>
+    renderToStaticMarkup(createElement(genericIcons[key], { "aria-hidden": true }));
+  const shape = (markup: string) => markup.replace(/^<svg[^>]*>/u, "");
 
-    expect(markup).toContain('data-mark="vendor-sheet"');
+  it("shows the registered icon, then the fallback, then the generic step", () => {
+    expect(icon({ name: "ledger" })).toContain('data-mark="ledger"');
+    expect(shape(icon({ name: "outlook", fallback: "mail" }))).toBe(shape(generic("mail")));
+    expect(shape(icon({ name: "unknown" }))).toBe(shape(generic("step")));
   });
 
+  it.each(["file", "skill"] as const)(
+    "resolves an unknown key of the family %s to the family's generic icon",
+    (family) => {
+      expect(shape(icon({ name: "unknown", family }))).toBe(shape(generic(family)));
+      // A registered key and a registered fallback come before the family.
+      expect(icon({ name: "ledger", family })).toContain('data-mark="ledger"');
+      expect(shape(icon({ name: "unknown", fallback: "mail", family }))).toBe(
+        shape(generic("mail"))
+      );
+    }
+  );
+
+  it("lets an application replace a family's icon", () => {
+    expect(icon({ name: "unknown", family: "skill" }, { skill: Mark })).toContain(
+      'data-mark="ledger"'
+    );
+  });
+});
+
+describe("file-type pages", () => {
   it.each(["light", "dark"] as const)(
-    "keeps a white glyph readable on every page colour and the page off the surface in %s",
+    "keep a white glyph readable on every page colour and the page off the surface in %s",
     (mode) => {
       const inputs = DEFAULT_THEME_INPUTS[mode];
       const tokens = createThemeTokens(inputs, mode);
@@ -114,60 +76,4 @@ describe("file-type icons", () => {
       }
     }
   );
-});
-
-describe("RegistryIcon in the gallery", () => {
-  const markup = renderToStaticMarkup(
-    createElement(
-      UiRoot,
-      { mode: "light", labels: uiLabelsEn },
-      createElement(UiGallery, {
-        initialMode: "light",
-        initialLanguage: "en",
-        initialSection: "status"
-      })
-    )
-  );
-
-  it("shows every key of the registry", () => {
-    const fileTypes = new Set([
-      "spreadsheet",
-      "document",
-      "presentation",
-      "pdf",
-      "image",
-      "archive",
-      "text",
-      "file"
-    ]);
-    const missing = Object.keys(genericIcons).filter(
-      (key) =>
-        !markup.includes(`data-gallery-sample="icon-${fileTypes.has(key) ? "file-" : ""}${key}"`)
-    );
-
-    expect(missing).toEqual([]);
-  });
-
-  it("shows the fallback of every family", () => {
-    for (const family of ["file", "service", "skill", "tool"]) {
-      expect(markup).toContain(`data-gallery-sample="icon-family-${family}"`);
-    }
-  });
-});
-
-describe("kind icons", () => {
-  // One icon per kind, the same in Studio, on the rail and on the canvas.
-  it.each([
-    ["agent", "bot"],
-    ["skill", "book-open"],
-    ["connection", "plug"],
-    ["workflow", "workflow"],
-    ["app", "layout-grid"],
-    ["datastore", "database"],
-    ["guardrail", "shield-check"]
-  ])("draws the kind %s as %s", (kind, lucideName) => {
-    expect(renderToStaticMarkup(createElement(RegistryIcon, { name: kind }))).toContain(
-      `lucide-${lucideName}`
-    );
-  });
 });

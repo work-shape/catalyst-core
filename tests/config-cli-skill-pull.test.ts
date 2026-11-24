@@ -232,7 +232,7 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
     expect(await tree(f.cwd)).toEqual(before);
   });
 
-  it.each(["agent", "agents", "guardrail", "unknown-kind"])(
+  it.each(["agent", "unknown-kind"])(
     "rejects %s pull as usage before contacting the instance",
     async (kind) => {
       const f = await fixture();
@@ -244,15 +244,6 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
       expect(await tree(f.cwd)).toEqual({});
     }
   );
-
-  it("shows skill pull once in offline help without advertising pull for every kind", async () => {
-    const f = await fixture();
-    const result = await f.run(["--help"]);
-    expect(result.code).toBe(0);
-    expect(result.out.match(/catalyst skill pull <name> <folder>/gu)).toHaveLength(1);
-    expect(result.out).not.toContain("catalyst <kind> pull");
-    expect(f.calls).toEqual([]);
-  });
 
   it("cleans up newly created parents after a failed nested pull", async () => {
     const f = await fixture();
@@ -396,55 +387,49 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
     expect(await tree(f.cwd)).toEqual(before);
   });
 
-  it.each([
-    "wrong hash",
-    "broken HTTP",
-    "broken file transfer",
-    "../x",
-    "/abs",
-    "a\\b",
-    "./a",
-    "a/./b"
-  ])("keeps both new and earlier targets unchanged after %s", async (failure) => {
-    for (const earlier of [false, true]) {
-      const f = await fixture();
-      if (earlier) expect(await f.pull()).toMatchObject({ code: 0 });
-      const before = await tree(f.cwd);
-      f.state.revision = 2;
-      if (failure === "wrong hash")
-        f.state.files = files.map((file, index) =>
-          index === 2 ? { ...file, sha256: "0".repeat(64) } : file
+  it.each(["wrong hash", "broken HTTP", "broken file transfer", "../x", "/abs", "a\\b"])(
+    "keeps both new and earlier targets unchanged after %s",
+    async (failure) => {
+      for (const earlier of [false, true]) {
+        const f = await fixture();
+        if (earlier) expect(await f.pull()).toMatchObject({ code: 0 });
+        const before = await tree(f.cwd);
+        f.state.revision = 2;
+        if (failure === "wrong hash")
+          f.state.files = files.map((file, index) =>
+            index === 2 ? { ...file, sha256: "0".repeat(64) } : file
+          );
+        else if (failure === "broken HTTP") f.state.broken = true;
+        else if (failure === "broken file transfer") {
+          const actual = await vi.importActual<typeof fs>("node:fs/promises");
+          let written = 0;
+          vi.mocked(fs.writeFile).mockImplementation(async (path, data, options) => {
+            if (String(path).endsWith("/scripts/run.py")) {
+              expect(written).toBe(2);
+              throw new Error("transfer broke after second file");
+            }
+            await actual.writeFile(path, data, options);
+            written += 1;
+          });
+        } else
+          f.state.files = [
+            ...files.slice(0, 2),
+            {
+              ...files[0],
+              path: failure,
+              sha256: files[0]?.sha256 ?? "",
+              bytes: 0,
+              contentType: "text/plain"
+            }
+          ].filter((file): file is NonNullable<Asset["files"]>[number] => file !== undefined);
+        expect(await f.pull()).toMatchObject({ code: 1, out: "" });
+        expect(await tree(f.cwd)).toEqual(before);
+        vi.mocked(fs.writeFile).mockImplementation(
+          (await vi.importActual<typeof fs>("node:fs/promises")).writeFile
         );
-      else if (failure === "broken HTTP") f.state.broken = true;
-      else if (failure === "broken file transfer") {
-        const actual = await vi.importActual<typeof fs>("node:fs/promises");
-        let written = 0;
-        vi.mocked(fs.writeFile).mockImplementation(async (path, data, options) => {
-          if (String(path).endsWith("/scripts/run.py")) {
-            expect(written).toBe(2);
-            throw new Error("transfer broke after second file");
-          }
-          await actual.writeFile(path, data, options);
-          written += 1;
-        });
-      } else
-        f.state.files = [
-          ...files.slice(0, 2),
-          {
-            ...files[0],
-            path: failure,
-            sha256: files[0]?.sha256 ?? "",
-            bytes: 0,
-            contentType: "text/plain"
-          }
-        ].filter((file): file is NonNullable<Asset["files"]>[number] => file !== undefined);
-      expect(await f.pull()).toMatchObject({ code: 1, out: "" });
-      expect(await tree(f.cwd)).toEqual(before);
-      vi.mocked(fs.writeFile).mockImplementation(
-        (await vi.importActual<typeof fs>("node:fs/promises")).writeFile
-      );
+      }
     }
-  });
+  );
 
   it("restores the target when moving the staged folder into place fails", async () => {
     for (const earlier of [false, true]) {

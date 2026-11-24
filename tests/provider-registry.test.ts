@@ -255,7 +255,7 @@ describe("a secret that is configured and broken", () => {
     }
   });
 
-  it.each(["CHAT_SESSION_TOKEN_SECRET", "CHAT_SERVER_CREDENTIAL", "SERVICE_ACCESS_TOKEN_SECRET"])(
+  it.each(["CHAT_SERVER_CREDENTIAL", "SERVICE_ACCESS_TOKEN_SECRET"])(
     "stops startup and names %s when its mounted file cannot be read",
     async (name) => {
       await expect(

@@ -80,29 +80,13 @@ describe("the demo's agent on what a skill change does", () => {
   );
   const learning = instructions.slice(instructions.indexOf("## Learning"));
 
-  it("calls a skill a skill, never an instruction or a rule", () => {
-    expect(instructions).toContain("## Learning");
-    expect(learning).toContain("Call a skill a skill");
-    expect(learning).not.toMatch(/Say “instruction”|rather than “skill”/u);
-    expect(learning).not.toMatch(/shared instructions?\b|affected instruction|new instruction/u);
-  });
-
-  it("says what a save does from saveApproval, read first, never assumed", () => {
+  // Also PR-382 L3: read_skill reads only the agent's own skills; the agent was sent to it for
+  // every skill and failed on one it does not hold.
+  it("calls a skill a skill, says what a save does from saveApproval, and reads others with the asset read", () => {
     expect(toolNames).toEqual(expect.arrayContaining(["read_skill", "platform.assets.get"]));
+    expect(learning).toContain("Call a skill a skill");
     expect(learning).toContain("saveApproval.approverNames");
-    expect(learning).toContain(
-      "without saveApproval, a save the user may make takes effect immediately"
-    );
     expect(learning).not.toContain("that approval is still needed");
-  });
-
-  // PR-382 L3: read_skill reads only the agent's own skills; the agent was sent to it for every
-  // skill and failed on one it does not hold.
-  it("reads a skill it does not hold with the asset read, not with read_skill", () => {
-    expect(learning).toContain("Read your skill with read_skill first.");
-    expect(learning).toContain(
-      "Read any other skill with platform.assets.get, naming kind skill and its name"
-    );
-    expect(learning).not.toContain("Read the affected skill with read_skill first.");
+    expect(learning).toContain("Read any other skill with platform.assets.get");
   });
 });

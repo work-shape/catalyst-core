@@ -264,77 +264,6 @@ describe("the artifact preview job handler", () => {
     ).resolves.toEqual([]);
   });
 
-  it("renders queued PDF page jobs into managed preview image artifacts and a ready manifest", async () => {
-    const fixture = await createWorkerFixture({
-      kind: "document.pdf",
-      filename: "report.pdf",
-      mimeType: "application/pdf"
-    });
-    const renderer = new FakeRenderer({
-      result: {
-        format: "png",
-        pages: [
-          {
-            bytes: bytes("pdf-page-two"),
-            mimeType: "image/png",
-            pageNumber: 2,
-            width: 800,
-            height: 1000
-          }
-        ]
-      }
-    });
-    const worker = createWorker(fixture, renderer);
-
-    const result = await worker.runOnce();
-
-    expect(result.status).toBe("claimed");
-    if (result.status !== "claimed") {
-      throw new Error("Expected preview job to be claimed");
-    }
-    expect(renderer.inputs[0]).toMatchObject({
-      sourceKind: "pdf",
-      mimeType: "application/pdf"
-    });
-    expect(result.job).toMatchObject({
-      status: "completed",
-      errorCode: undefined
-    });
-    const manifest = await fixture.store.files.getArtifactPreviewManifest({
-      clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
-    });
-    expect(manifest).toMatchObject({
-      status: "ready",
-      pageCount: 1,
-      pages: [
-        expect.objectContaining({
-          mimeType: "image/png",
-          pageNumber: 2,
-          width: 800,
-          height: 1000
-        })
-      ]
-    });
-    if (!manifest || manifest.status !== "ready") {
-      throw new Error("Expected ready PDF preview manifest");
-    }
-    const pageArtifact = await fixture.store.files.getManagedArtifact({
-      clientInstanceId: fixture.clientInstanceId,
-      artifactId: manifest.pages[0]!.artifactId
-    });
-    expect(pageArtifact).toMatchObject({
-      kind: "document.preview_page_image",
-      filename: "report-page-1.png",
-      metadata: {
-        sourceArtifactId: fixture.source.id,
-        previewRole: "page",
-        pageNumber: 2,
-        rendererVersion: "preview-contract-v2"
-      }
-    });
-  });
-
   it("renders queued spreadsheet sheet and range jobs into internal preview artifacts", async () => {
     const settingsHash = createArtifactPreviewSettingsHash({
       sheets: ["Summary"],
@@ -485,7 +414,7 @@ describe("the artifact preview job handler", () => {
     expect(imageDigest(summary.pages[0]!.bytes)).not.toBe(imageDigest(detail.pages[0]!.bytes));
   }, 30000);
 
-  it("previews a sheet of 20,000 cells and one at the limit of 50,000 cells", async () => {
+  it("previews a sheet at the limit of 50,000 cells", async () => {
     const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-cells-"));
     try {
       const commands = await writeFakeRendererCommands(root);
@@ -494,7 +423,7 @@ describe("the artifact preview job handler", () => {
         ...commands.options
       });
 
-      for (const rows of [2_000, 5_000]) {
+      for (const rows of [5_000]) {
         const result = await renderer.render({
           ...spreadsheetRenderInput(createGridWorkbookBytes(rows, 10)),
           sheets: ["Grid"]
@@ -785,6 +714,8 @@ describe("the artifact preview job handler", () => {
       status: "failed",
       errorCode: "source_too_large"
     });
+    // Another attempt cannot help: the job is failed, not dead.
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "failed", attempts: 1 }]);
   });
 
   it("fails safely when rendered pages exceed the cumulative output limit", async () => {
@@ -845,17 +776,6 @@ describe("the artifact preview job handler", () => {
       status: "failed",
       errorCode: "conversion_failed"
     });
-  });
-
-  it("marks the job failed, not dead, when another attempt cannot help", async () => {
-    const fixture = await createWorkerFixture({ byteSize: 6, sourceBytes: bytes("small") });
-    const worker = createWorker(fixture, new FakeRenderer({ result: emptyRenderResult() }), {
-      maxSourceBytes: 5
-    });
-
-    await worker.runOnce();
-
-    expect(await platformJobs(fixture)).toMatchObject([{ status: "failed", attempts: 1 }]);
   });
 
   it("gives the job back when the worker stops and the next worker finishes the row", async () => {

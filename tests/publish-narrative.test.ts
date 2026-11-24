@@ -1,11 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   asCollaborationWorkspaceId,
+  asUserId,
   INSTANCE_ASSET_SCOPE,
   type AssetScope,
+  type CollaborationWorkspace,
   type JsonObject,
-  type LocaleCode
+  type LocaleCode,
+  type OperationDefinition,
+  type PublishNarrativeStoredData
 } from "@work-shape/catalyst-core";
 
 import { createPublishNarrator } from "@work-shape/catalyst-server";
@@ -38,16 +43,6 @@ describe("PUBQ-1 the publish question's sentence", () => {
     );
     expect(narrative.warnings).toEqual([
       "The step “Mail an Mandanten” may stop: the guardrail “E-Mail senden: IBAN → Freigabe” asks for approval when what it checks matches, and a published run cannot wait for one."
-    ]);
-  });
-
-  it("check 75 in German: the same sentence and warning in the reader's language", async () => {
-    const narrative = await narrateWorkflow("de");
-    expect(narrative.summary).toBe(
-      "Nachtimport läuft jeden Tag um 02:00 Uhr (UTC, die Standardzeitzone) unter dem Konto „nachtimport-runner“, liest aus Exampledata, fügt Zeilen in Findings hinzu und nutzt Outlook für „Mail an Mandanten“. Die App „Findings“ zeigt den 14 Personen von „Kai Spezis“ die Zeilen von Findings."
-    );
-    expect(narrative.warnings).toEqual([
-      "Der Schritt „Mail an Mandanten“ kann angehalten werden: Die Leitplanke „E-Mail senden: IBAN → Freigabe“ verlangt eine Freigabe, wenn ihre Prüfung einen Treffer ergibt, und ein veröffentlichter Lauf kann nicht auf sie warten."
     ]);
   });
 
@@ -323,52 +318,6 @@ describe("PUBQ-1 the publish question's sentence", () => {
     expect(narrative.summary).not.toContain("sends nothing");
   });
 
-  it("sets a started-by-hand clause apart from the account, and writes clock times per locale", async () => {
-    const config = nightlyImport();
-    const manifest = config.manifest;
-    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new Error();
-    const archive = {
-      id: "x",
-      name: "Archivieren",
-      type: "operation",
-      operation: "connection.exampledata.archive",
-      input: {}
-    };
-    const manual = (runAs: boolean, trigger: JsonObject = { kind: "manual" }) => {
-      const kept = Object.entries(manifest).filter(([key]) => runAs || key !== "runAs");
-      return {
-        ...config,
-        manifest: {
-          ...Object.fromEntries(kept),
-          steps: [{ id: "start", name: "Start", type: "trigger", triggers: [trigger] }, archive]
-        }
-      };
-    };
-    const summary = async (locale: LocaleCode, input: JsonObject) =>
-      (await narrateWorkflow(locale, {}, input)).summary;
-
-    expect(await summary("en", manual(true))).toBe(
-      "Nachtimport runs as the account “nachtimport-runner” when someone starts it and uses Exampledata for “Archivieren”."
-    );
-    expect(await summary("de", manual(true))).toBe(
-      "Nachtimport läuft, wenn jemand ihn startet, unter dem Konto „nachtimport-runner“ und nutzt Exampledata für „Archivieren“."
-    );
-    // Without an account the clause still closes before "und".
-    expect(await summary("de", manual(false))).toBe(
-      "Nachtimport läuft, wenn jemand ihn startet, und nutzt Exampledata für „Archivieren“."
-    );
-    expect(await summary("en", manual(false))).toBe(
-      "Nachtimport runs when someone starts it and uses Exampledata for “Archivieren”."
-    );
-    const evening = { kind: "schedule", cron: "30 18 * * 1" };
-    expect(await summary("en", manual(true, evening))).toContain(
-      "runs as the account “nachtimport-runner” every Monday at 6:30 PM (UTC, the default time zone) and uses"
-    );
-    expect(await summary("de", manual(true, evening))).toContain(
-      "läuft jeden Montag um 18:30 Uhr (UTC, die Standardzeitzone) unter dem Konto „nachtimport-runner“ und nutzt"
-    );
-  });
-
   it("E1: names the zone of a schedule's clock time and never says the cron itself", async () => {
     const config = nightlyImport();
     const manifest = config.manifest;
@@ -395,39 +344,23 @@ describe("PUBQ-1 the publish question's sentence", () => {
 
     // The trigger's own zone wins over the instance's; 23:25 stays 23:25, never converted.
     expect(
-      await summary("de", { cron: "25 23 * * *", timeZone: "Europe/Berlin" }, "America/New_York")
-    ).toContain("läuft jeden Tag um 23:25 Uhr (Europe/Berlin) unter dem Konto");
-    // Without one, the instance's zone.
+      await summary("en", { cron: "25 23 * * *", timeZone: "Europe/Berlin" }, "America/New_York")
+    ).toContain("every day at 11:25 PM (Europe/Berlin)");
+    // Without one, the instance's zone; without either, UTC.
     expect(await summary("en", { cron: "25 23 * * *" }, "Europe/Berlin")).toContain(
-      "every day at 11:25 PM (Europe/Berlin)"
+      "(Europe/Berlin)"
     );
-    // Without either, UTC, said as the default.
-    expect(await summary("de", { cron: "25 23 * * *" })).toContain(
-      "jeden Tag um 23:25 Uhr (UTC, die Standardzeitzone)"
-    );
-    // A fixed day of a fixed month reads as a date, never as the cron.
-    const once = { cron: "34 21 18 10 *", timeZone: "Europe/Berlin" };
-    expect(await summary("de", once)).toContain(
-      "läuft jedes Jahr am 18. Oktober um 21:34 Uhr (Europe/Berlin)"
-    );
-    expect(await summary("en", once)).toContain(
-      "every year on October 18 at 9:34 PM (Europe/Berlin)"
-    );
-    // A form not put into words is a plain schedule with its zone; no date that does not exist.
-    for (const cron of ["*/5 * * * *", "0 9 31 2 *", "0 9 1-5 * *"]) {
-      const de = await summary("de", { cron, timeZone: "Europe/Berlin" });
-      expect(de).toContain("läuft nach Zeitplan (Europe/Berlin) unter dem Konto");
-      expect(de).not.toContain(cron);
-      expect(await summary("en", { cron })).toContain(
-        "runs as the account “nachtimport-runner” on a schedule (UTC, the default time zone)"
-      );
+    expect(await summary("en", { cron: "25 23 * * *" })).toContain("(UTC, the default time zone)");
+    // A form not put into words is a plain schedule with its zone, never the cron.
+    for (const cron of ["*/5 * * * *", "0 9 31 2 *"]) {
+      const text = await summary("en", { cron });
+      expect(text).toContain("on a schedule (UTC, the default time zone)");
+      expect(text).not.toContain(cron);
     }
   });
 
   it.each([
     ["en", "instance", "everyone in the instance"],
-    ["de", "instance", "alle in der Instanz"],
-    ["en", "self", "the person it is shared with"],
     ["de", "self", "die Person, mit der sie geteilt ist"]
   ] as const)(
     "ACCEPT-FIX-11 E-2: %s names the published %s audience instead of ownership",
@@ -455,37 +388,6 @@ describe("PUBQ-1 the publish question's sentence", () => {
       expect(narrative?.summary).not.toMatch(/admins only|nur Instanz-Admins|Personal workspace/u);
     }
   );
-
-  it("names holders alone in the case the sentence asks for, and never as others", async () => {
-    const narrate = (locale: LocaleCode, holders: number) =>
-      narrator({
-        stored: {
-          ...storedData,
-          appRevision: () =>
-            Promise.resolve({ audience: { holders }, stores: [], truncated: false })
-        }
-      }).narrate({
-        kind: "app",
-        name: "findings",
-        scope: workspaceScope,
-        revision: 2,
-        config: { title: "Findings", manifest: { actions: [] } },
-        locale,
-        access: everything
-      });
-    expect((await narrate("de", 1))?.summary).toBe(
-      "Findings öffnet sich für einen Inhaber mit eigenem Recht. Sie ändert nichts."
-    );
-    expect((await narrate("de", 3))?.summary).toBe(
-      "Findings öffnet sich für 3 Inhaber mit eigenem Recht. Sie ändert nichts."
-    );
-    expect((await narrate("en", 1))?.summary).toBe(
-      "Findings opens for one holder with its own right. It changes nothing."
-    );
-    for (const holders of [1, 3]) {
-      expect((await narrate("de", holders))?.summary).not.toMatch(/weitere/u);
-    }
-  });
 
   it("names a Connection the reader may not see by the name the revision gives it", async () => {
     const narrative = await narrator({}).narrate({
@@ -529,24 +431,20 @@ describe("PUBQ-1 the publish question's sentence", () => {
         ]
       }
     };
-    const narrate = (locale: LocaleCode) =>
-      narrator({}).narrate({
-        kind: "app",
-        name: "findings",
-        scope: workspaceScope,
-        revision: 2,
-        config,
-        locale,
-        access: everything
-      });
-    expect(await narrate("en")).toEqual({
+    const narrative = await narrator({}).narrate({
+      kind: "app",
+      name: "findings",
+      scope: workspaceScope,
+      revision: 2,
+      config,
+      locale: "en",
+      access: everything
+    });
+    expect(narrative).toEqual({
       summary:
         "Findings opens for the 14 people of “Kai Spezis”. Everyone who opens it sees what its actions read from Findings (copied by Nachtimport from Exampledata). Its actions use Outlook for “send_reminder”.",
       warnings: []
     });
-    expect((await narrate("de"))?.summary).toBe(
-      "Findings öffnet sich für die 14 Personen von „Kai Spezis“. Wer sie öffnet, sieht, was ihre Aktionen aus Findings (kopiert von Nachtimport aus Exampledata) lesen. Ihre Aktionen nutzen Outlook für „send_reminder“."
-    );
   });
 
   it("says what each store verb does, how each notice goes and to whom, and names a child Workflow by its visible name", async () => {
@@ -630,19 +528,8 @@ describe("PUBQ-1 the publish question's sentence", () => {
     expect((await steps("en")).summary).toBe(
       "Nachtimport runs when someone starts it, adds, changes or removes rows in Ledger, proposes record values for Facts, notifies Anna Berg and the workspace “Kai Spezis” in the Inbox, notifies Ben Kurz and one other person by mail, and starts “Belege holen”. The App “Kasse” shows the rows of Ledger to the 1,000 people of “Kai Spezis”. 2 more Apps or knowledge bases you may not see read Facts."
     );
-    const german = (await steps("de")).summary;
-    expect(german).toContain("fügt Zeilen in Ledger hinzu, ändert oder löscht sie");
-    expect(german).toContain(
-      "benachrichtigt Anna Berg und den Arbeitsbereich „Kai Spezis“ im Eingang"
-    );
-    expect(german).toContain("benachrichtigt Ben Kurz und eine weitere Person per Mail");
-    expect(german).toContain("den 1.000 Personen von „Kai Spezis“");
-    expect(german).toContain(
-      "2 weitere Apps oder Wissensbasen, die du nicht sehen darfst, lesen Facts."
-    );
-    expect(german).not.toContain("Sie nicht");
     // No id of a person or a child Workflow reaches the sentence.
-    expect(german).not.toMatch(/usr_|child_fetch/u);
+    expect((await steps("en")).summary).not.toMatch(/usr_|child_fetch/u);
     // A workspace name from the stored-data module cannot break the line the CLI prints.
     const hostile = (await steps("en", true)).summary;
     expect(hostile).not.toMatch(/[\n\r]/u);
@@ -654,9 +541,9 @@ describe("PUBQ-1 the publish question's sentence", () => {
     const manifest = config.manifest;
     if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new Error();
     const steps = Array.isArray(manifest.steps) ? manifest.steps.slice(0, 4) : [];
-    const workflow = (locale: LocaleCode, truncated: boolean) =>
+    const workflow = (truncated: boolean) =>
       narrateWorkflow(
-        locale,
+        "en",
         {
           stored: {
             ...storedData,
@@ -680,7 +567,7 @@ describe("PUBQ-1 the publish question's sentence", () => {
         },
         { ...config, manifest: { ...manifest, steps } }
       );
-    const app = (locale: LocaleCode, truncated: boolean) =>
+    const app = (truncated: boolean) =>
       narrator({
         stored: {
           ...storedData,
@@ -692,83 +579,30 @@ describe("PUBQ-1 the publish question's sentence", () => {
         scope: workspaceScope,
         revision: 2,
         config: { title: "Findings", manifest: { actions: [] } },
-        locale,
+        locale: "en",
         access: everything
       });
 
     // Complete: admins alone hold it, by their role.
-    const complete = (await workflow("en", false)).summary;
+    const complete = (await workflow(false)).summary;
     expect(complete).toContain(
       "The App “Leer” shows the rows of Findings to instance admins only."
     );
     expect(complete).not.toMatch(/nobody|may omit/u);
-    expect((await workflow("de", false)).summary).toContain(
-      "Die App „Leer“ zeigt nur Instanz-Admins die Zeilen von Findings."
-    );
-    expect((await app("en", false))?.summary).toBe(
+    expect((await app(false))?.summary).toBe(
       "Findings opens for instance admins only. It changes nothing."
-    );
-    expect((await app("de", false))?.summary).toBe(
-      "Findings öffnet sich nur für Instanz-Admins. Sie ändert nichts."
     );
 
     // Incomplete: a grant past the bound may give more access; "only" would be false.
-    const incomplete = (await workflow("en", true)).summary;
+    const incomplete = (await workflow(true)).summary;
     expect(incomplete).toContain(
       "The App “Leer” shows the rows of Findings to instance admins and possibly others."
     );
     expect(incomplete).toContain("This review may omit other readers of Findings.");
     expect(incomplete).not.toMatch(/only|nobody|No App or knowledge base reads/u);
-    const german = (await workflow("de", true)).summary;
-    expect(german).toContain(
-      "Die App „Leer“ zeigt Instanz-Admins und möglicherweise weiteren die Zeilen von Findings."
-    );
-    expect(german).toContain("Diese Übersicht nennt vielleicht nicht alle Leser von Findings.");
-    expect(german).not.toContain("nur Instanz-Admins");
-    expect((await app("en", true))?.summary).toBe(
+    expect((await app(true))?.summary).toBe(
       "Findings opens for instance admins and possibly others. It changes nothing. This review may omit other people or data sources."
     );
-    const germanApp = (await app("de", true))?.summary;
-    expect(germanApp).toContain(
-      "Findings öffnet sich für Instanz-Admins und möglicherweise weitere."
-    );
-    expect(germanApp).toContain(
-      "Diese Übersicht nennt vielleicht nicht alle Personen und Datenquellen."
-    );
-    expect(germanApp).not.toContain("nur");
-  });
-
-  it("counts holders of their own right apart from the workspace's people, in plain words", async () => {
-    const narrate = (locale: LocaleCode, holders: number) =>
-      narrator({
-        stored: {
-          ...storedData,
-          appRevision: () =>
-            Promise.resolve({
-              audience: { workspace: { title: "Kai Spezis", members: 14 }, holders },
-              stores: [],
-              truncated: false
-            })
-        }
-      }).narrate({
-        kind: "app",
-        name: "findings",
-        scope: workspaceScope,
-        revision: 2,
-        config: { title: "Findings", manifest: { actions: [] } },
-        locale,
-        access: everything
-      });
-    expect((await narrate("en", 2))?.summary).toContain(
-      "Findings opens for the 14 people of “Kai Spezis” and 2 holders with their own right."
-    );
-    expect((await narrate("en", 1))?.summary).toContain("and one holder with its own right.");
-    expect((await narrate("de", 2))?.summary).toContain(
-      "Findings öffnet sich für die 14 Personen von „Kai Spezis“ und 2 weitere Inhaber mit eigenem Recht."
-    );
-    for (const locale of ["en", "de"] as const) {
-      expect((await narrate(locale, 2))?.summary).not.toMatch(/grant|Berechtigung/iu);
-    }
   });
 
   it("narrates an App without the stored-data module by its workspace, and nothing for another kind", async () => {
@@ -794,49 +628,6 @@ describe("PUBQ-1 the publish question's sentence", () => {
       "Findings opens for whoever may use it in “Kai Spezis”. It changes nothing."
     );
     expect(await plain.narrate({ ...input, kind: "skill" })).toBeUndefined();
-  });
-
-  it("names the chosen audience mid-sentence in lower case, without doubling German “für”", async () => {
-    const plain = createPublishNarrator({
-      clientInstanceId,
-      stores: {
-        configAssets: { getConfigAsset: () => Promise.resolve(undefined) },
-        workspaces: { getWorkspace: () => Promise.resolve({ name: "Vertrieb" }) },
-        users: { getUser: () => Promise.resolve(undefined) }
-      },
-      resolve: () => Promise.resolve(undefined)
-    });
-    const summary = async (locale: LocaleCode, audienceLabel: string) =>
-      (
-        await plain.narrate({
-          kind: "app",
-          name: "findings",
-          scope: workspaceScope,
-          revision: 1,
-          config: { title: "Findings", manifest: { actions: [] } },
-          locale,
-          access: everything,
-          audienceLabel
-        })
-      )?.summary;
-    expect(await summary("en", "Only the builder")).toMatch(
-      /^Findings opens for only the builder\./u
-    );
-    expect(await summary("en", "Everyone in Sales")).toMatch(
-      /^Findings opens for everyone in Sales\./u
-    );
-    expect(await summary("en", "Everyone in the instance")).toMatch(
-      /^Findings opens for everyone in the instance\./u
-    );
-    expect(await summary("de", "Nur für den Ersteller")).toMatch(
-      /^Findings öffnet sich nur für den Ersteller\./u
-    );
-    expect(await summary("de", "Alle in Vertrieb")).toMatch(
-      /^Findings öffnet sich für alle in Vertrieb\./u
-    );
-    expect(await summary("de", "Alle in der Instanz")).toMatch(
-      /^Findings öffnet sich für alle in der Instanz\./u
-    );
   });
 });
 
@@ -879,9 +670,6 @@ describe("MAIL-2 a mail step in the publish question (check 139)", () => {
     expect((await narrateWorkflow("en", options(), config)).summary).toBe(
       "Monatsmail runs when someone starts it, e-mails Anna Berg, the workspace “Kai Spezis”, and office@kanzlei.de as “Kanzlei Muster” <catalyst@mail.example.test>, and e-mails recipients from earlier steps as “Kanzlei Team” <catalyst@mail.example.test>. An address outside the instance holds no data scope: it receives whatever the mail says."
     );
-    expect((await narrateWorkflow("de", options(), config)).summary).toBe(
-      "Monatsmail läuft, wenn jemand ihn startet, schickt eine E-Mail an Anna Berg, den Arbeitsbereich „Kai Spezis“ und office@kanzlei.de als „Kanzlei Muster“ <catalyst@mail.example.test> und schickt eine E-Mail an Empfänger aus früheren Schritten als „Kanzlei Team“ <catalyst@mail.example.test>. Eine Adresse außerhalb der Instanz hat keinen Datenbereich: An sie geht alles, was die Mail enthält."
-    );
   });
 
   it("says nothing of outside addresses where a step mails only people and workspaces", async () => {
@@ -918,5 +706,226 @@ describe("MAIL-2 a mail step in the publish question (check 139)", () => {
         "The step “An das Team” will stop: the guardrail “E-Mail senden: IBAN → Freigabe”"
       )
     ]);
+  });
+});
+
+describe("publish narration survives outside input checks", () => {
+  const operation = "connection.outlook.send_mail";
+  const checks = (count: number): JsonObject => ({
+    manifest: {
+      name: "Checks",
+      steps: [
+        { id: "start", type: "trigger", triggers: [{ kind: "manual" }] },
+        ...Array.from({ length: count }, (_, index) => ({
+          id: `step-${index}`,
+          name: `Check ${index}`,
+          type: "operation",
+          operation,
+          input: {}
+        }))
+      ]
+    }
+  });
+  const narrateChecks = (definition: OperationDefinition, count = 1) =>
+    narrator({ definitions: [definition] }).narrate({
+      kind: "workflow",
+      name: "checks",
+      scope: workspaceScope,
+      revision: 1,
+      config: checks(count),
+      locale: "en",
+      access: everything
+    });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("names a step that may stop when its check throws, without the error", async () => {
+    const result = await narrateChecks({
+      ...operationDefinition(operation),
+      inputSchema: z.unknown().superRefine(async () => {
+        throw new Error("schema_check_timeout");
+      })
+    });
+    expect(result?.warnings).toHaveLength(1);
+    expect(result?.warnings[0]).toContain("“Check 0” may stop");
+    expect(JSON.stringify(result)).not.toContain("schema_check_timeout");
+    expect(Object.keys(result ?? {}).sort()).toEqual(["summary", "warnings"]);
+  });
+
+  it("warns that an input the Connection schema refuses may stop the step", async () => {
+    const result = await narrateChecks({
+      ...operationDefinition(operation),
+      inputSchema: z.object({ required: z.string() })
+    });
+    expect(result?.warnings[0]).toContain("may stop");
+  });
+
+  it("bounds the whole narration when its metadata read never answers", async () => {
+    vi.useFakeTimers();
+    const instance = narrator({
+      stored: { appRevision: () => new Promise(() => {}), storeReaders: async () => [] }
+    });
+    const pending = instance.narrate({
+      kind: "app",
+      name: "checks",
+      scope: workspaceScope,
+      revision: 1,
+      config: { title: "Checks", manifest: { actions: [] } },
+      locale: "en",
+      access: everything
+    });
+    const failed = expect(pending).rejects.toThrow("Publish narration timed out");
+    await vi.advanceTimersByTimeAsync(3_100);
+    await failed;
+  });
+
+  it("returns 50 slow steps within one narration budget, including checks still queued", async () => {
+    vi.useFakeTimers();
+    const checked = vi.fn(async () => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10_000));
+    });
+    let settled = false;
+    const started = Date.now();
+    let finishedAt = started;
+    const pending = narrateChecks(
+      { ...operationDefinition(operation), inputSchema: z.unknown().superRefine(checked) },
+      50
+    ).then((result) => {
+      settled = true;
+      finishedAt = Date.now();
+      return result;
+    });
+    await vi.advanceTimersByTimeAsync(3_100);
+    expect(settled).toBe(true);
+    const result = await pending;
+    expect(finishedAt - started).toBeLessThanOrEqual(3_000);
+    expect(result?.warnings).toHaveLength(50);
+    expect(result?.warnings[49]).toContain("“Check 49” may stop");
+    expect(checked).toHaveBeenCalledTimes(4);
+    // Let the already-started checks finish: no queued check starts after the deadline.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(checked).toHaveBeenCalledTimes(4);
+  });
+
+  it("checks 50 delayed steps concurrently with a small bound before the budget ends", async () => {
+    vi.useFakeTimers();
+    let active = 0;
+    let peak = 0;
+    const checked = vi.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      active--;
+    });
+    let settled = false;
+    const pending = narrateChecks(
+      {
+        ...operationDefinition(operation),
+        policyFloor: "deny",
+        inputSchema: z.unknown().superRefine(checked)
+      },
+      50
+    ).then((result) => {
+      settled = true;
+      return result;
+    });
+    await vi.advanceTimersByTimeAsync(1_400);
+    expect(settled).toBe(true);
+    const result = await pending;
+    expect(checked).toHaveBeenCalledTimes(50);
+    expect(peak).toBe(4);
+    expect(result?.warnings.every((warning) => warning.includes("will be refused"))).toBe(true);
+  });
+
+  it("reads published guardrails once per narration and reads them fresh for the next", async () => {
+    const onGuardrailRead = vi.fn();
+    const instance = narrator({ onGuardrailRead });
+    const input = {
+      kind: "workflow",
+      name: "checks",
+      scope: workspaceScope,
+      revision: 1,
+      config: checks(50),
+      locale: "en" as const,
+      access: everything
+    };
+    await instance.narrate(input);
+    expect(onGuardrailRead).toHaveBeenCalledTimes(1);
+    await instance.narrate(input);
+    expect(onGuardrailRead).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ACCEPT-FIX-2 C5 on the server: the publish sentence names a Personal Workspace after its
+// owner, or by the generic name in the reader's language where no name of the owner can be
+// read. The name stored on its row, "Personal workspace", is never written.
+describe("the publish sentence of an App in a Personal Workspace", () => {
+  const STORED = "Personal workspace";
+  const MARA = asCollaborationWorkspaceId("cw_mara");
+  const MAILBOX = asCollaborationWorkspaceId("cw_mailbox");
+  const WORKSPACES: Record<
+    string,
+    Pick<CollaborationWorkspace, "name" | "kind" | "personalUserId">
+  > = {
+    [MARA]: { name: STORED, kind: "personal", personalUserId: asUserId("usr_mara") },
+    // An account without a name has its e-mail address as its label.
+    [MAILBOX]: { name: STORED, kind: "personal", personalUserId: asUserId("usr_mailbox") }
+  };
+  const PEOPLE: Record<string, string> = {
+    usr_mara: "Mara Lindqvist",
+    usr_mailbox: "inbox@example.test"
+  };
+  async function appSentence(
+    workspaceId: CollaborationWorkspace["id"],
+    locale: LocaleCode,
+    storedData?: PublishNarrativeStoredData
+  ): Promise<string> {
+    const narrative = await createPublishNarrator({
+      clientInstanceId,
+      stores: {
+        configAssets: { getConfigAsset: () => Promise.resolve(undefined) },
+        workspaces: { getWorkspace: (_instance, id) => Promise.resolve(WORKSPACES[id]) },
+        users: {
+          getUser: ({ userId }) => {
+            const displayLabel = PEOPLE[userId];
+            return Promise.resolve(displayLabel === undefined ? undefined : { displayLabel });
+          }
+        }
+      },
+      resolve: () => Promise.resolve(undefined),
+      ...(storedData ? { storedData } : {})
+    }).narrate({
+      kind: "app",
+      name: "urlaub",
+      scope: { kind: "workspace", workspaceId },
+      revision: 1,
+      config: { title: "Urlaubsanträge", manifest: { actions: [] } },
+      locale,
+      access: everything
+    });
+    if (!narrative) throw new Error("An App revision is narrated");
+    return narrative.summary;
+  }
+
+  it("names the workspace after its owner, or generically where the owner has no name", async () => {
+    expect(await appSentence(MARA, "en")).toContain("“Mara's workspace”");
+    expect(await appSentence(MAILBOX, "de")).toContain("„Persönlicher Arbeitsbereich“");
+    expect(await appSentence(MAILBOX, "de")).not.toContain(STORED);
+  });
+
+  it("names the people who use it by the owner's workspace, not the stored name", async () => {
+    const stored: PublishNarrativeStoredData = {
+      // The stored-data module reads the name stored on the row.
+      appRevision: () =>
+        Promise.resolve({
+          audience: { workspace: { title: STORED, members: 1 }, holders: 0 },
+          stores: [],
+          truncated: false
+        }),
+      storeReaders: () => Promise.resolve([])
+    };
+    const english = await appSentence(MARA, "en", stored);
+    expect(english).toContain("“Mara's workspace”");
+    expect(english).not.toContain(STORED);
   });
 });

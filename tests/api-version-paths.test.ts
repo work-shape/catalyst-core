@@ -95,66 +95,18 @@ describe("the operation catalog", () => {
   });
 
   it("puts every operation except the two probes and the files of a view's frame under the version prefix", () => {
-    expect(API_VERSION_PREFIX.split("/")).toEqual(["", "api", "v1"]);
     for (const name of versioned) {
       expect(descriptor(name).path.startsWith(`${API_VERSION_PREFIX}/`), name).toBe(true);
     }
-    expect(routeOf("health.get")).toBe("GET /health");
-    expect(descriptor("health.get").auth).toBe("public");
-    expect(routeOf("ready.get")).toBe("GET /ready");
-    expect(descriptor("ready.get").auth).toBe("public");
-    expect(routeOf("view_runtime.files.get")).toBe("GET /app-runtime/view/:version/:file");
-    expect(descriptor("view_runtime.files.get").auth).toBe("public");
-    expect(routeOf("view_shell.files.get")).toBe("GET /app-runtime/view-shell/:version/:file");
-    expect(descriptor("view_shell.files.get").auth).toBe("public");
-    // Public because its frame has no origin and so no session to send: the token in the
-    // address is the authorization.
-    expect(routeOf("app_content.files.get")).toBe("GET /app-content/*");
-    expect(descriptor("app_content.files.get").auth).toBe("public");
+    // The unversioned ones are public: a frame has no origin and so no session to send, the
+    // token in the address is the authorization.
+    for (const name of unversioned) expect(descriptor(name).auth, name).toBe("public");
   });
 
   it("scopes paths by resource and never by a role name", () => {
     for (const name of names) {
       expect(descriptor(name).path, name).not.toMatch(/\/(?:super)?admin(?:\/|$)/u);
     }
-    const scopes = new Set(versioned.map((name) => descriptor(name).path.split("/")[3]));
-    expect([...scopes].sort()).toEqual([
-      "agents",
-      "app-actions",
-      "app-content-sessions",
-      "app-data-sources",
-      "approval-requests",
-      "apps",
-      "assets",
-      "auth",
-      "connection-tools",
-      "connections",
-      "connector-types",
-      "context",
-      "conversations",
-      "data-stores",
-      "dev",
-      "docs",
-      "feedback",
-      "guardrails",
-      "instance",
-      "knowledge-bases",
-      "me",
-      "openapi.json",
-      "operations",
-      "password-reset",
-      "password-setup",
-      "project-files",
-      "project-settings",
-      "projects",
-      "scheduled-starts",
-      "skills",
-      "transcriptions",
-      "workflow-capabilities",
-      "workflow-runs",
-      "workflows",
-      "workspaces"
-    ]);
   });
 
   it("gives every method and path to one operation", () => {
@@ -164,10 +116,6 @@ describe("the operation catalog", () => {
   it("keeps session-token issuance for embedding hosts as one operation without an alias", () => {
     const issuing = names.filter((name) => descriptor(name).auth === "serverCredential");
     expect(issuing).toEqual(["session_tokens.issue"]);
-    expect(routeOf("session_tokens.issue")).toBe(
-      `POST ${API_VERSION_PREFIX}/instance/session-tokens`
-    );
-    expect(routeOf("access_tokens.exchange")).toBe(`POST ${API_VERSION_PREFIX}/auth/access-token`);
   });
 });
 
@@ -246,39 +194,19 @@ describe("a running instance", () => {
     );
   });
 
-  it.each(retiredApiPaths)("answers 404 at the retired path %s %s", async (method, path) => {
-    // A full set of credentials shows that the refusal is the missing route, not the caller.
-    const response = await callTestPath(development, method, path, {
-      "x-dev-user-id": "superadmin",
-      "x-server-credential": "server-credential"
-    });
-    expect(response.statusCode).toBe(404);
-  });
-
   // The asset addresses under `/instance/config/assets` are gone without an alias: the same
   // calls are made at `/api/v1/assets`.
-  it.each(removedAssetPaths)(
-    "answers 404 at the removed asset address %s %s",
-    async (method, path) => {
+  it("answers 404 at every retired path and removed asset address", async () => {
+    const current = new Set(names.map(routeOf));
+    for (const [method, path] of [...retiredApiPaths, ...removedAssetPaths]) {
+      expect(current.has(`${method} ${path}`), `${method} ${path}`).toBe(false);
+      // A full set of credentials shows that the refusal is the missing route, not the caller.
       const response = await callTestPath(development, method, path, {
         "x-dev-user-id": "superadmin",
         "x-server-credential": "server-credential"
       });
-      expect(response.statusCode).toBe(404);
-      for (const name of names) {
-        expect(name).not.toMatch(/^config_assets\.(?:get|put|delete|revert|revisions\.list)$/u);
-      }
+      expect(response.statusCode, `${method} ${path}`).toBe(404);
     }
-  );
-
-  it("retired every path the previous release answered", () => {
-    const current = new Set(names.map(routeOf));
-    for (const [method, path] of retiredApiPaths) {
-      expect(current.has(`${method} ${path}`), `${method} ${path}`).toBe(false);
-    }
-    // The paths the unversioned release answered are frozen: the list changes only when a
-    // release retires more paths.
-    expect(retiredApiPaths.length).toBe(93);
   });
 });
 

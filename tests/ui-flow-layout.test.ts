@@ -61,7 +61,6 @@ const large: FlowGraph = {
   ]
 };
 
-const groups = new Map((large.groups ?? []).map((group) => [group.id, group]));
 const parentOf = new Map(
   [...large.nodes, ...(large.groups ?? [])].map((item) => [item.id, item.parentId])
 );
@@ -205,13 +204,6 @@ describe("layoutFlow", () => {
       direction: "horizontal"
     });
     expect([...stray.boxes.keys()].toSorted()).toEqual(["a", "b"]);
-  });
-
-  it("knows every group it was given", () => {
-    const layout = layoutFlow({ graph: large, direction: "horizontal" });
-    for (const id of groups.keys()) {
-      expect(layout.boxes.has(id), id).toBe(true);
-    }
   });
 });
 

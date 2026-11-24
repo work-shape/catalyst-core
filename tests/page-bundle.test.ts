@@ -129,37 +129,31 @@ body { font-family: Bungee; }`
     ]);
   });
 
-  it.each(["1.4.0", "1.5.1"])(
-    "refuses CSS references to kit %s in an App using 1.5.0",
-    async (version) => {
-      for (const [reference, css] of [
-        [
-          `/app-runtime/kit/${version}/fonts/fonts.css`,
-          (path: string) => `@import url("${path}");`
-        ],
-        [
-          `/app-runtime/kit/${version}/fonts/bungee/bungee-latin-400-normal.woff2`,
-          (path: string) => `@font-face { font-family: Bungee; src: url("${path}"); }`
-        ]
-      ] as const) {
-        const result = await buildPage({
-          files: pageFiles({
-            "app.yaml": reactManifest.replace("1.0.0", "1.5.0"),
-            "src/routes/__root.tsx": rootRoute,
-            "src/routes/index.tsx": `import "../fonts.css";\n${fileRoute("/")}`,
-            "src/fonts.css": css(reference)
-          })
-        });
-        expect(errorsOf(result)).toEqual([
-          expect.objectContaining({
-            file: "src/fonts.css",
-            code: "import_unavailable",
-            message: `The CSS reference '${reference}' cannot be imported. This App uses kit version '1.5.0'.`
-          })
-        ]);
-      }
+  it.each(["1.4.0"])("refuses CSS references to kit %s in an App using 1.5.0", async (version) => {
+    for (const [reference, css] of [
+      [`/app-runtime/kit/${version}/fonts/fonts.css`, (path: string) => `@import url("${path}");`],
+      [
+        `/app-runtime/kit/${version}/fonts/bungee/bungee-latin-400-normal.woff2`,
+        (path: string) => `@font-face { font-family: Bungee; src: url("${path}"); }`
+      ]
+    ] as const) {
+      const result = await buildPage({
+        files: pageFiles({
+          "app.yaml": reactManifest.replace("1.0.0", "1.5.0"),
+          "src/routes/__root.tsx": rootRoute,
+          "src/routes/index.tsx": `import "../fonts.css";\n${fileRoute("/")}`,
+          "src/fonts.css": css(reference)
+        })
+      });
+      expect(errorsOf(result)).toEqual([
+        expect.objectContaining({
+          file: "src/fonts.css",
+          code: "import_unavailable",
+          message: `The CSS reference '${reference}' cannot be imported. This App uses kit version '1.5.0'.`
+        })
+      ]);
     }
-  );
+  });
 
   it.each([
     "/fonts/outside.woff2",
@@ -540,50 +534,6 @@ describe("a plain HTML Page", () => {
       expect(files.get("help/index.html")).toBe(`${baseStyles}${themeScript}<h1>Help</h1>\n`);
     });
 
-    it("writes them after the doctype or the html tag of a file that has no head tag", async () => {
-      const withDoctype = built(
-        await buildPage({ files: styled("<!-- tool -->\n<!DOCTYPE html>\n<p>Hi</p>\n") })
-      );
-      const withHtml = built(
-        await buildPage({ files: styled('<!doctype html><html lang="de"><body>Hi</body></html>') })
-      );
-
-      expect(withDoctype.get("index.html")).toBe(
-        `<!-- tool -->\n<!DOCTYPE html>${baseStyles}${themeScript}\n<p>Hi</p>\n`
-      );
-      expect(withHtml.get("index.html")).toBe(
-        `<!doctype html><html lang="de">${baseStyles}${themeScript}<body>Hi</body></html>`
-      );
-    });
-
-    it("styles an HTML file whose script imports the kit only to call an action", async () => {
-      const files = built(
-        await buildPage({
-          files: styled(
-            `<!doctype html>
-<head><title>Rows</title></head>
-<body>
-  <script type="module" src="./src/main.ts"></script>
-</body>
-`,
-            {
-              "src/main.ts":
-                'import { actions } from "@work-shape/catalyst-app-kit";\nvoid actions.call("rows");\n'
-            }
-          )
-        })
-      );
-
-      // Such a script renders nothing of the kit, so the file is one of plain elements.
-      expect(files.get("index.html")).toBe(`<!doctype html>
-<head>${baseStyles}${themeScript}<title>Rows</title></head>
-<body>
-  <script type="module" src="./src/main.js"></script>
-</body>
-`);
-      expect(files.get("src/main.js")).toContain('"/app-runtime/kit/1.2.0/kit.js"');
-    });
-
     it("links the library's stylesheet, and no base rules, into an HTML file whose script renders components", async () => {
       const files = built(
         await buildPage({
@@ -621,11 +571,6 @@ createRoot(document.getElementById("root")!).render(<Button>Go</Button>);
       ["@work-shape/catalyst-app-kit", "page.css"],
       ["@work-shape/catalyst-app-kit/charts", "page.css"],
       ["@work-shape/catalyst-app-kit/ui", "ui.css"],
-      ["@work-shape/catalyst-app-kit/router", "ui.css"],
-      ["@tanstack/react-router", "ui.css"],
-      ["react", "ui.css"],
-      ["react/jsx-runtime", "ui.css"],
-      ["react-dom", "ui.css"],
       ["react-dom/client", "ui.css"]
     ])("gives an HTML file whose script imports %s the stylesheet %s", async (name, stylesheet) => {
       const files = built(

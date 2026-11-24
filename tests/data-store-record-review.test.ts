@@ -231,7 +231,7 @@ describe("REC-2 records review through the public operation source", () => {
     expect(await w.target`select kaufpreis from objekt`).toEqual([{ kaufpreis: null }]);
   });
 
-  it("assigns a document whose object was not known, and writes its fields into that object", async () => {
+  it("assigns a document whose object was not known, writes its fields into that object, and leaves out a withdrawn document's candidate", async () => {
     const w = await world("assign");
     const lost = await w.item(
       "e4",
@@ -271,6 +271,22 @@ describe("REC-2 records review through the public operation source", () => {
         })
       )
     ).toMatchObject({ code: "NOT_FOUND" });
+
+    // The candidate of a withdrawn document is left out, its quote included.
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [
+        await w.item("a9", "kaufvertrag", { kaufpreis: 100 }),
+        await w.item("b9", "kaufvertrag", { kaufpreis: 200 })
+      ]
+    });
+    expect((await flagged(w)).items.map((item) => item.documentId)).toEqual(["a9", "b9"]);
+    await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'b9'`;
+    const after = await flagged(w);
+    expect(after.items.map((item) => item.documentId)).toEqual(["a9"]);
+    // Its id, its file and its quote; quoted, since a random id may hold the letters "b9".
+    for (const left of ['"b9"', '"b9.pdf"', '"200"'])
+      expect(JSON.stringify(after)).not.toContain(left);
   });
 
   it("reads an existing flagged-fields tuple and writes the same bytes", async () => {
@@ -320,7 +336,7 @@ describe("REC-2 records review through the public operation source", () => {
     });
   });
 
-  it("shows a candidate only to a reader who may use its Knowledge Base, and refuses a decision citing it", async () => {
+  it("shows a candidate only to a reader who may use its Knowledge Base, and refuses a decision citing it or citing none", async () => {
     const w = await world("citations");
     await call(w, "records.propose", {
       table: "objekt",
@@ -344,29 +360,32 @@ describe("REC-2 records review through the public operation source", () => {
         })
       )
     ).toMatchObject({ code: "FORBIDDEN" });
-  });
 
-  it("refuses a decision without a citation that pins a candidate of a Knowledge Base the person may not use", async () => {
-    const w = await world("uncited");
+    // A decision without a citation pins a candidate of the Knowledge Base the person may not
+    // use: refused for a field that does not wait in conflict either.
     await call(w, "records.propose", {
       table: "objekt",
-      items: [await w.item("a7", "kaufvertrag", { kaufpreis: 100 })]
+      items: [
+        await w.item("a7", "kaufvertrag", { kaufpreis: 100 }, "2026-10-17", "/Objekte/1403/a7.pdf")
+      ]
     });
     const decide = (input: JsonObject) =>
       refusal(
-        callAs(w, reviewerOf(w), "records.decide", {
+        callAs(w, reviewer, "records.decide", {
           table: "objekt",
-          key: 1402,
+          key: 1403,
           field: "kaufpreis",
           ...input
         })
       );
     expect(await decide({ action: "correct", value: 150 })).toMatchObject({ code: "FORBIDDEN" });
     expect(await decide({ action: "confirm" })).toMatchObject({ code: "FORBIDDEN" });
-    expect(await w.target`select document_id, state from catalyst.record_fields`).toEqual([
-      { document_id: "a7", state: "extracted" }
+    expect(
+      await w.target`select state from catalyst.record_fields where document_id = 'a7'`
+    ).toEqual([{ state: "extracted" }]);
+    expect(await w.target`select kaufpreis::float8 from objekt where objekt_nr = 1403`).toEqual([
+      { kaufpreis: 100 }
     ]);
-    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
   });
 
   it("takes a decision only from a person: a Workflow step that may propose the field is refused", async () => {
@@ -388,24 +407,6 @@ describe("REC-2 records review through the public operation source", () => {
     expect(await w.target`select kaufpreis from objekt`).toEqual([{ kaufpreis: null }]);
     await callAs(w, actor, "records.decide", input, { kind: "cli" });
     expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
-  });
-
-  it("leaves out the candidate of a withdrawn document, its quote included", async () => {
-    const w = await world("withdrawn");
-    await call(w, "records.propose", {
-      table: "objekt",
-      items: [
-        await w.item("a9", "kaufvertrag", { kaufpreis: 100 }),
-        await w.item("b9", "kaufvertrag", { kaufpreis: 200 })
-      ]
-    });
-    expect((await flagged(w)).items.map((item) => item.documentId)).toEqual(["a9", "b9"]);
-    await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'b9'`;
-    const after = await flagged(w);
-    expect(after.items.map((item) => item.documentId)).toEqual(["a9"]);
-    // Its id, its file and its quote; quoted, since a random id may hold the letters "b9".
-    for (const left of ['"b9"', '"b9.pdf"', '"200"'])
-      expect(JSON.stringify(after)).not.toContain(left);
   });
 
   it("check 114: replacing a correction leaves the candidate as its document reads it, evidence passed, and counted as read again", async () => {
@@ -496,8 +497,8 @@ describe("REC-2 records review through the public operation source", () => {
       return { w, actor, events, pin };
     }
 
-    it("projects the corrected value, keeps the value read with its evidence, and audits neither", async () => {
-      const { w, actor, events } = await corrected("keep-projected", 1_205_000);
+    it("projects the corrected value, keeps the value read with its evidence, audits neither, and compares pinned peers by the corrected value", async () => {
+      const { w, actor, events, pin } = await corrected("keep-projected", 1_205_000);
       expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([
         { kaufpreis: 1_205_000 }
       ]);
@@ -525,16 +526,13 @@ describe("REC-2 records review through the public operation source", () => {
       expect(
         await w.target`select value, corrected_value, state from catalyst.record_fields`
       ).toEqual([{ value: 1_250_000, corrected_value: 1_205_000, state: "corrected" }]);
-    });
-
-    it("compares pinned peers by the corrected value, not the value read", async () => {
-      // b12 says 1.205.000, as a12 was corrected to: they agree, though a12 reads 1.250.000.
-      const agreeing = await corrected("keep-agree", 1_205_000);
-      await agreeing.pin();
-      expect(await agreeing.w.target`select kaufpreis::float8 from objekt`).toEqual([
+      // Pinned peers compare by the corrected value: b12 says 1.205.000, as a12 was corrected
+      // to, and they agree, though a12 reads 1.250.000.
+      await pin();
+      expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([
         { kaufpreis: 1_205_000 }
       ]);
-      expect((await flagged(agreeing.w)).items).toEqual([]);
+      expect((await flagged(w)).items).toEqual([]);
       // b12 says 1.250.000, as a12 reads: it disagrees with the correction.
       const disagreeing = await corrected("keep-disagree", 1_250_000);
       await disagreeing.pin();
@@ -543,7 +541,7 @@ describe("REC-2 records review through the public operation source", () => {
       ]);
     });
 
-    it("shows both values in Prüfen with who corrected and when, to a reader who may use the Knowledge Base and to no other", async () => {
+    it("shows both values in Prüfen with who corrected and when, to a reader who may use the Knowledge Base and to no other, and neither once withdrawn", async () => {
       const { w, actor, pin } = await corrected("keep-shown", 1_300_000);
       await pin();
       const { items } = await flagged(w);
@@ -565,6 +563,21 @@ describe("REC-2 records review through the public operation source", () => {
       const { output } = await callAs(w, reviewerOf(w), "records.flagged", { limit: 100 });
       expect(output).toEqual({ items: [] });
       expectNoField(output, 1_250_000, 1_205_000);
+      // Both values stay with the candidate's row: a withdrawn document shows neither, and its
+      // purge leaves no copy.
+      await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'a12'`;
+      const after = await flagged(w);
+      expect(after.items.map((item) => item.documentId)).toEqual(["b12", "c12"]);
+      expectNoField(after, 1_250_000, 1_205_000);
+      // The purge deletes the candidate's row: no other row of the store's own schema holds
+      // either value.
+      await w.target`delete from catalyst.record_fields where document_id = 'a12'`;
+      expect(
+        await w.target`select count(*)::int as n from catalyst.record_fields
+            where value::text in ('1250000', '1205000') or corrected_value::text in ('1250000', '1205000')`
+      ).toEqual([{ n: 0 }]);
+      for (const row of await w.target`select * from catalyst.loads`)
+        expectNoField(row, 1_250_000, 1_205_000);
     });
 
     it("names the person who corrected by the name the instance shows, and no one once their deletion is requested", async () => {
@@ -619,24 +632,6 @@ describe("REC-2 records review through the public operation source", () => {
       const after = (await flagged(w)).items.find((item) => item.documentId === "a14");
       expect(after).toMatchObject({ state: "corrected", correctedValue: 1_205_000 });
       expect(after).not.toHaveProperty("decidedByName");
-    });
-
-    it("leaves both values with the candidate's row: a withdrawn document shows neither, and its purge leaves no copy", async () => {
-      const { w, pin } = await corrected("keep-withdrawn", 1_300_000);
-      await pin();
-      await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'a12'`;
-      const after = await flagged(w);
-      expect(after.items.map((item) => item.documentId)).toEqual(["b12", "c12"]);
-      expectNoField(after, 1_250_000, 1_205_000);
-      // The purge deletes the candidate's row: no other row of the store's own schema holds
-      // either value.
-      await w.target`delete from catalyst.record_fields where document_id = 'a12'`;
-      expect(
-        await w.target`select count(*)::int as n from catalyst.record_fields
-          where value::text in ('1250000', '1205000') or corrected_value::text in ('1250000', '1205000')`
-      ).toEqual([{ n: 0 }]);
-      for (const row of await w.target`select * from catalyst.loads`)
-        expectNoField(row, 1_250_000, 1_205_000);
     });
   });
 

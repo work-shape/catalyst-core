@@ -281,6 +281,18 @@ describe("who reads the rights of a holder", () => {
     );
   });
 
+  it("lets a person read their own effective rights without users.manage", async () => {
+    const t = await setup();
+    await t.grant(t.kai.id, "agent.read", { workspaceId: await t.sharedWorkspace("Kai") });
+    const response = await t.expectOk(t.kai.id, "permissions.effective", {
+      query: { holderKind: "user", holderId: t.kai.id }
+    });
+    expect(response.json()).toMatchObject({
+      holderActive: true,
+      items: expect.arrayContaining([expect.objectContaining({ action: "agent.read" })])
+    });
+  });
+
   it("leaves out the name of an asset the reader may not read", async () => {
     const t = await setup();
     await t.putAgent(t.admin.id, "secret-helper");

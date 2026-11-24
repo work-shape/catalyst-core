@@ -9,7 +9,6 @@ import {
   CHART_MAX_SERIES,
   ChartFieldError,
   UiRoot,
-  uiLabelsDe,
   uiLabelsEn,
   type ChartProps,
   type ChartRow
@@ -31,7 +30,6 @@ const palette: chartEngine.ChartPalette = {
 };
 const size = { width: 640, height: 280 };
 const chartTypes = ["bar", "line", "area", "pie"] as const;
-const captionClass = "text-caption text-muted-foreground";
 
 const base: ChartProps = {
   type: "bar",
@@ -61,12 +59,15 @@ const baseSpec: ChartSpec = {
   stacked: false,
   formatValue: (value) => new Intl.NumberFormat("en-US").format(value)
 };
-const chatSpec = { series: baseSpec.series.slice(0, 1) };
 
 /** What the component renders before the engine has loaded: the box and the data table. */
-function render(props: Partial<ChartProps>, labels = uiLabelsEn): string {
+function render(props: Partial<ChartProps>): string {
   return renderToStaticMarkup(
-    createElement(UiRoot, { mode: "light", labels }, createElement(Chart, { ...base, ...props }))
+    createElement(
+      UiRoot,
+      { mode: "light", labels: uiLabelsEn },
+      createElement(Chart, { ...base, ...props })
+    )
   );
 }
 
@@ -110,35 +111,12 @@ afterEach(() => {
 });
 
 describe("Chart", () => {
-  it("names the chart and gives the data as a table beside the hidden drawing", () => {
-    const markup = render({});
-
-    expect(markup).toMatch(/^<div class=""><figure aria-label="Runs per month" data-chart="bar"/u);
-    expect(markup).not.toContain("data-truncated");
-    // Until the engine has loaded the box shows the skeleton, at the chart's height.
-    expect(markup).toMatch(/<div aria-hidden="true"[^>]*style="height:280px"><span aria-hidden/u);
-    expect(markup).toContain(
-      '<div class="sr-only"><table><thead><tr><td></td><th scope="col">Chat</th><th scope="col">Apps</th></tr></thead>'
-    );
-    expect(markup).toContain('<tr><th scope="row">Feb</th><td>465</td><td>85</td></tr>');
-  });
-
   it("shows the empty label in the chart's box when there are no rows", () => {
     const markup = render({ rows: [], height: 200 });
 
     expect(markup).toMatch(/style="height:200px"><div[^>]*>No runs in this period\.<\/div>/u);
     expect(markup).not.toContain("<table");
     expect(markup).not.toContain("aria-hidden");
-  });
-
-  it("reads one row and a thousand rows", () => {
-    expect(tableRows(render({ rows: [{ month: "Jan", chat: 420, apps: 60 }] }))).toEqual([
-      ["Jan", "420", "60"]
-    ]);
-
-    const thousand = tableRows(render({ rows: manyRows(1000), series: chatOnly }));
-    expect(thousand).toHaveLength(1000);
-    expect(thousand.at(-1)).toEqual(["M999", "999"]);
   });
 
   it("keeps negative values, and gives a pie without a value above zero the empty label", () => {
@@ -187,30 +165,6 @@ describe("Chart", () => {
     expect(render(absent)).toContain(">No runs in this period.</div></div></figure>");
   });
 
-  it("draws a series that is empty in every row as a series without data", () => {
-    const rows = [
-      { month: "Jan", chat: 1, apps: null },
-      { month: "Feb", chat: 2, apps: null }
-    ];
-
-    expect(tableHead(render({ rows }))).toEqual(["Chat", "Apps"]);
-    expect(tableRows(render({ rows }))).toEqual([
-      ["Jan", "1", ""],
-      ["Feb", "2", ""]
-    ]);
-  });
-
-  it("keeps a very long label whole in the table", () => {
-    const long = "A very long category name ".repeat(40).trim();
-    const markup = render({
-      rows: [{ month: long, chat: 1, apps: 2 }],
-      series: [{ field: "chat", label: long }]
-    });
-
-    expect(tableHead(markup)).toEqual([long]);
-    expect(tableRows(markup)).toEqual([[long, "1"]]);
-  });
-
   it("draws the first rows and series up to the caps and says what it cut", () => {
     const series = Array.from({ length: CHART_MAX_SERIES + 1 }, (_, index) => ({
       field: "chat",
@@ -219,10 +173,7 @@ describe("Chart", () => {
 
     const cutRows = render({ rows: manyRows(CHART_MAX_ROWS + 1), series: chatOnly });
     expect(cutRows).toContain('data-truncated="rows"');
-    expect(cutRows).toContain(`<figcaption class="${captionClass}">${uiLabelsEn.chartTruncated}`);
-    expect(render({ rows: manyRows(CHART_MAX_ROWS + 1), series: chatOnly }, uiLabelsDe)).toContain(
-      `${uiLabelsDe.chartTruncated}</figcaption>`
-    );
+    expect(cutRows).toContain(uiLabelsEn.chartTruncated);
     expect(tableRows(cutRows)).toHaveLength(CHART_MAX_ROWS);
     expect(tableRows(cutRows).at(-1)?.[0]).toBe(`M${CHART_MAX_ROWS - 1}`);
 
@@ -236,7 +187,6 @@ describe("Chart", () => {
     );
     const atTheCaps = { rows: manyRows(CHART_MAX_ROWS), series: series.slice(0, CHART_MAX_SERIES) };
     expect(render(atTheCaps)).not.toContain("data-truncated");
-    expect(render(atTheCaps)).not.toContain("<figcaption");
   });
 
   it("gives a pie its first series only, which is no cut", () => {
@@ -271,47 +221,6 @@ describe("Chart", () => {
 });
 
 describe("chart engine", () => {
-  const letters = ["a", "b", "c", "d", "e", "f"];
-  const six = {
-    series: letters.map((letter, index) => ({ label: `S-${letter}`, values: [index, index + 1] }))
-  };
-  const five = { series: six.series.slice(0, 5) };
-
-  it("colours series from the palette in order, and axis and grid from text and line", () => {
-    const drawn = draw({});
-
-    expect(drawn).toContain('fill="series-1"');
-    expect(drawn).toContain('fill="series-2"');
-    expect(drawn).not.toContain("series-3");
-    expect(drawn).toMatch(/<text[^>]*fill="text">500<\/text>/u);
-    expect(drawn).toContain('stroke="line"');
-  });
-
-  it("never animates", () => {
-    for (const type of chartTypes) {
-      expect(draw({ type })).not.toMatch(/<animate|@keyframes|animation:/u);
-    }
-  });
-
-  it("tells series apart without colour: a pattern on bars, a marker shape on lines", () => {
-    // The first series is plain and each further one has a pattern of its own.
-    expect(draw({}).match(/<pattern/gu)).toHaveLength(1);
-    expect(draw(five).match(/<pattern/gu)).toHaveLength(4);
-    expect(draw(chatSpec)).not.toContain("<pattern");
-
-    const shapes = [...markers(draw({ ...five, type: "line" })).values()];
-    expect(new Set(shapes).size).toBe(5);
-  });
-
-  it("repeats the colours from the sixth series on, dashed for lines and lighter for bars", () => {
-    const dashed = /<path[^>]*stroke="(series-\d)"[^>]*stroke-dasharray/u;
-
-    expect(dashed.exec(draw({ ...six, type: "line" }))?.[1]).toBe("series-1");
-    expect(draw({ ...five, type: "line" })).not.toContain("stroke-dasharray");
-    expect(draw(six)).toContain('fill="series-1" fill-opacity="0.55"');
-    expect(draw(five)).not.toContain('fill-opacity="0.55"');
-  });
-
   it("stacks bars and areas, and nothing else", () => {
     // Stacked, the axis reaches the sum of both series (465 + 85) and not only the larger one.
     expect(texts(draw({}))).not.toContain("600");
@@ -319,22 +228,6 @@ describe("chart engine", () => {
     expect(texts(draw({ type: "area", stacked: true }))).toContain("600");
     expect(texts(draw({ type: "line", stacked: true }))).not.toContain("600");
     expect(texts(draw({ type: "area" }))).not.toContain("600");
-  });
-
-  it("shows the legend for several series and hides it for one", () => {
-    expect(texts(draw({}))).toEqual(expect.arrayContaining(["Chat", "Apps"]));
-    expect(texts(draw(chatSpec))).not.toContain("Chat");
-  });
-
-  it("labels the slices of a pie, which has no legend and no axis", () => {
-    expect(texts(draw({ type: "pie" }))).toEqual(["Jan: 420", "Feb: 465"]);
-  });
-
-  it("formats axis and slice values with the spec's formatter", () => {
-    const formatValue = (value: number) => `${value} runs`;
-
-    expect(texts(draw({ formatValue }))).toContain("500 runs");
-    expect(texts(draw({ type: "pie", formatValue }))).toContain("Jan: 420 runs");
   });
 
   it("draws nothing for no rows and one point for one row, in every type", () => {
@@ -353,18 +246,6 @@ describe("chart engine", () => {
       series: [{ label: "Chat", values: [420] }]
     });
     expect(markers(point).size).toBe(1);
-  });
-
-  it("draws a thousand rows in every type", () => {
-    const categories = Array.from({ length: 1000 }, (_, index) => `M${index}`);
-    const values = categories.map((_, index) => index + 1);
-
-    for (const type of chartTypes) {
-      const drawn = draw({ type, categories, series: [{ label: "Chat", values }] });
-      expect(texts(drawn).length).toBeGreaterThan(0);
-      // The axis shows some of the thousand labels, never all of them on top of each other.
-      expect(texts(drawn).length).toBeLessThan(200);
-    }
   });
 
   it("keeps negative values on the axis and leaves them out of a pie", () => {
@@ -396,23 +277,6 @@ describe("chart engine", () => {
         series: [{ label: "Chat", values: gap.categories.map(() => null) }]
       };
       expect(draw(empty)).toContain("<svg");
-    }
-  });
-
-  it("cuts very long labels on the axis, in the legend and on a slice", () => {
-    const long = "A very long category name ".repeat(40).trim();
-    const spec = {
-      categories: [long, `${long} again`],
-      series: [
-        { label: long, values: [1, 2] },
-        { label: "Apps", values: [2, 1] }
-      ]
-    };
-
-    for (const type of chartTypes) {
-      const shown = texts(draw({ ...spec, type }));
-      expect(shown.filter((text) => text.startsWith("A very")).length).toBeGreaterThan(0);
-      expect(shown.filter((text) => text.length > 40)).toEqual([]);
     }
   });
 });

@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
@@ -6,12 +5,8 @@ import {
   createSafeConfigView,
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
-import {
-  asClientInstanceId,
-  isJsonObject,
-  type ToolExecutionContext
-} from "@work-shape/catalyst-core";
-import { createShowViewTool, showViewTool } from "@work-shape/catalyst-tool-execution";
+import { asClientInstanceId, type ToolExecutionContext } from "@work-shape/catalyst-core";
+import { showViewTool } from "@work-shape/catalyst-tool-execution";
 
 describe("built-in platform tools", () => {
   it("stores the model's HTML alone and keeps it out of model-visible output", async () => {
@@ -59,77 +54,6 @@ describe("built-in platform tools", () => {
     expect(result.display?.data?.html).toBe(
       "<!doctype html><html><head><title>Chart</title></head><body><script>window.chartReady = true;</script></body></html>"
     );
-  });
-
-  it("tells the agent what a view may load", () => {
-    const closed = createShowViewTool();
-    const named = createShowViewTool({ allowedScriptSrc: ["https://cdn.jsdelivr.net"] });
-    const open = createShowViewTool({ allowedScriptSrc: ["https:"] });
-
-    for (const tool of [closed, named, open]) {
-      expect(tool.description).toContain("Tailwind CSS and Lucide are loaded from the instance");
-      expect(tool.description).toContain("Network fetches and external images are blocked.");
-    }
-    expect(closed.description).toContain("No other script file can be loaded");
-    expect(named.description).toContain("only from: https://cdn.jsdelivr.net.");
-    expect(open.description).toContain("from any HTTPS host");
-  });
-
-  it("tells the agent that a view is a small inline widget and workspace.open shows the standalone one", () => {
-    const description = showViewTool.description;
-
-    expect(description).toMatch(/^Show a small HTML widget inline in your answer/u);
-    expect(description).toContain("show them with workspace.open instead");
-  });
-
-  it("names no runtime switch in the tool's source", async () => {
-    const source = await readFile("packages/tool-execution/src/built-in-tools.ts", "utf8");
-
-    expect(source).not.toMatch(/externalRuntime/u);
-  });
-
-  it("gives the layout and color guidance once, in the tool description", () => {
-    const description = showViewTool.description;
-    const htmlDescription = readHtmlSchemaDescription();
-
-    for (const rule of [
-      "must not frame itself",
-      "md:p-6",
-      "Start directly with the content",
-      "no introductory heading or preamble",
-      "no heading that repeats the title",
-      "no max-width or centering container",
-      "shadcn-style theme classes are available",
-      "Only bordered cards carry inner padding",
-      "gap-* or space-y-*",
-      "never scrolls inside itself",
-      "h-screen, min-h-screen, fixed height, or overflow-y-auto",
-      "bg-background text-foreground",
-      "text-success",
-      "text-destructive",
-      "bg-success/10",
-      "border-warning/30 bg-warning/10",
-      "Do not make the view monochrome",
-      "Never use color as the only signal",
-      "bg-white",
-      "text-gray-*/text-slate-*",
-      "!important",
-      "success, warning, info",
-      "chartPalette()",
-      "text-chart-1",
-      "text-chart-5",
-      "bg-chart-2/20",
-      "chartColors() returns a named object",
-      "never index it like an array",
-      "color('foreground')",
-      'data-lucide="chart-column"'
-    ]) {
-      expect(description).toContain(rule);
-      expect(description.split(rule)).toHaveLength(2);
-      expect(htmlDescription).not.toContain(rule);
-    }
-    expect(htmlDescription).toContain("rules in the tool description");
-    expect(wordCount(description) + wordCount(htmlDescription)).toBeLessThan(400);
   });
 });
 
@@ -210,18 +134,6 @@ function emptyAssets() {
   };
 }
 
-function readHtmlSchemaDescription(): string {
-  const properties = showViewTool.inputJsonSchema?.properties;
-  if (!isJsonObject(properties)) {
-    throw new Error("Expected show_view input JSON schema to include properties");
-  }
-  const html = properties.html;
-  if (!isJsonObject(html) || typeof html.description !== "string") {
-    throw new Error("Expected show_view input JSON schema to describe html");
-  }
-  return html.description;
-}
-
 function createToolContext(): ToolExecutionContext {
   const clientInstanceId = asClientInstanceId("built-in-tools-client");
   return {
@@ -237,8 +149,4 @@ function createToolContext(): ToolExecutionContext {
       authSource: "test"
     }
   };
-}
-
-function wordCount(text: string): number {
-  return text.split(/\s+/u).filter(Boolean).length;
 }

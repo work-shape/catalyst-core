@@ -415,21 +415,23 @@ describe("SQL shapes on a scoped table (SCOPE-1)", () => {
     }
   });
 
-  it.each([
-    ["a schema-qualified name", "select * from public.findings"],
-    ["a quoted schema-qualified name", 'select * from "public"."findings"'],
-    ["a schema-qualified name split by a comment", "select * from public./**/findings"],
-    ["a Unicode-escaped identifier", 'select * from U&"findings"'],
-    ["a lower-case Unicode-escaped identifier", 'select * from u&"\\0066indings"'],
-    ["a relation read by name", "select table_to_xml('findings', true, false, '')"],
-    ["SQL run from text", "select query_to_xml('select * from findings', true, false, '')"],
-    ["column statistics", 'select * from "pg_stats"'],
-    ["text search statistics", "select * from ts_stat('select note::tsvector from findings')"],
-    ["a statement that is no select", "table findings"]
-  ])("refuses %s for a scoped viewer", async (_shape, sql) => {
+  it("refuses every way around the scope for a scoped viewer", async () => {
     const w = await world();
-    expect(await refusal(query(w, { sql }, viewers.assigned))).toMatchObject({
-      code: "VALIDATION_FAILED"
-    });
+    for (const [shape, sql] of [
+      ["a schema-qualified name", "select * from public.findings"],
+      ["a quoted schema-qualified name", 'select * from "public"."findings"'],
+      ["a schema-qualified name split by a comment", "select * from public./**/findings"],
+      ["a Unicode-escaped identifier", 'select * from U&"findings"'],
+      ["a lower-case Unicode-escaped identifier", 'select * from u&"\\0066indings"'],
+      ["a relation read by name", "select table_to_xml('findings', true, false, '')"],
+      ["SQL run from text", "select query_to_xml('select * from findings', true, false, '')"],
+      ["column statistics", 'select * from "pg_stats"'],
+      ["text search statistics", "select * from ts_stat('select note::tsvector from findings')"],
+      ["a statement that is no select", "table findings"]
+    ] as const) {
+      expect
+        .soft(await refusal(query(w, { sql }, viewers.assigned)), shape)
+        .toMatchObject({ code: "VALIDATION_FAILED" });
+    }
   });
 });

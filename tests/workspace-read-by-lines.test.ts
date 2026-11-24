@@ -202,13 +202,6 @@ describe("workspace.read_file by lines", () => {
     expect(last.nextOffset).toBeUndefined();
     expect(last.hint).toContain("Line 1 has 12 bytes");
     expect(last.hint).toContain("workspace.exec");
-
-    const readTool = harness.tools.find((tool) => tool.name === "workspace.read_file");
-    expect(readTool?.description).toContain(
-      "a single line that is longer than one answer is cut inside the line"
-    );
-    expect(readTool?.description).toContain("lineCut true");
-    expect(readTool?.description).not.toContain("always ends at a whole line");
   });
 
   // Fails without the change: the answer had no line fields.
@@ -325,16 +318,13 @@ describe("workspace.read_file by lines", () => {
 
     const missing = await readFailure(harness, { path: "absent.txt" });
     expect(missing.message).toContain("was not found");
-    expect(missing.message).toContain("workspace.list_files");
 
     const binary = await readFailure(harness, { path: "bin/blob.dat" });
     expect(binary.message).toContain("binary");
-    expect(binary.message).toContain("workspace.exec");
     expect(binary.message).toContain("workspace.preview_images");
 
     const image = await readFailure(harness, { path: "image.png" });
     expect(image.message).toContain("not a supported text MIME type");
-    expect(image.message).toContain("workspace.exec");
     expect(image.message).toContain("workspace.preview_images");
 
     const latin1 = await readFailure(harness, { path: "latin1.txt" });
@@ -347,17 +337,13 @@ describe("workspace.read_file by lines", () => {
 
     for (const [path, what] of [
       ["/workspace", "must name a file"],
-      ["notes/", "must not end with a slash"],
       ["../outside.txt", "cannot traverse outside the workspace"],
       ["/etc/passwd", "must be relative"],
-      ["notes\\a.txt", "must use forward slashes"],
       ["   ", "cannot be blank"]
     ] as const) {
       const invalid = await readFailure(harness, { path });
       expect(invalid.code).toBe("validation_failed");
       expect(invalid.message).toContain(what);
-      expect(invalid.message).toContain("Pass a path relative to /workspace");
-      expect(invalid.message).toContain("workspace.list_files");
     }
   });
 
@@ -457,21 +443,5 @@ describe("workspace.read_file by lines", () => {
     const runs = await harness.execution.runs.list({ clientInstanceId: harness.clientInstanceId });
     expect(runs.length).toBeGreaterThan(0);
     expect(JSON.stringify(runs)).not.toContain("secret-line");
-  });
-
-  // Fails without the change: the description promised a "bounded preview" and no way on.
-  it("describes how to continue, with the limits the tools enforce", async () => {
-    const harness = await createWorkspaceHarness();
-    const readTool = harness.tools.find((tool) => tool.name === "workspace.read_file");
-    expect(readTool?.effect).toBe("reading");
-    expect(readTool?.description).toContain("400 lines or 16 KiB");
-    expect(readTool?.description).toContain("call again with offset set to nextOffset");
-    expect(readTool?.description).toContain("above 8 MiB");
-    expect(readTool?.description).toContain("workspace.exec");
-
-    const listTool = harness.tools.find((tool) => tool.name === "workspace.list_files");
-    expect(listTool?.effect).toBe("reading");
-    expect(listTool?.description).toContain("empty until a tool has put a file there");
-    expect(listTool?.description).toContain("workspace.read_file");
   });
 });

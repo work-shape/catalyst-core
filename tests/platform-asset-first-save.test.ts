@@ -145,11 +145,12 @@ describe("the agent's first save of a conversation", () => {
     return { app, clientInstanceId, ok, converse, say, call };
   }
 
-  it("keeps invalid Workflow creates as structured unsaved results", async () => {
-    const t = await fixture();
+  it("creates a new Workflow or Data Store of the conversation's workspace as a draft with its first save, and keeps an invalid create unsaved", async () => {
+    const t = await fixture({ dataStores: true });
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());
+    // An invalid Workflow create is a structured unsaved result.
     const name = "invalid-draft";
-    const refused = writeSchema.parse(
+    const invalid = writeSchema.parse(
       await t.call(id, "platform.assets.put", {
         kind: WORKFLOW_ASSET_KIND,
         name,
@@ -159,8 +160,8 @@ describe("the agent's first save of a conversation", () => {
         }
       })
     );
-    expect(refused.saved).toBe(false);
-    expect(refused.issues?.length).toBeGreaterThan(0);
+    expect(invalid.saved).toBe(false);
+    expect(invalid.issues?.length).toBeGreaterThan(0);
     const runs = (
       await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId })
     ).filter(
@@ -178,11 +179,8 @@ describe("the agent's first save of a conversation", () => {
         name
       })
     ).toBeUndefined();
-  });
 
-  it("creates a new Workflow of the conversation's workspace as a draft with its first save and makes it the subject", async () => {
-    const t = await fixture();
-    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());
+    // A valid one creates the Workflow and makes it the subject.
     const NEW = "new-close";
     const config = { name: NEW, manifest: { ...manifest(), id: NEW, name: "New close" } };
 
@@ -230,7 +228,7 @@ describe("the agent's first save of a conversation", () => {
 
     // A later create in a conversation about an asset stands beside it (BUILD-ALL-1): the
     // conversation stays about the first one. Its own tests are in
-    // `platform-asset-build-all.test.ts`.
+    // `platform-asset-tools.test.ts`.
     const second = await t.call(id, "platform.assets.put", {
       kind: WORKFLOW_ASSET_KIND,
       name: "other-close",
@@ -249,7 +247,7 @@ describe("the agent's first save of a conversation", () => {
     // A save that names no kind it may create makes nothing.
     const { id: fresh } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());
     const unnamed = await t.say(fresh, `/tool platform.assets.put ${JSON.stringify({ config })}`);
-    expect(unnamed.answer).toContain("A save without 'expectedRevision' creates an asset");
+    expect(unnamed.answer).not.toContain('"saved":true');
 
     // A person who may not build is offered no agent that builds, so has none to create one
     // with: the agent of this instance builds, and a run needs an agent.
@@ -265,12 +263,9 @@ describe("the agent's first save of a conversation", () => {
       OTHER
     );
     expect(notOffered.statusCode).toBe(422);
-    expect(notOffered.body).toContain("No default agent");
-  }, 120_000);
 
-  it("creates a Data Store from its files with the check of the files write the CLI uses", async () => {
-    const t = await fixture({ dataStores: true });
-    const { id, collaborationWorkspaceId } = z
+    // A Data Store is created from its files with the check of the files write the CLI uses.
+    const { id: storeChat, collaborationWorkspaceId } = z
       .object({ id: z.string(), collaborationWorkspaceId: z.string() })
       .parse((await t.ok(t.converse())).json());
     const manifestFile = { path: DATA_STORE_MANIFEST_FILE, text: "id: leads\nname: Leads\n" };
@@ -295,7 +290,7 @@ describe("the agent's first save of a conversation", () => {
       .parse(throughApi.json())
       .error.details.issues.map((issue) => issue.message);
     const refused = writeSchema.parse(
-      await t.call(id, "platform.assets.put", {
+      await t.call(storeChat, "platform.assets.put", {
         kind: DATA_STORE_ASSET_KIND,
         name: "leads",
         files: [manifestFile, migration, stray]
@@ -304,25 +299,28 @@ describe("the agent's first save of a conversation", () => {
     expect(refused.saved).toBe(false);
     expect(refused.issues?.map((issue) => issue.message)).toEqual(apiIssues);
 
-    const created = await t.call(id, "platform.assets.put", {
+    const createdStore = await t.call(storeChat, "platform.assets.put", {
       kind: DATA_STORE_ASSET_KIND,
       name: "leads",
       files: [manifestFile, migration]
     });
-    expect(created).toMatchObject({
+    expect(createdStore).toMatchObject({
       saved: true,
       revision: 1,
       created: true,
       kind: DATA_STORE_ASSET_KIND,
       name: "leads"
     });
-    const stored = await t.app.stores.configAssets.getConfigAsset({
+    const storedStore = await t.app.stores.configAssets.getConfigAsset({
       clientInstanceId: t.clientInstanceId,
       kind: DATA_STORE_ASSET_KIND,
       name: "leads"
     });
     // A Data Store may be owned by a workspace: the conversation's owns it (WS-OWN-1a).
-    expect(stored?.scope).toEqual({ kind: "workspace", workspaceId: collaborationWorkspaceId });
-    expect(stored?.publishedRevisionId).toBeUndefined();
+    expect(storedStore?.scope).toEqual({
+      kind: "workspace",
+      workspaceId: collaborationWorkspaceId
+    });
+    expect(storedStore?.publishedRevisionId).toBeUndefined();
   }, 120_000);
 });

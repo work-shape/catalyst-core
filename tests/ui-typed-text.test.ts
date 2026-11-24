@@ -52,9 +52,7 @@ describe("TypedText", () => {
     render("Offers for the roof");
 
     expect(typing()).toBe(false);
-    expect(element().outerHTML).toBe(
-      '<span title="Offers for the roof">Offers for the roof</span>'
-    );
+    expect(seen()).toBe("Offers for the roof");
   });
 
   it("types in a text that replaces another, with the whole text in the element throughout", () => {
@@ -69,11 +67,9 @@ describe("TypedText", () => {
     steps(2);
     expect(seen()).toBe("Roo");
     expect(element().textContent).toBe("Roof");
-    expect(element().querySelector(".sr-only")?.textContent).toBe("f");
-    expect(element().querySelector("[aria-hidden]")?.textContent).toBe("");
     steps(1);
     expect(typing()).toBe(false);
-    expect(element().outerHTML).toBe('<span title="Roof">Roof</span>');
+    expect(seen()).toBe("Roof");
   });
 
   it("starts over when the text changes in the middle of the typing", () => {

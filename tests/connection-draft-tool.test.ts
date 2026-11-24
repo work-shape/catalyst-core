@@ -14,7 +14,9 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
+  CONNECTION_OFFER_TOOL_NAME,
   createConnectionDraftTool,
+  createConnectionOfferTool,
   ToolRegistry
 } from "@work-shape/catalyst-tool-execution";
 
@@ -389,31 +391,54 @@ describe("the agent's draft of REST API tools", () => {
   });
 });
 
-describe("where the draft tool is offered", () => {
-  /** The release's registry with every module on, but `connections` as given. */
-  const registryWith = (connections: boolean) =>
-    new ToolRegistry({
-      tools: [tool],
-      enabledToolNames: new Set([CONNECTION_DRAFT_TOOL_NAME]),
-      modules: createModuleRegistry(platformModules).snapshot(
-        Object.fromEntries(
-          platformModules.map((module) => [
-            module.name,
-            { enabled: module.name !== "connections" || connections }
-          ])
-        )
-      )
+// The agent's offer of a Connection's approved tools to an agent (CS-5d): the tool answers the
+// card and nothing else. It reads nothing of the instance and gives no tool: the person's
+// confirmation on the card publishes the agent.
+const offerTool = createConnectionOfferTool();
+
+describe("the offer of a Connection's tools to an agent", () => {
+  it("answers the Connection and the agent the person named, for the card, and writes nothing", async () => {
+    const offer = async (input: Record<string, unknown>) => {
+      const parsed = offerTool.inputSchema.safeParse(input);
+      if (!parsed.success) return { status: "invalid" as const };
+      return offerTool.execute(parsed.data, context());
+    };
+    expect(offerTool.effect).toBe("reading");
+    expect(await offer({ connection: " crm ", agent: "assistant" })).toMatchObject({
+      status: "success",
+      output: { connection: "crm", agent: "assistant" }
     });
-
-  it("is a tool of the module connections: off with it, on with it", () => {
-    expect(registryWith(false).has(CONNECTION_DRAFT_TOOL_NAME)).toBe(false);
-    expect(registryWith(true).has(CONNECTION_DRAFT_TOOL_NAME)).toBe(true);
+    const without = await offer({ connection: "crm" });
+    expect(without).toMatchObject({ status: "success", output: { connection: "crm" } });
+    if (without.status !== "success") return;
+    expect(without.output).toEqual({ connection: "crm" });
+    expect((await offer({ connection: "" })).status).toBe("invalid");
   });
+});
 
-  it("is no tool every agent may hold whatever the modules: an agent lists it by name", () => {
-    // Fixtures hand an agent every name of the list; with connections off, that agent would be
-    // refused for naming a tool of a module that is off.
-    expect(PLATFORM_TOOL_NAMES).not.toContain(CONNECTION_DRAFT_TOOL_NAME);
+describe("where the draft and offer tools are offered", () => {
+  it("are tools of the module connections, which an agent lists by name", () => {
+    /** The release's registry with every module on, but `connections` as given. */
+    const registryWith = (connections: boolean) =>
+      new ToolRegistry({
+        tools: [tool, offerTool],
+        enabledToolNames: new Set([CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]),
+        modules: createModuleRegistry(platformModules).snapshot(
+          Object.fromEntries(
+            platformModules.map((module) => [
+              module.name,
+              { enabled: module.name !== "connections" || connections }
+            ])
+          )
+        )
+      });
+    for (const name of [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]) {
+      expect(registryWith(false).has(name)).toBe(false);
+      expect(registryWith(true).has(name)).toBe(true);
+      // Fixtures hand an agent every name of the list; with connections off, that agent would
+      // be refused for naming a tool of a module that is off.
+      expect(PLATFORM_TOOL_NAMES).not.toContain(name);
+    }
   });
 });
 

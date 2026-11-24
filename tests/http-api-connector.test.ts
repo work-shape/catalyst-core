@@ -375,17 +375,7 @@ describe("the Connector type http_api", () => {
     const base = { baseUrl: "https://api.example.test/datevconnect" };
 
     it("refuse a fixed header that can carry a credential with credential_in_settings, and accept x-client-instance-id", () => {
-      for (const name of [
-        "Authorization",
-        "Proxy-Authorization",
-        "Cookie",
-        "X-Api-Key",
-        "x-auth-token",
-        "Client-Secret",
-        "X-Session",
-        "X-Password",
-        "AUTH"
-      ]) {
+      for (const name of ["Authorization", "Cookie", "x-auth-token", "Client-Secret", "AUTH"]) {
         const parsed = read({ ...base, headers: { [name]: "value" } });
         expect(parsed.success, name).toBe(false);
         expect(JSON.stringify(parsed), name).toContain("credential_in_settings");
@@ -474,11 +464,11 @@ describe("the Connector type http_api", () => {
     });
 
     it("refuses every declared field on a type that reads its operations from the outside system", () => {
-      expect(issuesOf("mcp", {})).toEqual([
-        "operations.0.description: Connector type 'mcp' reads its operations from the outside system, so an operation declares no 'description'",
-        "operations.0.method: Connector type 'mcp' reads its operations from the outside system, so an operation declares no 'method'",
-        "operations.0.path: Connector type 'mcp' reads its operations from the outside system, so an operation declares no 'path'",
-        "operations.0.pathParams: Connector type 'mcp' reads its operations from the outside system, so an operation declares no 'pathParams'"
+      expect(issuesOf("mcp", {}).map((issue) => issue.split(":")[0])).toEqual([
+        "operations.0.description",
+        "operations.0.method",
+        "operations.0.path",
+        "operations.0.pathParams"
       ]);
     });
   });

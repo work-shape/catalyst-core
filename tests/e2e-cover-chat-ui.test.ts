@@ -1,18 +1,36 @@
 // @vitest-environment happy-dom
 
-import { act, createElement, type ReactElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, createElement, useState, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import type {
   AdministeredUser,
+  ApiUser,
+  ConversationListItem,
   CreatePermissionGrantRequest,
-  EffectivePermissions
+  EffectivePermissions,
+  StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
 import { grantOptions, GrantsTab } from "@work-shape/catalyst-chat-ui/access";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { required } from "./support/assertions";
-import { GrantDialog } from "./support/chat-ui";
+import {
+  GrantDialog,
+  readLastDockConversation,
+  storeLastDockConversation,
+  useControlPlaneModel,
+  useConversationListRefresh,
+  useUnreadableDockConversation,
+  useWorkspaceDock,
+  workspaceQueryKeys
+} from "./support/chat-ui";
 import { TranslationProvider } from "./support/chat-ui/shared";
+import { platformContext } from "./chat-ui-build-fixtures";
+import { recordedApiClient } from "./support/recorded-api-client";
+
+// Cover tests that replace browser specs: grantable rights, the dock, the rail's polling and
+// the UI library route.
 
 const assets = {
   app: {
@@ -267,4 +285,236 @@ it("writes View and Edit, View first, when a workspace giver grants Edit", async
       ]);
     }
   );
+});
+
+it("replaces an unreadable conversation with an empty open dock and forgets its identity", () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  const keepDraft = vi.fn();
+  const routes = vi.fn();
+  const gone = Object.assign(new Error("Not found"), { status: 404 });
+  storeLastDockConversation("conv_foreign");
+  let seen: ReturnType<typeof useWorkspaceDock>["dock"] | undefined;
+  function Shell() {
+    const [chat, setChat] = useState<string | undefined>("conv_foreign");
+    const { dock } = useWorkspaceDock({
+      route: { kind: "build-kind", assetKind: "agents" },
+      chat,
+      onRouteChange: (route, options) => {
+        routes(route, options);
+        setChat(options?.chat);
+      }
+    });
+    useUnreadableDockConversation({ dock, docked: true, error: gone, keepDraft });
+    seen = dock;
+    return createElement("div", { "data-open": dock.open }, dock.conversationId ?? "New chat");
+  }
+  try {
+    act(() => root.render(createElement(Shell)));
+    expect(seen?.open).toBe(true);
+    expect(seen?.conversationId).toBeUndefined();
+    expect(seen?.last).toBeUndefined();
+    expect(readLastDockConversation()).toBeUndefined();
+    expect(host.textContent).toBe("New chat");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(keepDraft).toHaveBeenCalledExactlyOnceWith("conv_foreign");
+    expect(routes).toHaveBeenCalledExactlyOnceWith(
+      { kind: "build-kind", assetKind: "agents" },
+      { chat: undefined, replace: true }
+    );
+  } finally {
+    act(() => root.unmount());
+    storeLastDockConversation(undefined);
+    vi.unstubAllGlobals();
+  }
+});
+
+it("does not poll the streamed conversation or an idle rail, and stops when its title arrives", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.useFakeTimers();
+  const root = createRoot(document.createElement("div"));
+  const refresh = vi.fn();
+  const conversation: ConversationListItem = {
+    id: "conv_1",
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_1",
+    createdByUserId: "usr_1",
+    createdByExternalUserId: "external_1",
+    visibility: "private",
+    status: "active",
+    retainedUntil: "2027-10-24T10:00:00Z",
+    people: [],
+    title: "Temporary",
+    createdAt: "2026-10-24T10:00:00Z",
+    updatedAt: "2026-10-24T10:00:00Z",
+    activeRun: {
+      id: "run_1",
+      conversationId: "conv_1",
+      agentName: "assistant",
+      status: "running",
+      startedAt: "2026-10-24T10:00:00Z",
+      updatedAt: "2026-10-24T10:00:00Z",
+      lastSequence: 0
+    }
+  };
+  let accepted: ReturnType<typeof useConversationListRefresh>["runAccepted"] | undefined;
+  function Rail({
+    rows,
+    streamed
+  }: {
+    rows: ConversationListItem[];
+    streamed: string | undefined;
+  }) {
+    accepted = useConversationListRefresh({
+      enabled: true,
+      conversations: rows,
+      streamedConversationId: streamed,
+      refresh
+    }).runAccepted;
+    return null;
+  }
+  const show = (rows: ConversationListItem[], streamed?: string) =>
+    act(() => root.render(createElement(Rail, { rows, streamed })));
+  const advance = async (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  try {
+    show([conversation], conversation.id);
+    await advance(10_000);
+    expect(refresh).not.toHaveBeenCalled();
+    // The stream ended while the list still reports its run: read only until it catches up.
+    show([conversation]);
+    await advance(2_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    const idle = { ...conversation, activeRun: undefined };
+    show([idle]);
+    await advance(10_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    const userMessage = {
+      id: "msg_1",
+      conversationId: idle.id,
+      clientInstanceId: "client",
+      role: "user" as const,
+      text: "First turn",
+      createdAt: idle.createdAt
+    };
+    const response: StartConversationRunResponse = {
+      conversation: idle,
+      userMessage,
+      run: {
+        ...required(conversation.activeRun),
+        clientInstanceId: "client",
+        ownerUserId: "usr_1",
+        correlationId: "corr_1",
+        inputMessageId: userMessage.id
+      },
+      thread: {
+        conversation: idle,
+        messages: [userMessage],
+        userState: {
+          clientInstanceId: "client",
+          conversationId: idle.id,
+          userId: "usr_1",
+          updatedAt: idle.updatedAt
+        },
+        serverTime: idle.updatedAt
+      },
+      eventsUrl: "/runs/run_1/events"
+    };
+    act(() => accepted?.(response));
+    expect(refresh).toHaveBeenCalledTimes(2);
+    await advance(2_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
+    show([{ ...idle, title: "Learned title" }]);
+    await advance(60_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
+    // Workspace switch: stale title waiting must not poll the new workspace.
+    show([]);
+    await advance(60_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
+  } finally {
+    act(() => root.unmount());
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("opens the gallery route for an administrator and redirects a plain member without showing it", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const queryClient = new QueryClient();
+  const { client } = recordedApiClient(() => platformContext());
+  const apiBaseUrl = "https://chat.example";
+  queryClient.setQueryData(
+    workspaceQueryKeys.platformContext(apiBaseUrl, "workspace"),
+    platformContext()
+  );
+  const goToDefaultChat = vi.fn();
+  const noop = () => undefined;
+  const user: ApiUser = {
+    id: "usr_admin",
+    clientInstanceId: "client",
+    externalUserId: "admin",
+    displayLabel: "Admin",
+    authSource: "standalone",
+    roles: ["admin"],
+    permissionRefs: [],
+    permissions: ["users.manage"]
+  };
+  function Route({ viewer }: { viewer: ApiUser }) {
+    const model = useControlPlaneModel({
+      apiBaseUrl,
+      authScope: "workspace",
+      client,
+      user: viewer,
+      config: undefined,
+      administration: undefined,
+      collaborationWorkspaces: [],
+      collaborationWorkspacesReady: true,
+      settingsCollaborationWorkspace: undefined,
+      selectSettingsCollaborationWorkspace: noop,
+      activeCollaborationWorkspace: undefined,
+      isAuthenticated: true,
+      route: { kind: "ui-library" },
+      view: "ui-library",
+      supportedLocales: ["en"],
+      activeLocale: "en",
+      selectLocale: noop,
+      showContextIndicator: false,
+      setShowContextIndicator: noop,
+      themePreference: "light",
+      selectThemePreference: noop,
+      goToDefaultChat,
+      showRoute: noop,
+      onAccountDeleted: noop,
+      onCollaborationWorkspaceDeleted: noop,
+      agentActions: {}
+    });
+    return model.showUiLibrary ? createElement("h1", null, "UI library") : null;
+  }
+  const render = async (viewer: ApiUser) =>
+    act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(Route, { viewer })
+        )
+      );
+    });
+  try {
+    await render(user);
+    expect(container.textContent).toBe("UI library");
+    expect(goToDefaultChat).not.toHaveBeenCalled();
+    await render({ ...user, id: "usr_member", roles: ["user"], permissions: [] });
+    expect(container.querySelector("h1")).toBeNull();
+    expect(goToDefaultChat).toHaveBeenCalledExactlyOnceWith({ replace: true });
+  } finally {
+    act(() => root.unmount());
+    queryClient.clear();
+    vi.unstubAllGlobals();
+  }
 });

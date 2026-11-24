@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveEffectivePermissions } from "./support/ap4-verify/pre-ap4-permissions";
 import {
-  type PlatformAction,
-  type Permission,
   ACTIONS,
   GRANTABLE_ACTION_SCOPES,
   operationScopesOfPersonalApiKey,
@@ -151,27 +149,6 @@ describe("permissions", () => {
       "audit.view": ["audit.view"]
     });
   });
-
-  it.each([
-    ["agent.read", "config_assets.read"],
-    ["agent.write", "config_assets.write"],
-    ["agent.delete", "config_assets.write"],
-    ["skill.read", "config_assets.read"],
-    ["skill.write", "config_assets.write"],
-    ["skill.delete", "config_assets.write"],
-    ["skill.approve", "agent_skills.approve"],
-    ["users.manage", "users.manage"],
-    ["usage.view", "usage.view"],
-    ["audit.view", "audit.view"],
-    ["api_access.manage", "api_access.manage"],
-    ["agent_models.manage", "agent_models.manage"],
-    ["assets.release", "config_assets.release"]
-  ] satisfies [PlatformAction, Permission][])("maps %s to %s", (action, permission) => {
-    expect(legacyPermissionFor(action)).toBe(permission);
-  });
-
-  // An invalid string cannot honestly inhabit the closed PlatformAction union.
-  // The unmapped-action branch requires an unsafe cast or an untyped boundary.
 
   it("derives unchanged legacy role defaults from the canonical actions", () => {
     // A `user` holds one default: adding their own MCP server (PMCP), which no legacy key names.

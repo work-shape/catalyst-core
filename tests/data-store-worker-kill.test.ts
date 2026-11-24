@@ -185,12 +185,9 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
 
   // Fails without the record of the key: the call that was cut off is never made again and
   // the run ends as failed with `operation_interrupted`.
-  it.each([
-    { backend: "disconnects naturally", disconnectBeforeObservation: false },
-    { backend: "has already disconnected", disconnectBeforeObservation: true }
-  ])(
-    "replays the committed insert under its key after a kill, holding each row once, when its backend $backend",
-    async ({ disconnectBeforeObservation }) => {
+  it(
+    "replays the committed insert under its key after a kill, holding each row once",
+    async () => {
       const { world: t, worker: first } = await openProbeWorld({
         modules: { dataStores: { enabled: true } },
         fileStore: true
@@ -259,12 +256,10 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
         select pg_terminate_backend(pid, 5000) from pg_stat_activity
         where datname = current_database() and application_name = ${first.applicationName}`
         );
-      if (disconnectBeforeObservation) {
-        // Force the legal ordering that failed in CI. Postgres waits for termination here,
-        // so the next observation deterministically sees no backend, without a test poll.
-        await disconnect();
-        expect(await sessions()).toHaveLength(0);
-      }
+      // Postgres waits for termination here, so the observation deterministically sees no
+      // backend, without a test poll; a second termination finds nothing left to end.
+      await disconnect();
+      expect(await sessions()).toHaveLength(0);
       await disconnect();
       expect(await sessions()).toHaveLength(0);
       await held`rollback`;

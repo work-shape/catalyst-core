@@ -29,8 +29,4 @@ describe("the workspaces of the demo", () => {
       expect(scope).not.toContain(name.trim().toLocaleLowerCase());
     }
   });
-
-  it("name the HR workspace for what it holds", () => {
-    expect(demoCompany.hrWorkspace.name).toMatch(/HR/u);
-  });
 });

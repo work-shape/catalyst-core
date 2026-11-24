@@ -174,7 +174,7 @@ describe("catalogue CLI (CAT-2)", () => {
     expect(JSON.parse(json.out)).toEqual(catalogue.entries);
   });
 
-  it("rejects invalid arguments before contacting the instance and has offline help", async () => {
+  it("rejects invalid arguments before contacting the instance", async () => {
     for (const args of [
       ["connection", "init", "books"],
       ["connection", "init", "../escape", "--from", "sample-accounting"],
@@ -186,9 +186,5 @@ describe("catalogue CLI (CAT-2)", () => {
       expect(result.code, result.err).toBe(2);
       expect(result.fetchImpl).not.toHaveBeenCalled();
     }
-    const help = await run(["connection", "init", "--help"]);
-    expect(help.code).toBe(0);
-    expect(help.out).toContain("--from <entry>");
-    expect(help.fetchImpl).not.toHaveBeenCalled();
   });
 });

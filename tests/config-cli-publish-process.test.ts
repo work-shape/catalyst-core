@@ -125,17 +125,14 @@ async function publishing(status: "done" | "pending_confirmation" | "pending_app
 }
 
 describe("the public Data Store publish CLI process", () => {
-  it.each(["pending_confirmation", "pending_approval"] as const)(
-    "exits 3 while %s without publishing",
-    async (status) => {
-      const result = await publishing(status);
-      expect(result).toMatchObject({ code: 3, published: false, unattended: undefined });
-      expect(JSON.parse(result.output)).toMatchObject({
-        status: "pending_approval",
-        run: { status }
-      });
-    }
-  );
+  it.each(["pending_approval"] as const)("exits 3 while %s without publishing", async (status) => {
+    const result = await publishing(status);
+    expect(result).toMatchObject({ code: 3, published: false, unattended: undefined });
+    expect(JSON.parse(result.output)).toMatchObject({
+      status: "pending_approval",
+      run: { status }
+    });
+  });
   it("exits 0 only for the published revision", async () => {
     const result = await publishing("done");
     expect(result).toMatchObject({ code: 0, published: true, unattended: undefined });

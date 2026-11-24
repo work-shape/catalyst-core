@@ -102,8 +102,51 @@ describe("policies.set", () => {
     expect(changes).toHaveLength(2);
   });
 
-  it("narrows a setting to a shared workspace and names it", async () => {
+  it("refuses a person without policy.manage and an operation it may not set, and narrows a setting to a shared workspace", async () => {
     const t = await setup();
+    await t.expectRefused(t.kai.id, "policies.get", {}, { status: 403, code: "FORBIDDEN" });
+    await t.expectRefused(
+      t.kai.id,
+      "policies.set",
+      { payload: { operation: "operations.list_callable", value: "deny" } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    await t.expectRefused(
+      t.kai.id,
+      "policies.set_always_allow_lock",
+      { payload: { operation: "me.chat_skills.set", locked: true } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    expect(await t.stores.centralPolicySettings.list({ clientInstanceId })).toEqual([]);
+    expect(await audited(t, "governance.policy_setting_changed")).toEqual([]);
+
+    const refusedWith = (operation: string, value: string, reason: string) =>
+      t.expectRefused(
+        t.admin.id,
+        "policies.set",
+        { payload: { operation, value } },
+        { status: 422, code: "VALIDATION_FAILED", details: expect.objectContaining({ reason }) }
+      );
+    await refusedWith("nothing.here", "deny", "unknown_operation");
+    await refusedWith("operations.list_callable", "confirm", "reading_operation_waits");
+    await refusedWith("policies.set", "deny", "policy_names_itself");
+    await refusedWith("policies.*", "deny", "policy_names_itself");
+    expect(await t.stores.centralPolicySettings.list({ clientInstanceId })).toEqual([]);
+
+    // The interface's own read stays out of reach, so a deny on a pattern locks no admin out.
+    await refusedWith("platform.context.get", "deny", "policy_names_itself");
+    await refusedWith("platform.*", "deny", "policy_names_itself");
+    // A bare `*` names no operation at all.
+    await t.expectRefused(
+      t.admin.id,
+      "policies.set",
+      { payload: { operation: "*", value: "deny" } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    // What the interface loads and the Policies screen still answer.
+    await t.expectOk(t.admin.id, "platform.context.get");
+    await t.expectOk(t.admin.id, "policies.get");
+
     const team = await t.sharedWorkspace("Team");
     await t.expectOk(t.admin.id, "policies.set", {
       payload: { operation: "assets.*", workspaceId: team, value: "approval" }
@@ -122,49 +165,6 @@ describe("policies.set", () => {
       { payload: { operation: "assets.*", workspaceId: "cws_missing", value: "deny" } },
       { status: 404, code: "NOT_FOUND" }
     );
-  });
-
-  it("refuses an unknown operation, a wait on a reading one, and the screen's own", async () => {
-    const t = await setup();
-    const refused = (operation: string, value: string, reason: string) =>
-      t.expectRefused(
-        t.admin.id,
-        "policies.set",
-        { payload: { operation, value } },
-        { status: 422, code: "VALIDATION_FAILED", details: expect.objectContaining({ reason }) }
-      );
-    await refused("nothing.here", "deny", "unknown_operation");
-    await refused("operations.list_callable", "confirm", "reading_operation_waits");
-    await refused("policies.set", "deny", "policy_names_itself");
-    await refused("policies.*", "deny", "policy_names_itself");
-    expect(await t.stores.centralPolicySettings.list({ clientInstanceId })).toEqual([]);
-  });
-
-  it("keeps the interface's own read out of reach, so a deny on a pattern locks no admin out", async () => {
-    const t = await setup();
-    const refused = (operation: string) =>
-      t.expectRefused(
-        t.admin.id,
-        "policies.set",
-        { payload: { operation, value: "deny" } },
-        {
-          status: 422,
-          code: "VALIDATION_FAILED",
-          details: expect.objectContaining({ reason: "policy_names_itself" })
-        }
-      );
-    await refused("platform.context.get");
-    await refused("platform.*");
-    // A bare `*` names no operation at all.
-    await t.expectRefused(
-      t.admin.id,
-      "policies.set",
-      { payload: { operation: "*", value: "deny" } },
-      { status: 422, code: "VALIDATION_FAILED" }
-    );
-    // What the interface loads and the Policies screen still answer.
-    await t.expectOk(t.admin.id, "platform.context.get");
-    await t.expectOk(t.admin.id, "policies.get");
   });
 
   it("refuses a new setting and a new lock once the instance holds the most it keeps", async () => {
@@ -216,25 +216,6 @@ describe("policies.set", () => {
       { status: 403, code: "POLICY_DENIED" }
     );
     expect(await audited(t, "governance.always_allow_lock_changed")).toEqual([]);
-  });
-
-  it("refuses a person without policy.manage", async () => {
-    const t = await setup();
-    await t.expectRefused(t.kai.id, "policies.get", {}, { status: 403, code: "FORBIDDEN" });
-    await t.expectRefused(
-      t.kai.id,
-      "policies.set",
-      { payload: { operation: "operations.list_callable", value: "deny" } },
-      { status: 403, code: "FORBIDDEN" }
-    );
-    await t.expectRefused(
-      t.kai.id,
-      "policies.set_always_allow_lock",
-      { payload: { operation: "me.chat_skills.set", locked: true } },
-      { status: 403, code: "FORBIDDEN" }
-    );
-    expect(await t.stores.centralPolicySettings.list({ clientInstanceId })).toEqual([]);
-    expect(await audited(t, "governance.policy_setting_changed")).toEqual([]);
   });
 });
 

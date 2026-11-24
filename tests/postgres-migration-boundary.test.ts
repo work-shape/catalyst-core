@@ -77,7 +77,7 @@ describe("the migration boundary", () => {
     expect(await schemaObjects(databaseUrl)).toEqual([]);
   });
 
-  it("names the migrations a database behind lacks, and starts once they are applied", async () => {
+  it("names the migrations a database behind lacks, starts once they are applied, and starts ahead of this release", async () => {
     const databaseUrl = await emptyDatabase("behind");
     const behind = committed.length - 2;
     expect(
@@ -93,11 +93,8 @@ describe("the migration boundary", () => {
     expect(await migrateDatabase({ databaseUrl })).toEqual(committed.slice(behind));
     expect(await migrateDatabase({ databaseUrl })).toEqual([]);
     await expect(start(databaseUrl)).resolves.toBeUndefined();
-  });
 
-  it("starts on a database that is ahead of this release", async () => {
-    const databaseUrl = await emptyDatabase("ahead");
-    await migrateDatabase({ databaseUrl });
+    // A database ahead of this release, with a migration of a newer one, starts as well.
     const sql = postgres(databaseUrl, { max: 1 });
     try {
       await sql`create table from_a_newer_release (id text primary key)`;

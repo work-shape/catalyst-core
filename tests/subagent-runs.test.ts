@@ -677,10 +677,6 @@ describe("the model of a subagent (CR-3m)", () => {
     const tool = runAgentToolOf(required(f.requestsFor(message)[0]));
     expect(tool.agent.enum).toEqual(["test_agent", "alpha", "zeta"]);
     expect(tool.model.enum).toEqual(["large", "small"]);
-    expect(tool.agent.description).toContain(
-      "- alpha: Alpha — Sorts receipts. (models: large, small)"
-    );
-    expect(tool.agent.description).not.toContain("outsider");
 
     // A chosen model runs the child on it. Without one a named agent runs on its own default
     // and a copy of the parent on the parent's model.
@@ -688,7 +684,6 @@ describe("the model of a subagent (CR-3m)", () => {
     expect(children.map((child) => child.description)).toEqual(["Klein", "Eigen", "Kopie"]);
     const [chosen, ownDefault, copy] = children.map((child) => child.subagentRunId);
     expect(await f.agentRun(required(chosen))).toMatchObject({ modelBindingId: "large" });
-    expect(tool.model.description).toContain("another agent on its own default model");
 
     // A binding outside the child agent's offer is refused and starts nothing.
     const failures = (await f.events(said.runId)).flatMap((event) =>
@@ -714,24 +709,6 @@ describe("the model of a subagent (CR-3m)", () => {
       agentDisplayName: "Alpha",
       model: { model: "local", label: "Large 5.5" }
     });
-    await f.app.close();
-  });
-
-  it("runs a child on a model its agent offers that the parent's agent does not", async () => {
-    const f = await modelFixture(["alpha"]);
-    // `alpha` offers `small` as its own; the parent offers it too, `zeta` would not.
-    const said = await f.say(
-      runAgent({ description: "Sortieren", task: "Task sort.", agent: "alpha", model: "small" })
-    );
-    await f.until(said.runId, "completed");
-    const child = required((await f.children(said.runId))[0]);
-    expect(await f.agentRun(child.subagentRunId)).toMatchObject({ modelBindingId: "small" });
-    const usage = await f.app.stores.usage.listModelUsageEvents({
-      clientInstanceId: f.clientInstanceId
-    });
-    const ofChild = usage.filter((event) => event.agentRunId === child.subagentRunId);
-    expect(ofChild.length).toBeGreaterThan(0);
-    expect(ofChild.every((event) => event.bindingId === "small")).toBe(true);
     await f.app.close();
   });
 

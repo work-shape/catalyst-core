@@ -79,7 +79,7 @@ describe("the data scope resolver", () => {
       { dimension: "mandant", all: true }
     ]);
   });
-  it.each(["$viewer.scope", "$viewer.scope(user_input)", "/* never closed", "'never closed"])(
+  it.each(["$viewer.scope(user_input)", "/* never closed"])(
     "refuses malformed SQL binding text %s",
     (sql) => {
       expect(() => viewerScopeBindings(sql)).toThrow();

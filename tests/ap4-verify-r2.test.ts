@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import postgres, { type Sql } from "postgres";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import {
@@ -22,7 +23,8 @@ import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 import { storesOn } from "./support/upgrade-database";
 
-// AP-4 verifier, second round (PR 50 at 41173b8d).
+// AP-4 verifier: migration 0079 on odd inputs, the way back (`--restore-legacy-columns`) and
+// the second round (PR 50 at 41173b8d).
 
 const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -31,6 +33,10 @@ afterEach(async () => {
 });
 
 const instance = "ap4-r2";
+const migrationSql = readFileSync(
+  "packages/postgres-store/migrations/0079_legacy_permission_grants.sql",
+  "utf8"
+);
 const clientInstanceId = asClientInstanceId(instance);
 const LEGACY_ACTIONS = PERMISSIONS.flatMap((key) => [...LEGACY_PERMISSION_ACTIONS[key]]);
 const QUESTIONS = [...PERMISSIONS, ...LEGACY_ACTIONS];
@@ -60,6 +66,13 @@ async function seedPrincipal(sql: Sql, id: string, permissions: string[]) {
       permission_refs, permissions, created_at, updated_at)
     values (${id}, ${instance}, ${id}, ${id}, 'active', '[]'::jsonb,
       ${JSON.stringify(permissions)}::text::jsonb, now(), now())`;
+}
+
+async function seedCredential(sql: Sql, principalId: string) {
+  await sql`
+    insert into api_credentials (id, client_instance_id, service_principal_id, name,
+      key_prefix, secret_hash, scopes, created_at)
+    values ('cred_a', ${instance}, ${principalId}, 'cred_a', 'p', 'h', null, now())`;
 }
 
 /** The answers of the release before AP-4: column and every row of the holder. */
@@ -132,6 +145,79 @@ async function newAnswers(stores: PostgresStores, kind: "user" | "service_princi
   const access = await createAuthorizer(stores.access).forActor(actor);
   return Object.fromEntries(QUESTIONS.map((q) => [q, access.authorize(q).allowed]));
 }
+
+describe("AP-4 verifier: migration 0079 SQL", () => {
+  it("gives no right for a list entry that is not a string key", async () => {
+    const { databaseUrl, sql } = await databaseBeforeAp4();
+    const lists: Record<string, string> = {
+      usr_nested: '[["users.manage"]]',
+      usr_object: '{"users.manage": true}',
+      usr_string: '"users.manage"',
+      usr_object_in_list: '[{"users.manage": true}]'
+    };
+    for (const [id, permissions] of Object.entries(lists)) {
+      await sql`
+        insert into product_users (id, client_instance_id, display_label, roles, permission_refs,
+          permissions, status, created_at, updated_at)
+        values (${id}, ${instance}, ${id}, '["user"]'::jsonb, '[]'::jsonb,
+          ${permissions}::text::jsonb, 'active', now(), now())`;
+    }
+    await migrateDatabase({ databaseUrl });
+    const rows = await sql<{ holder_id: string; action: string }[]>`
+      select holder_id, action from permission_grants order by holder_id`;
+    expect(rows).toEqual([]);
+  });
+
+  it("run a second time by hand, it keeps a key without a list at every scope", async () => {
+    const { databaseUrl, sql } = await databaseBeforeAp4();
+    await seedPrincipal(sql, "sp_a", ["config_assets.read"]);
+    await seedCredential(sql, "sp_a");
+    // Through 0079 alone: a later migration takes out a column its SQL names.
+    const through = migrationsUntil({ name: "legacy_permission_grants", including: true });
+    cleanups.push(() => through.remove());
+    await migrateDatabase({ databaseUrl, migrationsDirectory: through.directory });
+    const grantsAfterFirst =
+      await sql`select action, effect from permission_grants order by action`;
+    await sql.unsafe(migrationSql.replaceAll("--> statement-breakpoint", ""));
+    const grantsAfterSecond =
+      await sql`select action, effect from permission_grants order by action`;
+    expect(grantsAfterSecond).toEqual(grantsAfterFirst);
+    const [credential] = await sql<{ scopes: unknown }[]>`select scopes from api_credentials`;
+    expect(credential?.scopes).toEqual(["*"]);
+  });
+});
+
+describe("AP-4 verifier: rollback", () => {
+  it("a key the release before AP-4 takes away after the rollback is gone", async () => {
+    const { databaseUrl, sql } = await databaseBeforeAp4();
+    await seedUser(sql, "usr_manager", ["users.manage"]);
+    expect((await oldAnswers(sql, "user", "usr_manager"))["users.manage"]).toBe(true);
+
+    await migrateDatabase({ databaseUrl });
+    await restoreLegacyColumns({ sql, write: () => undefined });
+    // Restored, the old release answers what it answered before the migration.
+    expect((await oldAnswers(sql, "user", "usr_manager"))["users.manage"]).toBe(true);
+
+    // On the old release an admin unticks users.manage: the old store writes the column only.
+    await sql`update product_users set permissions = '[]'::jsonb where id = 'usr_manager'`;
+    // Migration 0079's instance-wide rows do not keep it.
+    expect((await oldAnswers(sql, "user", "usr_manager"))["users.manage"]).toBe(false);
+  });
+
+  it("restoring twice changes nothing the second time", async () => {
+    const { databaseUrl, sql } = await databaseBeforeAp4();
+    await seedUser(sql, "usr_a", ["users.manage", "!audit.view", "nonsense"]);
+    await seedPrincipal(sql, "sp_a", ["config_assets.read"]);
+    await seedCredential(sql, "sp_a");
+    await migrateDatabase({ databaseUrl });
+    const first = await restoreLegacyColumns({ sql, write: () => undefined });
+    const second = await restoreLegacyColumns({ sql, write: () => undefined });
+    expect(first).toBeGreaterThan(0);
+    expect(second).toBe(0);
+    const [credential] = await sql<{ scopes: unknown }[]>`select scopes from api_credentials`;
+    expect(credential?.scopes).toBeNull();
+  });
+});
 
 describe("AP-4 r2: rollback round trip with edits on both releases", () => {
   it("keeps every right through upgrade, edit, restore, edit, upgrade", async () => {

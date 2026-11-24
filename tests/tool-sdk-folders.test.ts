@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { toolAssetConfigSchema } from "@work-shape/catalyst-core";
+import { isJsonObject, toolAssetConfigSchema } from "@work-shape/catalyst-core";
 import { runCli, type CliRuntimeOptions } from "@work-shape/catalyst-cli";
+import { defineTool } from "@work-shape/catalyst-tool-sdk";
 
 // A code tool as a folder (TOOL-2d, platform-access.md, section 3a): `catalyst tool put`
 // derives the input schema and the description from the handler on this computer, and `catalyst
@@ -585,5 +586,83 @@ describe("catalyst tool run <folder>", () => {
     ]);
     expect(repeated.code).toBe(1);
     expect(repeated.err).toContain("must NOT have duplicate items");
+  });
+});
+
+describe("tool SDK", () => {
+  it("derives provider-facing input JSON Schema from Zod input schemas", () => {
+    const tool = defineTool({
+      name: "test.representative",
+      effect: "reading",
+      description: "Representative test tool.",
+      inputSchema: z.object({
+        title: z.string().min(2).max(40).describe("Short user-visible title."),
+        count: z.number().int().min(1).max(10).default(3).describe("Number of items to include."),
+        mode: z.enum(["fast", "thorough"]).default("fast").describe("Execution mode."),
+        code: z
+          .string()
+          .regex(/^AB-\d{3}$/u)
+          .describe("Optional tracking code.")
+          .optional()
+      }),
+      execute() {
+        return { status: "success", output: {} };
+      }
+    });
+
+    expect(tool.inputJsonSchema).toEqual({
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          minLength: 2,
+          maxLength: 40,
+          description: "Short user-visible title."
+        },
+        count: {
+          default: 3,
+          type: "integer",
+          minimum: 1,
+          maximum: 10,
+          description: "Number of items to include."
+        },
+        mode: {
+          default: "fast",
+          type: "string",
+          enum: ["fast", "thorough"],
+          description: "Execution mode."
+        },
+        code: {
+          type: "string",
+          pattern: "^AB-\\d{3}$",
+          description: "Optional tracking code."
+        }
+      },
+      required: ["title"],
+      additionalProperties: false
+    });
+  });
+
+  it("keeps record value schemas in additionalProperties instead of closing them", () => {
+    const tool = defineTool({
+      name: "test.record_input",
+      effect: "reading",
+      description: "Tool with a record-typed input field.",
+      inputSchema: z.object({
+        labels: z.record(z.string(), z.string()).describe("Arbitrary string labels.")
+      }),
+      execute() {
+        return { status: "success", output: {} };
+      }
+    });
+
+    const properties = tool.inputJsonSchema.properties;
+    if (!isJsonObject(properties) || !isJsonObject(properties.labels)) {
+      throw new Error("Expected an object schema for labels");
+    }
+    const labels = properties.labels;
+    expect(labels.type).toBe("object");
+    expect(labels.additionalProperties).toEqual({ type: "string" });
+    expect(tool.inputJsonSchema.additionalProperties).toBe(false);
   });
 });

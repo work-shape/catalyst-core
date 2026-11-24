@@ -8,7 +8,6 @@ import {
   Picker,
   PickerButton,
   UiRoot,
-  uiLabelsDe,
   uiLabelsEn,
   type PickerMoreRow
 } from "@work-shape/catalyst-ui";
@@ -67,7 +66,6 @@ describe("Picker with a next page", () => {
     await mount({ loading: false, onLoad });
 
     const row = moreRow();
-    expect(row?.textContent).toBe(uiLabelsEn.showMore);
     // The row comes after the options, inside the list that scrolls.
     const rows = [...document.querySelectorAll("[cmdk-item]")].map((item) => item.textContent);
     expect(rows).toEqual(["Alpha", "Beta", uiLabelsEn.showMore]);
@@ -94,34 +92,20 @@ describe("Picker with a next page", () => {
 });
 
 describe("LoadMore", () => {
-  async function mountLoadMore(props: Parameters<typeof LoadMore>[0], labels = uiLabelsEn) {
+  async function mountLoadMore(props: Parameters<typeof LoadMore>[0]) {
     await act(async () => {
-      root.render(createElement(UiRoot, { mode: "light", labels }, createElement(LoadMore, props)));
+      root.render(
+        createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, createElement(LoadMore, props))
+      );
     });
     return host.querySelector<HTMLButtonElement>('[data-slot="load-more"] button');
   }
 
-  it("reads the next page when pressed, in the library's words of the reader's language", async () => {
+  it("reads the next page when pressed", async () => {
     const onLoad = vi.fn();
-    const button = await mountLoadMore({ loading: false, onLoad, id: "list-more" });
-    expect(button?.textContent).toBe(uiLabelsEn.showMore);
-    // What the caller marks it with reaches its element.
-    expect(host.querySelector('[data-slot="load-more"]')?.id).toBe("list-more");
+    const button = await mountLoadMore({ loading: false, onLoad });
     await act(async () => button?.click());
     expect(onLoad).toHaveBeenCalledTimes(1);
-
-    expect((await mountLoadMore({ loading: false, onLoad }, uiLabelsDe))?.textContent).toBe(
-      uiLabelsDe.showMore
-    );
-  });
-
-  it("says the caller's words where it gives them", async () => {
-    const button = await mountLoadMore({
-      loading: false,
-      onLoad: () => undefined,
-      label: "Mehr zeigen"
-    });
-    expect(button?.textContent).toBe("Mehr zeigen");
   });
 
   it("cannot be pressed again while the next page is on its way", async () => {

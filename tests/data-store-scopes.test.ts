@@ -84,7 +84,7 @@ describe("scoped Data Store rows", () => {
       ...extra
     });
   }
-  it("refuses missing scope values, out-of-scope inserts and cross-scope value cursors", async () => {
+  it("refuses missing scope values, out-of-scope writes and cross-scope value cursors, and publishing an invalid scope column or an undeclared relative (M1)", async () => {
     const w = await world();
     expect(
       await refusal(call(w, "insert", { table: "findings", rows: [{ id: 4 }] }, access("all")))
@@ -109,38 +109,67 @@ describe("scoped Data Store rows", () => {
     expect(
       await refusal(call(w, "value", { table: "findings", column: "note", at }, access(["101"])))
     ).toMatchObject({ code: "NOT_FOUND" });
-  });
-  it.each([
-    "drop column mandant_nr",
-    "alter column mandant_nr drop not null",
-    "alter column mandant_nr type varchar(50)"
-  ])("refuses publishing invalid scope column: %s", async (ddl) => {
-    const w = await world();
-    const drop = {
-      path: "migrations/0002_remove_scope.sql",
-      text: `alter table findings ${ddl}`
-    };
-    expect(await refusal(publish(w, [scoped, init, drop]))).toMatchObject({
-      details: { reason: "scope_column_invalid" }
-    });
+    expect(
+      await refusal(
+        call(
+          w,
+          "load",
+          { table: "findings", dataset: { $dataset: "missing-scope", rowCount: 1, bytes: 10 } },
+          access("all")
+        )
+      )
+    ).toMatchObject({ details: { reason: "scope_value_required" } });
+    expect(
+      await refusal(
+        call(
+          w,
+          "update",
+          { table: "findings", rows: [{ key: { id: 3 }, set: { note: "changed" } }] },
+          access(["101"])
+        )
+      )
+    ).toMatchObject({ details: { reason: "key_not_found" } });
+    expect(
+      await refusal(
+        call(
+          w,
+          "update",
+          { table: "findings", rows: [{ key: { id: 1 }, set: { mandant_nr: "103" } }] },
+          access(["101"])
+        )
+      )
+    ).toMatchObject({ details: { reason: "scope_value_denied" } });
+    expect(
+      await call(
+        w,
+        "update",
+        { table: "findings", rows: [{ key: { id: 1 }, set: { note: "changed" } }] },
+        access(["101"])
+      )
+    ).toMatchObject({ updated: 1 });
+    expect(
+      await refusal(
+        call(w, "delete_rows", { table: "findings", keys: [{ id: 3 }] }, access(["101"]))
+      )
+    ).toMatchObject({ details: { reason: "key_not_found" } });
+    for (const ddl of [
+      "alter table findings drop column mandant_nr",
+      "alter table findings alter column mandant_nr drop not null",
+      "alter table findings alter column mandant_nr type varchar(50)",
+      "create table findings_more () inherits (findings)",
+      "create table findings_all (id int, mandant_nr text not null, note text); alter table findings inherit findings_all",
+      "create view findings_view as select * from findings",
+      "create materialized view findings_counts as select mandant_nr, count(*) from findings group by 1"
+    ]) {
+      const change = { path: "migrations/0002_change.sql", text: ddl };
+      expect(await refusal(publish(w, [scoped, init, change])), ddl).toMatchObject({
+        details: { reason: "scope_column_invalid" }
+      });
+    }
     expect(await call(w, "query", { sql: "select * from findings" }, access("all"))).toMatchObject({
       rows: [expect.anything(), expect.anything(), expect.anything()]
     });
   });
-
-  it.each([
-    "create table findings_more () inherits (findings)",
-    "create table findings_all (id int, mandant_nr text not null, note text); alter table findings inherit findings_all",
-    "create view findings_view as select * from findings",
-    "create materialized view findings_counts as select mandant_nr, count(*) from findings group by 1"
-  ])("refuses publishing an undeclared relative of a scoped table (M1): %s", async (ddl) => {
-    const w = await world();
-    const relative = { path: "migrations/0002_relative.sql", text: ddl };
-    expect(await refusal(publish(w, [scoped, init, relative]))).toMatchObject({
-      details: { reason: "scope_column_invalid" }
-    });
-  });
-
   it("never activates a store whose undeclared partition holds a scoped table's rows (M1)", async () => {
     const w = await setup("partitions", {}, undefined, undefined, undefined, dimension);
     const id = await publish(w, [
@@ -203,52 +232,6 @@ insert into findings values (1, '101', 'A'), (3, '103', 'C');`
     );
   });
 
-  it("refuses a load missing the scope value and checks old and new scope values on mutations", async () => {
-    const w = await world();
-    expect(
-      await refusal(
-        call(
-          w,
-          "load",
-          { table: "findings", dataset: { $dataset: "missing-scope", rowCount: 1, bytes: 10 } },
-          access("all")
-        )
-      )
-    ).toMatchObject({ details: { reason: "scope_value_required" } });
-    expect(
-      await refusal(
-        call(
-          w,
-          "update",
-          { table: "findings", rows: [{ key: { id: 3 }, set: { note: "changed" } }] },
-          access(["101"])
-        )
-      )
-    ).toMatchObject({ details: { reason: "key_not_found" } });
-    expect(
-      await refusal(
-        call(
-          w,
-          "update",
-          { table: "findings", rows: [{ key: { id: 1 }, set: { mandant_nr: "103" } }] },
-          access(["101"])
-        )
-      )
-    ).toMatchObject({ details: { reason: "scope_value_denied" } });
-    expect(
-      await call(
-        w,
-        "update",
-        { table: "findings", rows: [{ key: { id: 1 }, set: { note: "changed" } }] },
-        access(["101"])
-      )
-    ).toMatchObject({ updated: 1 });
-    expect(
-      await refusal(
-        call(w, "delete_rows", { table: "findings", keys: [{ id: 3 }] }, access(["101"]))
-      )
-    ).toMatchObject({ details: { reason: "key_not_found" } });
-  });
   it("never activates an initially nullable scope column", async () => {
     const w = await setup("nullable", {}, undefined, undefined, undefined, dimension);
     const id = await publish(w, [

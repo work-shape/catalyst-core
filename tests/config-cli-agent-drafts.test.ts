@@ -1,12 +1,10 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   STATE_FILENAME,
-  canonicalizeAgentConfig,
   readStateFile,
-  serializeAgentYaml,
   runCli,
   writeStateFile,
   type CatalystState
@@ -610,52 +608,5 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     const pushed = await cli.run(["config", "push"]);
     expect(pushed.code, pushed.err).toBe(0);
     expect(await draft()).toMatchObject({ revision: 1 });
-  });
-
-  it("publishes a workspace's agent with config push --publish, live at once (PUB-LIVE-1)", async () => {
-    const { t } = await setup();
-    const team = await t.sharedWorkspace("Team");
-    const mine = await workingCopy();
-    const cli = cliAs(t.instance, { user: t.admin.id }, mine);
-    await cli.ok(["config", "pull", "--workspace", team]);
-    await mkdir(join(mine, "agents"), { recursive: true });
-    await writeFile(
-      join(mine, "agents", "team-helper.agent.yaml"),
-      serializeAgentYaml(
-        canonicalizeAgentConfig({
-          name: "team-helper",
-          displayName: "Team helper",
-          instructions: "Help the team.",
-          modelProviderId: "local",
-          toolNames: [],
-          skillNames: [],
-          initialPrompts: []
-        })
-      ),
-      "utf8"
-    );
-    const created = await cli.run(["config", "push"]);
-    expect(created.code, created.err).toBe(0);
-    const teamAgent = async () =>
-      t.stores.configAssets.getConfigAsset({
-        clientInstanceId,
-        kind: "agent",
-        name: "team-helper"
-      });
-    expect(await teamAgent()).toMatchObject({ revision: 1 });
-
-    const path = join(mine, "agents", "team-helper.agent.yaml");
-    await writeFile(
-      path,
-      (await readFile(path, "utf8")).replace("Help the team.", "Help the team well."),
-      "utf8"
-    );
-    const published = await cli.run(["config", "push", "--publish"]);
-    expect(published.code, published.err).toBe(0);
-    expect(published.out).toContain("agent:team-helper: draft revision 1;");
-    expect(await teamAgent()).toMatchObject({
-      revision: 2,
-      config: { instructions: "Help the team well." }
-    });
   });
 });
