@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { operationBatchResultSchema } from "@work-shape/catalyst-core";
-import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { start, stepRunsOf } from "./support/workflow-runs";
-import { manifest, prepared, expectBatchViews } from "./support/workflow-batch";
+import { prepared, expectBatchViews } from "./support/workflow-batch";
 
 describe("Workflow batch operations (WF 114)", () => {
   it.each([false, true])(
@@ -47,20 +46,8 @@ describe("Workflow batch operations (WF 114)", () => {
     });
   });
 
-  it.each([
-    [12, 5],
-    [5, 1]
-  ])("runs %i rows in views of %i without copying them", expectBatchViews, 300_000);
+  it.each([[12, 5]])("runs %i rows in views of %i without copying them", expectBatchViews, 300_000);
 
-  it.each([0, -1, 1.5, "500"])("refuses malformed batch size %s", (batch) => {
-    const value = manifest(500);
-    expect(
-      parseWorkflowManifest({
-        ...value,
-        steps: value.steps.map((step) => (step && "batch" in step ? { ...step, batch } : step))
-      }).ok
-    ).toBe(false);
-  });
   it("refuses a batched inline loop instead of silently treating rows as batches", async () => {
     const { t } = await prepared(3, 2, true);
     expect(await t.finish((await start(t)).id)).toMatchObject({

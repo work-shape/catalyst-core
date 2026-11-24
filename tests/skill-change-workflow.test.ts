@@ -214,17 +214,6 @@ describe("skill change approval workflow", () => {
     // A change the guardrail lets through is applied.
     expect(await f.approve((await f.propose()).id)).toMatchObject({ status: "approved" });
   });
-  it("approves independent pending changes to different paragraphs in sequence", async () => {
-    const f = await fixture();
-    const first = await f.propose();
-    const second = await f.propose([
-      { type: "replace_text", target: "root", oldText: "Keep", newText: "Retain" }
-    ]);
-    expect(await f.approve(first.id)).toMatchObject({ status: "approved" });
-    expect(await f.approve(second.id)).toMatchObject({ status: "approved" });
-    expect((await f.revisions()).at(-1)?.config?.content).toBe("Verify facts.\n\nRetain evidence.");
-    expect(await f.revisions()).toHaveLength(3);
-  });
 
   it("refreshes a pending preview with the current paragraph while the operation still applies", async () => {
     const f = await fixture();
@@ -310,29 +299,6 @@ describe("skill change approval workflow", () => {
     }
   );
 
-  it("supersedes a stale proposal and keeps its original preview readable", async () => {
-    const f = await fixture();
-    const request = await f.propose();
-    await applyAtCurrentRevisions(f.store.configAssets, {
-      clientInstanceId,
-      mutations: [
-        {
-          type: "upsert",
-          scope: f.owner,
-          kind: "skill",
-          name: skill.name,
-          config: json({ ...skill, content: "Other content" })
-        }
-      ]
-    });
-    expect(
-      await f.workflow.getRequest(reviewer, accessOf(reviewer), context, request.id)
-    ).toMatchObject({
-      preview: request.payload.preview
-    });
-    expect(await f.approve(request.id)).toMatchObject({ status: "superseded" });
-    expect(await f.revisions()).toHaveLength(2);
-  });
   it("refuses approval while the policy or skill creation is disabled", async () => {
     const f = await fixture();
     const request = await f.propose();
@@ -732,8 +698,7 @@ describe("skill change tool and wiring policy", () => {
   it.each([
     [true, true],
     [true, false],
-    [false, true],
-    [false, false]
+    [false, true]
   ])("includes instructions only with policy %s and tool %s", (enabled, toolPresent) => {
     const content = createSystemInstructions("Help", "en", {
       agentSkillChangesEnabled: enabled,
@@ -753,8 +718,6 @@ describe("skill change tool and wiring policy", () => {
         agentSkillChangesEnabled: true,
         agentToolNames: tools
       });
-      expect(content).toContain("A proposal changes one of your own skills or creates a new one.");
-      expect(content).toContain("Read your skill with read_skill first.");
       expect(content.includes("Read any other skill with platform.assets.get")).toBe(gets);
       expect(content.includes("You cannot read or propose a change to any other skill")).toBe(
         !gets

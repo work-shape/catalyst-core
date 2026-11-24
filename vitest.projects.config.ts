@@ -34,7 +34,6 @@ const isolatedPureFiles = new Set([
   "tests/chat-ui-connection-typed.test.ts",
   "tests/chat-ui-connection-create.test.ts",
   "tests/chat-ui-thread-time.test.ts",
-  "tests/chat-ui-workflow-fix-with-agent.test.ts",
   "tests/chat-ui-workflow-rights.test.ts",
   "tests/ui-chart.test.ts",
   "tests/ui-library-page-head-back.test.ts",

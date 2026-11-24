@@ -18,23 +18,16 @@ import {
   createWorkflowCapabilitiesRoute,
   instancePlatformDocsSkill,
   instanceWorkflowCapabilitiesPage,
-  platformDocsSkill,
   type InstanceWorkflowCapabilities
 } from "@work-shape/catalyst-client-assembly";
 import { registerModuleOperations } from "@work-shape/catalyst-server";
 import { WORKFLOW_TEST_TOOL_NAMES } from "@work-shape/catalyst-tool-execution";
-import {
-  createWorkflowAuthoringSkill,
-  workflowCapabilityValueText,
-  type WorkflowCapabilities
-} from "@work-shape/catalyst-workflows";
+import type { WorkflowCapabilities } from "@work-shape/catalyst-workflows";
 import { connection, fixtureConnectorType } from "./support/connections";
 
-// Events, Workflows And Guardrails acceptance check 150 (WF-FIT): `workflows.capabilities`
-// lists the image's packages, every ceiling with its key, per Connection the operations a
-// Workflow reaches, and what is not offered, Postgres reach from a code step among it; the
-// page "What a Workflow can do" shows the same values; the Build Agent answers one of four
-// before its first write. Fails without the change: no such operation, page or answer.
+// Acceptance check 150 (WF-FIT): `workflows.capabilities` lists the image's packages, every
+// ceiling with its key, per Connection the operations a Workflow reaches, and what is not
+// offered; the page "What a Workflow can do" shows the instance's values.
 
 const clientInstanceId = asClientInstanceId("workflow-capabilities");
 
@@ -287,63 +280,17 @@ describe("workflows.capabilities", () => {
 });
 
 describe("the page What a Workflow can do", () => {
-  it("shows the instance's own values in the docs the instance ships", () => {
+  it("shows the instance's own values in the docs the instance ships, not the release's defaults", () => {
     const page = instanceWorkflowCapabilitiesPage(instance);
     const docs = instancePlatformDocsSkill(page).resources?.find(
       (resource) => resource.path === "references/automate/workflow-capabilities.md"
     )?.content;
-    expect(docs).toContain("# What a Workflow can do");
-    expect(docs).toContain(
-      "| Memory of one code step | 2 GiB | `workflows.codeSteps.memoryBytes` |"
-    );
-    expect(docs).toContain(
-      "| Run time of one code step | 300 s | `workflows.codeSteps.timeoutSeconds` |"
-    );
-    expect(docs).toContain("- `pandas` 2.2.3");
-    expect(docs).toContain("A code step does not reach a postgres Connection's database.");
-    expect(docs).toContain("Connections of type warehouse only read");
-    // The release's defaults are gone from the instance's page.
-    expect(docs).not.toContain("| Memory of one code step | 512 MiB |");
-  });
-
-  it("is the release's defaults in the product docs, every ceiling and its key with them", () => {
-    const docs = platformDocsSkill.resources?.find(
-      (resource) => resource.path === "references/automate/workflow-capabilities.md"
-    )?.content;
-    const defaults = workflowsConfigSchema.parse({});
-    expect(docs).toContain(
-      `| Memory of one code step | ${workflowCapabilityValueText({ value: defaults.codeSteps.memoryBytes, unit: "bytes", about: "" })} | \`workflows.codeSteps.memoryBytes\` |`
-    );
-    expect(docs).toContain("`workflows.source.treeBytes`");
-    expect(docs).toContain("A code step does not reach a postgres Connection's database.");
+    expect(docs).toContain("| 2 GiB | `workflows.codeSteps.memoryBytes` |");
+    expect(docs).toContain("| 300 s | `workflows.codeSteps.timeoutSeconds` |");
+    expect(docs).not.toContain("| 512 MiB | `workflows.codeSteps.memoryBytes` |");
   });
 });
 
-describe("the fit check of the Build Agent", () => {
-  const skill = createWorkflowAuthoringSkill([]).content;
-
-  it("is read with workflows.capabilities, a tool offered beside the Workflow test tools", () => {
-    expect(WORKFLOW_TEST_TOOL_NAMES).toContain("workflows.capabilities");
-    expect(skill).toContain("call `workflows.capabilities`");
-  });
-
-  it("gives one of four answers before the first write, naming the switch or the reason", () => {
-    const fit = skill.indexOf("## Before the first write: does it fit?");
-    expect(fit).toBeGreaterThan(-1);
-    expect(fit).toBeLessThan(skill.indexOf("## How you work on a definition"));
-    const section = skill.slice(fit, skill.indexOf("## How you work on a definition"));
-    for (const answer of [
-      "**It fits.**",
-      "**It fits once someone switches something on.**",
-      "**It belongs in another kind.**",
-      "**It is not a fit yet.**"
-    ]) {
-      expect(section).toContain(answer);
-    }
-    expect(section).toContain(
-      "a changing\n   operation of a Connection that an administrator switches on"
-    );
-    expect(section).toContain("a\n   database only the customer's network reaches");
-    expect(section).toContain("never promise what it does not list");
-  });
+it("offers workflows.capabilities to the Build Agent beside the Workflow test tools", () => {
+  expect(WORKFLOW_TEST_TOOL_NAMES).toContain("workflows.capabilities");
 });

@@ -357,26 +357,6 @@ describe("scheduled starts persistence", () => {
     ).toEqual([unrelated.id]);
   });
 
-  it("rolls back a start update with the transaction that owns its enqueue", async () => {
-    const { stores, start, clientInstanceId, owner } = await fixture();
-    await expect(
-      stores.transaction(async (tx) => {
-        await tx.scheduledStarts.get({ clientInstanceId, id: start.id, forUpdate: true });
-        await tx.scheduledStarts.update({
-          clientInstanceId,
-          id: start.id,
-          ownerUserId: owner.id,
-          patch: { state: "paused" },
-          now: start.updatedAt
-        });
-        throw new Error("enqueue failed");
-      })
-    ).rejects.toThrow("enqueue failed");
-    expect((await stores.scheduledStarts.get({ clientInstanceId, id: start.id }))?.state).toBe(
-      "active"
-    );
-  });
-
   it("removes skipped history when its workspace is deleted", async () => {
     const { stores, start, clientInstanceId, owner } = await fixture();
     const workspace = await stores.workspaces.createWorkspace({

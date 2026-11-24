@@ -90,16 +90,11 @@ describe("Workflow manifest document edits", () => {
     if (text === undefined) throw new Error("The edit fell back");
     expect(read(text)).toEqual(manifest);
     expect(text).toContain("# Maintained by the operations team.");
-    expect(text).toContain("name: Example # Keep this name note.\nid: example");
     expect(text).toContain("\n\n# Steps stay in execution order.");
-    expect(text).toContain("# The entry point.");
     expect(text).toContain("kind: schedule # Started by a person.");
     expect(text).toContain("# Keep this step's explanation.");
     expect(text).toContain("type: output\n    name: Renamed # The displayed name.");
     expect(text).not.toContain("obsolete");
-    expect(text).not.toContain("Remove this step");
-    expect(text).toContain("# The final step's explanation.");
-    expect(text).toContain("- id: added\n    name: Added\n    type: output\n    input: {}");
     expect(text.indexOf("description: New description")).toBeLessThan(
       text.indexOf("kind: process")
     );

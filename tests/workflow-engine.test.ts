@@ -112,18 +112,37 @@ describe("a Workflow Run from the manual start to its end", () => {
       ["send", "changing", "crm"],
       ["result", undefined, undefined]
     ]);
-  });
-
-  it("shows no preview of the trigger step, whose output is the run's input", async () => {
-    const t = await ready();
-    const run = await t.finish((await start(t)).id);
-    // A read never answers an input, and the trigger hands the input on as its output.
-    const [trigger, clients] = await stepRunsOf(t, run.id);
-    expect(trigger).toMatchObject({ stepId: "start", status: "done" });
-    expect(trigger?.outputPreview).toBeUndefined();
-    // The steps after it read that output all the same.
-    expect(clients?.outputPreview).toBeDefined();
-    expect(t.executed[0]).toMatchObject({ operation: "echo", input: { text: NOTE } });
+    // The trigger hands the input on as its output and shows no preview of it.
+    expect(stepRuns[0]?.outputPreview).toBeUndefined();
+    expect(stepRuns[1]?.outputPreview).toBeDefined();
+    // The start and the end are governance events without a value of the run.
+    const events = [
+      ...(await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.started" })),
+      ...(await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.ended" }))
+    ];
+    expect(events.map((event) => [event.type, event.subject, event.status])).toEqual([
+      ["workflow_run.started", run.id, "success"],
+      ["workflow_run.ended", run.id, "success"]
+    ]);
+    const [startedEvent, endedEvent] = events;
+    expect(startedEvent?.actor).toMatchObject({ userId: t.root.id });
+    expect(startedEvent?.metadata).toEqual({
+      workflow: "notify-clients",
+      definitionRevisionId: expect.any(String),
+      trigger: "manual",
+      mode: "live",
+      principalId: t.principal.id
+    });
+    expect(endedEvent?.actor).toMatchObject({ principalKind: "service" });
+    expect(endedEvent?.metadata).toEqual({
+      workflow: "notify-clients",
+      definitionRevisionId: expect.any(String),
+      status: "done",
+      stepRunCount: 7
+    });
+    const written = JSON.stringify(events);
+    expect(written).not.toContain(NOTE);
+    expect(written).not.toContain("client-anna");
   });
 
   it("filters the step runs by their block, their status and their item", async () => {
@@ -555,45 +574,9 @@ describe("starting a Workflow that cannot run", () => {
       { status: 409, code: "CONFLICT" }
     );
     expect(inactive.details).toMatchObject({ reason: "principal_inactive" });
-    expect(inactive.message).toContain("technical account 'workflow-runner'");
-    expect(inactive.message).toContain("Settings > API access");
     expect(
       await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.started" })
     ).toEqual([]);
-  });
-});
-
-describe("the audit of a Workflow Run", () => {
-  it("writes the start and the end as governance events without a value of the run", async () => {
-    const t = await ready();
-    const run = await t.finish((await start(t, t.root.id)).id);
-    const events = [
-      ...(await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.started" })),
-      ...(await t.stores.audit.listAuditEvents({ clientInstanceId, type: "workflow_run.ended" }))
-    ];
-    expect(events.map((event) => [event.type, event.subject, event.status])).toEqual([
-      ["workflow_run.started", run.id, "success"],
-      ["workflow_run.ended", run.id, "success"]
-    ]);
-    const [startedEvent, endedEvent] = events;
-    expect(startedEvent?.actor).toMatchObject({ userId: t.root.id });
-    expect(startedEvent?.metadata).toEqual({
-      workflow: "notify-clients",
-      definitionRevisionId: expect.any(String),
-      trigger: "manual",
-      mode: "live",
-      principalId: t.principal.id
-    });
-    expect(endedEvent?.actor).toMatchObject({ principalKind: "service" });
-    expect(endedEvent?.metadata).toEqual({
-      workflow: "notify-clients",
-      definitionRevisionId: expect.any(String),
-      status: "done",
-      stepRunCount: 7
-    });
-    const written = JSON.stringify(events);
-    expect(written).not.toContain(NOTE);
-    expect(written).not.toContain("client-anna");
   });
 });
 

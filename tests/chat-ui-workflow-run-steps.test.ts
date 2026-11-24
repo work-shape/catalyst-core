@@ -4,22 +4,25 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApiClient } from "@work-shape/catalyst-api-client";
+import { ApiError, createApiClient } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createTranslationContext, TranslationProvider } from "./support/chat-ui/shared";
 import {
   createInstanceSource,
+  fixWithAgentPrompt,
   toWorkflow,
   toWorkflowRun,
   toWorkflowStepRun,
   WorkflowRunPage,
   WorkflowsHostProvider,
   WorkflowsSourceProvider,
+  type WorkflowsHost,
   type WorkflowsSource
 } from "@work-shape/catalyst-chat-ui/workflows";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { UiRoot, uiLabelsEn, type FlowCanvasProps } from "@work-shape/catalyst-ui";
-import { CONDITION_WAIT_MS } from "./support/assertions";
+import { CONDITION_WAIT_MS, required } from "./support/assertions";
+import { openConversationAbout } from "./support/chat-ui";
 
 // Happy DOM has no layout dimensions. Keep the real nodes and the Workflow graph, and
 // replace only the canvas engine that would otherwise wait for a nonzero viewport.
@@ -44,13 +47,15 @@ vi.mock("@work-shape/catalyst-ui", async (importOriginal) => {
   };
 });
 
-// UI-FIX-1: the page of a run says when the steps of the run could not be read, with Try
-// again, under the head of the run it holds. Try again reads the run and its steps again, also
-// where a later reading of steps it held failed. While the steps are on their way, and once
-// they arrived, it says nothing of the kind. Where the run's own reading fails too, the page
-// says only that it lost the instance, as before.
+// The mounted page of a run. UI-FIX-1: the page of a run says when the steps of the run could
+// not be read, with Try again, under the head of the run it holds. Try again reads the run and
+// its steps again, also where a later reading of steps it held failed. While the steps are on
+// their way, and once they arrived, it says nothing of the kind. Where the run's own reading
+// fails too, the page says only that it lost the instance, as before. And a failed run's "Fix
+// with the agent" (UXA-6b) for a reader who may write the Workflow.
 
-const { t } = createTranslationContext("en");
+const en = createTranslationContext("en");
+const { t } = en;
 const STEPS_FAILED = t("workflows.run.stepsFailedToLoad");
 /** The start of the line a run says while the instance does not answer about it. */
 const SILENT = t("workflows.run.stale", { seconds: "{s}" }).split("{s}")[0] ?? "";
@@ -66,6 +71,27 @@ const definition = {
     { id: "result", name: "Result", type: "output", input: {} }
   ]
 };
+/** The Workflow with a loop over the clients, before its result. */
+const loopDefinition = toWorkflow({
+  name: "notify-clients",
+  config: {
+    ...definition,
+    steps: [
+      ...definition.steps.slice(0, 2),
+      {
+        id: "each_client",
+        name: "For each client",
+        type: "loop",
+        items: { step: "clients", path: "" },
+        steps: [
+          { id: "send", name: "Send", type: "operation", operation: "crm.send" },
+          { id: "record", name: "Record", type: "operation", operation: "crm.record" }
+        ]
+      },
+      definition.steps[2]
+    ]
+  }
+});
 const createdAt = "2026-10-12T09:00:00.000Z";
 const doneRun = toWorkflowRun({
   id: "wr_1",
@@ -126,7 +152,11 @@ async function mountRunPage(
   ) => Promise<readonly StepRunResource[]>,
   readRun: () => Promise<RunView> = () => Promise.resolve(doneRun),
   nextCursor: (cursor: string | undefined) => string | undefined = () => undefined,
-  options: { workflow?: ReturnType<typeof toWorkflow>; runs?: WorkflowsSource["runs"] } = {}
+  options: {
+    workflow?: ReturnType<typeof toWorkflow>;
+    runs?: WorkflowsSource["runs"];
+    host?: Partial<WorkflowsHost>;
+  } = {}
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const getRun = vi.fn(readRun);
@@ -185,7 +215,8 @@ async function mountRunPage(
                   },
                   viewerId: "user_1",
                   workspace: { id: "cw_1", name: "Office" },
-                  showRoute: () => undefined
+                  showRoute: () => undefined,
+                  ...options.host
                 },
                 children: null
               },
@@ -241,20 +272,14 @@ function tryAgain(container: ParentNode): HTMLButtonElement | undefined {
 }
 
 describe("the steps of a run on its page", () => {
-  it("says they could not be read, with Try again", async () => {
-    const page = await mountRunPage(unreadable);
+  it("says they could not be read, and reads the run and its steps again on Try again", async () => {
+    let answer: () => Promise<readonly StepRunResource[]> = unreadable;
+    const page = await mountRunPage(() => answer());
     await until(() => expect(page.container.textContent).toContain(STEPS_FAILED));
-    expect(tryAgain(page.container)).toBeDefined();
     // The sentence is the interface's own: nothing the refusal said reaches the page.
     expect(page.container.textContent).not.toContain("unreadable");
     // It is the steps that failed, not the run.
     expect(page.container.textContent).not.toContain(t("workflows.run.failedToLoad"));
-  });
-
-  it("reads the run and its steps again on Try again, and shows the steps that arrive", async () => {
-    let answer: () => Promise<readonly StepRunResource[]> = unreadable;
-    const page = await mountRunPage(() => answer());
-    await until(() => expect(page.container.textContent).toContain(STEPS_FAILED));
 
     // Try again that fails once more says so once more.
     let stepReads = page.listFrameStepRuns.mock.calls.length;
@@ -353,26 +378,6 @@ describe("the steps of a run on its page", () => {
   // The API lists loop items in creation order too. The after-loop step lives past page one,
   // and a finished run never polls again to find it: only automatic cursor following can.
   it("draws the step after 150 loop items of two steps without a click, incrementally", async () => {
-    const loopDefinition = toWorkflow({
-      name: "notify-clients",
-      config: {
-        ...definition,
-        steps: [
-          ...definition.steps.slice(0, 2),
-          {
-            id: "each_client",
-            name: "For each client",
-            type: "loop",
-            items: { step: "clients", path: "" },
-            steps: [
-              { id: "send", name: "Send", type: "operation", operation: "crm.send" },
-              { id: "record", name: "Record", type: "operation", operation: "crm.record" }
-            ]
-          },
-          definition.steps[2]
-        ]
-      }
-    });
     const rows: StepRunResource[] = [
       doneClients,
       {
@@ -518,5 +523,186 @@ describe("the steps of a run on its page", () => {
     expect(signal?.aborted).toBe(true);
     await act(async () => release([doneClients]));
     expect(page.listFrameStepRuns.mock.calls.map((call) => call[1])).toEqual([undefined, "c2"]);
+  });
+});
+
+describe("Fix with the agent on a failed run's page (UXA-6b)", () => {
+  const refusal = { code: "FORBIDDEN", message: "The instance's own sentence" };
+  const failedRunResource = (): Parameters<typeof toWorkflowRun>[0] => ({
+    id: "wr_1",
+    workflow: "notify-clients",
+    trigger: "manual",
+    status: "failed",
+    startedBy: { id: "user_1", label: "Ada Lovelace" },
+    createdAt,
+    startedAt: "2026-10-12T09:00:01.000Z",
+    finishedAt: "2026-10-12T09:00:42.000Z",
+    error: refusal
+  });
+  const failedRun = toWorkflowRun(failedRunResource());
+  const failedClients: StepRunResource = { ...doneClients, status: "failed", error: refusal };
+  const workflowFor = (mayStart: boolean) =>
+    toWorkflow(
+      { name: "notify-clients", config: definition, publishedRevision: 2 },
+      { mayStart },
+      { draftRevision: 2, publishedRevision: 2 }
+    );
+  const writer = (editWithAgent: NonNullable<WorkflowsHost["editWithAgent"]>, write = true) => ({
+    rights: { instance: { read: true, write, publish: false, delete: false } },
+    editWithAgent
+  });
+  const editNothing = () => Promise.resolve();
+  /** The run's moment as its page's title says it. */
+  const runDate = new Date(createdAt).toLocaleString("en", {
+    dateStyle: "long",
+    timeStyle: "short"
+  });
+  const button = (container: ParentNode, label: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (entry) => entry.textContent === label
+    );
+  const mountFailed = (
+    host: Partial<WorkflowsHost>,
+    options: {
+      mayStart?: boolean;
+      run?: RunView;
+      steps?: () => Promise<readonly StepRunResource[]>;
+    } = {}
+  ) =>
+    mountRunPage(
+      options.steps ?? (() => Promise.resolve([failedClients])),
+      () => Promise.resolve(options.run ?? failedRun),
+      undefined,
+      { workflow: workflowFor(options.mayStart ?? true), host }
+    );
+
+  it("opens the conversation about the Workflow with the failed step and its reason", async () => {
+    const editWithAgent = vi.fn<NonNullable<WorkflowsHost["editWithAgent"]>>(editNothing);
+    const page = await mountFailed(writer(editWithAgent));
+    await until(() =>
+      expect(button(page.container, t("workflows.fix.withAgent"))?.disabled).toBe(false)
+    );
+    expect(button(page.container, t("workflows.run.again"))).toBeDefined();
+    await act(async () => button(page.container, t("workflows.fix.withAgent"))?.click());
+    expect(editWithAgent).toHaveBeenCalledTimes(1);
+    const [workflow, prompt] = required(editWithAgent.mock.calls[0]);
+    expect(workflow).toBe("notify-clients");
+    expect(prompt).toBe(
+      t("workflows.fix.promptAtStep", {
+        date: runDate,
+        step: "Load the clients",
+        reason: t("workflows.reason.missingRight")
+      })
+    );
+    expect(prompt).not.toContain("FORBIDDEN");
+    expect(prompt).not.toContain("The instance's own sentence");
+  });
+
+  it("waits for the step runs, so a click never loses the failed step", async () => {
+    let arrive: (stepRuns: readonly StepRunResource[]) => void = () => undefined;
+    const stepRuns = new Promise<readonly StepRunResource[]>((resolve) => {
+      arrive = resolve;
+    });
+    const page = await mountFailed(writer(editNothing), { steps: () => stepRuns });
+    await until(() => expect(button(page.container, t("workflows.fix.withAgent"))).toBeDefined());
+    expect(button(page.container, t("workflows.fix.withAgent"))?.disabled).toBe(true);
+    await act(async () => arrive([failedClients]));
+    await until(() =>
+      expect(button(page.container, t("workflows.fix.withAgent"))?.disabled).toBe(false)
+    );
+  });
+
+  it("is offered by the reader's rights and the run's state, with Run again only to a starter", async () => {
+    const cases = [
+      { host: writer(editNothing), mayStart: false, fix: true, again: false },
+      { host: writer(editNothing, false), mayStart: true, fix: false, again: true },
+      {
+        host: writer(editNothing),
+        mayStart: true,
+        run: doneRun,
+        fix: false,
+        again: true
+      }
+    ];
+    for (const entry of cases) {
+      const page = await mountFailed(entry.host, {
+        mayStart: entry.mayStart,
+        ...(entry.run ? { run: entry.run } : {})
+      });
+      await until(() =>
+        expect(page.container.textContent).toContain(
+          entry.run ? t("workflows.run.done") : t("workflows.run.failed")
+        )
+      );
+      expect(button(page.container, t("workflows.fix.withAgent")) !== undefined).toBe(entry.fix);
+      expect(button(page.container, t("workflows.run.again")) !== undefined).toBe(entry.again);
+      await page.unmount();
+    }
+  });
+
+  it("says on the page where the instance refuses the conversation", async () => {
+    const page = await mountFailed(
+      writer(() =>
+        Promise.reject(
+          new ApiError(403, "Forbidden", { error: { code: "FORBIDDEN", message: "x" } })
+        )
+      )
+    );
+    await until(() =>
+      expect(button(page.container, t("workflows.fix.withAgent"))?.disabled).toBe(false)
+    );
+    await act(async () => button(page.container, t("workflows.fix.withAgent"))?.click());
+    await until(() => expect(page.container.textContent).toContain(t("workflows.edit.refused")));
+  });
+
+  it("names a step in a loop by its name, never a step's id, and the run's reason without one", () => {
+    const failed = (stepId: string) =>
+      toWorkflowStepRun({
+        ...doneClients,
+        id: `sr_${stepId}`,
+        stepId,
+        status: "failed",
+        error: { code: "x", message: "y" }
+      });
+    const steps = loopDefinition.steps;
+    expect(fixWithAgentPrompt(failedRun, [failed("send")], steps, en)).toContain("“Send”");
+    const gone = fixWithAgentPrompt(failedRun, [failed("old_step")], steps, en);
+    expect(gone).not.toContain("old_step");
+    expect(gone).toBe(
+      t("workflows.fix.prompt", { date: runDate, reason: t("workflows.reason.other") })
+    );
+    expect(fixWithAgentPrompt(failedRun, [], steps, en)).toContain(
+      t("workflows.reason.missingRight")
+    );
+    const unexplained = toWorkflowRun({ ...failedRunResource(), error: undefined });
+    expect(fixWithAgentPrompt(unexplained, [], undefined, en)).toContain(
+      t("workflows.reason.other")
+    );
+  });
+
+  it("opens the conversation beside the Workflow's page with the prompt, if any, in its composer", () => {
+    const openPage = vi.fn();
+    const showConversation = vi.fn();
+    const setDraft = vi.fn();
+    const deps = {
+      routeState: { showConversation },
+      dock: { openPage },
+      draftController: { setDraft }
+    };
+    const conversation = { id: "conv_1", collaborationWorkspaceId: "cw_1" };
+    const asset = { kind: "workflow" as const, name: "notify-clients" };
+    openConversationAbout(conversation, asset, "Fix it", deps);
+    expect(openPage).toHaveBeenCalledWith(
+      { kind: "workflow", collaborationWorkspaceId: "cw_1", workflow: "notify-clients" },
+      "conv_1"
+    );
+    expect(showConversation).not.toHaveBeenCalled();
+    expect(setDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: "conv_1" }),
+      "Fix it"
+    );
+    setDraft.mockClear();
+    openConversationAbout(conversation, asset, undefined, deps);
+    expect(setDraft).not.toHaveBeenCalled();
   });
 });

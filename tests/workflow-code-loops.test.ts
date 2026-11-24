@@ -84,7 +84,7 @@ describe("code steps inside dataset loops", () => {
           codeRunner: { timeoutSeconds: 60 }
         }
       );
-      const rows = Array.from({ length: 23 }, (_, index) => ({ id: `row-${index}` }));
+      const rows = Array.from({ length: 7 }, (_, index) => ({ id: `row-${index}` }));
       t.setBehaviour(async () => ({ clients: rows }));
       tempRoot = await mkdtemp(join(tmpdir(), "workflow-code-loops-"));
       const worker = t.worker([

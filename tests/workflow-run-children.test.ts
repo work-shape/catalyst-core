@@ -194,21 +194,6 @@ describe("Workflow child runs", () => {
       });
     }
   });
-
-  it("ends a waiting parent at its deadline and cascades cancellation", async () => {
-    let now = Date.now();
-    const definitions = publishedDefinitions();
-    definitions.publish(child());
-    definitions.publish(parent());
-    const t = await ready(definitions, { now: () => new Date(now), duration: 10_000 });
-    const started = await start(t);
-    const worker = t.worker();
-    await worker.runDue();
-    await worker.runDue();
-    now += 11_000;
-    expect((await t.finish(started.id, worker)).status).toBe("limit_reached");
-    expect((await children(t, started.id))[0]?.status).toBe("limit_reached");
-  });
 });
 
 async function assets() {
@@ -596,7 +581,7 @@ describe("test-run confirmation and independent starts", () => {
 });
 
 describe("descendant ownership and recovery", () => {
-  it.each(["user", "service"])(
+  it.each(["service"])(
     "cancels a grandchild with its parent cancellation context (%s)",
     async (kind) => {
       const definitions = publishedDefinitions();

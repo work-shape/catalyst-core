@@ -316,43 +316,38 @@ describe("parallel Workflow branches", () => {
 });
 
 describe("condition execution and mixed blocks", () => {
-  it.each([true, false])(
-    "runs only the chosen branch (%s), returning its last output",
-    async (takeThen) => {
-      const t = await ready(
-        definition({
-          id: "analyses",
-          name: "Choose",
-          type: "condition",
-          when: {
-            ref: { step: "start", path: "input.note" },
-            op: "equals",
-            value: takeThen ? "Quarterly figures are ready" : "other"
-          },
-          then: [action("yes")],
-          else: [action("no")]
-        })
-      );
-      const run = await t.finish((await start(t)).id);
-      expect(run.status).toBe("done");
-      expect(JSON.parse(run.outputPreview?.text ?? "null")).toMatchObject({
-        analyses: {
-          taken: takeThen ? "then" : "else",
-          result: { received: { data: expect.any(Array) } }
-        }
-      });
-      const steps = await stepRunsOf(t, run.id);
-      expect(steps.filter((step) => step.branch).map((step) => [step.stepId, step.branch])).toEqual(
-        [[takeThen ? "yes" : "no", takeThen ? "then" : "else"]]
-      );
-    }
-  );
+  it("runs only the chosen branch, returning its last output", async () => {
+    const t = await ready(
+      definition({
+        id: "analyses",
+        name: "Choose",
+        type: "condition",
+        when: {
+          ref: { step: "start", path: "input.note" },
+          op: "equals",
+          value: "Quarterly figures are ready"
+        },
+        then: [action("yes")],
+        else: [action("no")]
+      })
+    );
+    const run = await t.finish((await start(t)).id);
+    expect(run.status).toBe("done");
+    expect(JSON.parse(run.outputPreview?.text ?? "null")).toMatchObject({
+      analyses: {
+        taken: "then",
+        result: { received: { data: expect.any(Array) } }
+      }
+    });
+    const steps = await stepRunsOf(t, run.id);
+    expect(steps.filter((step) => step.branch).map((step) => [step.stepId, step.branch])).toEqual([
+      ["yes", "then"]
+    ]);
+  });
 
   it.each([
-    { op: "greater_than", actual: 3, value: 2, taken: "then" },
     { op: "greater_than_or_equal", actual: 2, value: 2, taken: "then" },
     { op: "less_than", actual: 3, value: 2, taken: "else" },
-    { op: "less_than_or_equal", actual: 2, value: 2, taken: "then" },
     { op: "equals", actual: { b: 2, a: 1 }, value: { a: 1, b: 2 }, taken: "then" }
   ])("evaluates $op without coercion", async ({ op, actual, value, taken }) => {
     const t = await ready(

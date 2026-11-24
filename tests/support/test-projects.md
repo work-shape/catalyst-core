@@ -33,7 +33,6 @@ explicitly in `vitest.projects.config.ts`:
 | `chat-ui-connection-create.test.ts`       | A draft left by an earlier SSR file opens a later dialog step.                     |
 | `chat-ui-thread-time.test.ts`             | A UTC thread does not apply the test's `process.env.TZ` change.                    |
 | `chat-ui-connection-typed.test.ts`        | A pending draft bypasses the initial MCP/type selector.                            |
-| `chat-ui-workflow-fix-with-agent.test.ts` | A reused flow observer receives no height.                                         |
 | `chat-ui-workflow-rights.test.ts`         | A reused flow observer receives no height.                                         |
 | `ui-chart.test.ts`                        | Earlier renders have loaded the lazy engine; the initial skeleton assertion fails. |
 | `ui-library-page-head-fold.test.ts`       | DOM prototype spies no longer find `clientWidth`.                                  |

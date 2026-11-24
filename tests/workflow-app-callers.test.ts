@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { assetSchema, assetSummarySchema } from "@work-shape/catalyst-api-contract";
-import type { CollaborationWorkspaceId, JsonObject } from "@work-shape/catalyst-core";
+import {
+  type CollaborationWorkspaceId,
+  type JsonObject,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
-import { readyWorkflows } from "./support/workflow-runs";
+import { notifyClients, readyWorkflows } from "./support/workflow-runs";
 import type { WorkflowFixture } from "./support/workflow-instance";
 
 let open: WorkflowFixture | undefined;
@@ -116,7 +121,7 @@ async function listed(t: WorkflowFixture, userId = t.root.id) {
 }
 
 describe("Apps that start a Workflow", () => {
-  it("names each App that starts it once, by title, on its read and on its row", async () => {
+  it("names each App that starts it once, by title, on its read and on its row, to a reader who may open it", async () => {
     const t = await readyWorkflows(
       (fixture) => {
         open = fixture;
@@ -140,20 +145,61 @@ describe("Apps that start a Workflow", () => {
     expect(rows[target]).toEqual(expected);
     // A Workflow no App starts carries no list at all on its row.
     expect(rows.unstarted).toBeUndefined();
+    // A reader who may not open the App is not told of it.
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
+    expect(await appCallers(t, t.kai.id)).toEqual([]);
+    expect((await listed(t, t.kai.id))[target]).toBeUndefined();
   });
+});
 
-  it("leaves out an App the reader may not open", async () => {
+const WORKFLOW = "notify-clients";
+const address = { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW };
+
+const readSchema = z.object({
+  revision: z.number(),
+  publishedRevision: z.number().optional(),
+  config: z.object({ manifest: z.object({ name: z.string() }).loose() })
+});
+
+describe("a Workflow's draft and the member who only reads it", () => {
+  // Moved down from the browser suite: a member with the read right on one Workflow is shown
+  // what is published while the builder's draft is ahead, never the draft.
+  it("shows a reader the published revision while a draft is ahead, and its writer the draft", async () => {
     const t = await readyWorkflows(
       (fixture) => {
         open = fixture;
       },
-      { definitions: "assets", apps: true }
+      { definitions: "assets" }
     );
-    await storeWorkflow(t, target);
-    const workspaceId = await t.sharedWorkspace("Apps");
-    await storeApp(t, workspaceId, "orders", "Orders", [target], true);
-    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
-    expect(await appCallers(t, t.kai.id)).toEqual([]);
-    expect((await listed(t, t.kai.id))[target]).toBeUndefined();
+    const put = async (name: string, expectedRevision: number | null) =>
+      z.object({ revision: z.number() }).parse(
+        (
+          await t.expectOk(t.admin.id, "assets.put", {
+            params: address,
+            payload: {
+              config: { name: WORKFLOW, manifest: { ...notifyClients(), name } },
+              expectedRevision
+            }
+          })
+        ).json()
+      ).revision;
+    const first = await put("Published name", null);
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision: first }
+    });
+    await put("Draft name", first);
+    await t.grant(t.kai.id, WORKFLOW_ACTIONS.read, {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW)
+    });
+
+    const read = async (userId: string) =>
+      readSchema.parse((await t.expectOk(userId, "assets.get", { params: address })).json());
+    const reader = await read(t.kai.id);
+    expect(reader.config.manifest.name).toBe("Published name");
+    expect(reader.revision).toBe(first);
+    const writer = await read(t.admin.id);
+    expect(writer.config.manifest.name).toBe("Draft name");
+    expect(writer.publishedRevision).toBe(first);
   });
 });

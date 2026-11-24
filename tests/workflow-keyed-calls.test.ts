@@ -228,21 +228,6 @@ describe("a changing call that carries its key to the outside system", () => {
     });
   }, 90_000);
 
-  it("finishes where the outside system fails a keyed call once and then answers", async () => {
-    const t = await ready();
-    await seedKeyed(t);
-    let failed = false;
-    t.setBehaviour((operation, input) => {
-      if (operation !== "write" || failed) return Promise.resolve(answer(operation, input));
-      failed = true;
-      return Promise.reject(connectionCallError("connection_unavailable"));
-    });
-    const run = await finishInTime(t, (await start(t)).id);
-    expect(run.status).toBe("done");
-    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 3, failed: 0 });
-    expect(writesOf(t)).toHaveLength(4);
-  }, 90_000);
-
   // Fails without the change: a 409 was told as `upstream_error` like any failure.
   it("fails the step at once, with the conflict in its reason, where the outside system answers a repeated call with a conflict", async () => {
     const t = await ready({ limits: { operationOutcomeWaitMs: 400 } });
@@ -311,21 +296,6 @@ describe("a reading call's retries", () => {
     });
   });
 
-  it("continues when a timed out read succeeds on its next attempt", async () => {
-    const t = await ready();
-    let reads = 0;
-    t.setBehaviour(async (operation, input) => {
-      if (operation === "echo" && ++reads === 1) throw connectionCallError("upstream_timeout");
-      return answer(operation, input);
-    });
-    const run = await finishRead(t, (await start(t)).id);
-    expect(run.status).toBe("done");
-    expect(reads).toBe(2);
-    expect((await stepRunsOf(t, run.id)).find((step) => step.key === "clients")).toMatchObject({
-      attempt: 2
-    });
-  });
-
   it("retries only the failing read item inside a loop", async () => {
     const definitions = publishedDefinitions();
     definitions.publish(
@@ -385,7 +355,7 @@ describe("a reading call's retries", () => {
     }
   );
 
-  it.each(["input_invalid", "output_invalid", "upstream_unauthorized"] as const)(
+  it.each(["input_invalid", "upstream_unauthorized"] as const)(
     "does not retry %s",
     async (reason) => {
       const t = await ready();

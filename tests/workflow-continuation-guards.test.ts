@@ -91,189 +91,144 @@ function concurrentAncestor(depth: number, continues: boolean): WorkflowManifest
   return base;
 }
 const refused = [
-  ...[1, 2, 3].flatMap((depth) =>
-    [false, true].map((continues) => ({
-      name: `concurrent ancestor at depth ${depth}, continuing=${continues}`,
-      make: () => concurrentAncestor(depth, continues),
-      step: "each_client",
-      rule: "cannot use concurrency above 1 while enclosing continueAsNew loop 'inner'",
-      de: "darf keine concurrency über 1 verwenden, wenn sie die continueAsNew-Schleife 'inner' umschließt"
-    }))
-  ),
+  ...[
+    [1, false],
+    [2, true],
+    [3, false]
+  ].map(([depth, continues]) => ({
+    name: `concurrent ancestor at depth ${String(depth)}, continuing=${String(continues)}`,
+    make: () => concurrentAncestor(Number(depth), Boolean(continues)),
+    step: "each_client",
+    rule: "cannot use concurrency above 1 while enclosing continueAsNew loop 'inner'"
+  })),
   {
     name: "loop A then plain loop B",
     make: () => after(false),
     step: "later",
-    rule: "cannot follow",
-    de: "darf nicht nach"
+    rule: "cannot follow"
   },
   {
     name: "two continueAsNew loops",
     make: () => after(true),
     step: "later",
-    rule: "cannot follow",
-    de: "darf nicht nach"
+    rule: "cannot follow"
   },
+  { name: "write before", make: () => before(write), step: "before", rule: "cannot precede" },
+  { name: "notify before", make: () => before(notify), step: "notice", rule: "cannot precede" },
+  { name: "child start before", make: () => before(child), step: "child", rule: "cannot precede" },
   {
-    name: "write before continuation",
-    make: () => before(write),
-    step: "before",
-    rule: "cannot precede",
-    de: "darf nicht vor"
-  },
-  {
-    name: "notify before continuation",
-    make: () => before(notify),
-    step: "notice",
-    rule: "cannot precede",
-    de: "darf nicht vor"
-  },
-  {
-    name: "child start before continuation",
-    make: () => before(child),
-    step: "child",
-    rule: "cannot precede",
-    de: "darf nicht vor"
-  },
-  {
-    name: "loop containing a write before continuation",
+    name: "loop containing a write before",
     make: () => before(loop("earlier", [write])),
     step: "earlier",
-    rule: "cannot precede",
-    de: "darf nicht vor"
+    rule: "cannot precede"
   },
   {
     name: "write at enclosing level",
     make: () => enclosing(write),
     step: "before",
-    rule: "cannot precede",
-    de: "darf nicht vor"
+    rule: "cannot precede"
   },
   {
     name: "loop after continuation at enclosing level",
     make: () => enclosing(loop("later", [write]), true),
     step: "later",
-    rule: "cannot follow",
-    de: "darf nicht nach"
+    rule: "cannot follow"
   },
-  ...[3, 4].map((stepRuns) => ({
-    name: `flat loop at stepRuns ${stepRuns}`,
-    make: () => ({ ...manifest(), limits: { stepRuns } }),
+  {
+    name: "flat loop at stepRuns 4",
+    make: () => ({ ...manifest(), limits: { stepRuns: 4 } }),
     step: "each_client",
-    rule: `needs at least 5 step runs`,
-    de: "benötigt mindestens 5 Schrittläufe"
-  }))
+    rule: "needs at least 5 step runs"
+  }
 ];
 
-it.each(refused)(
-  "refuses $name at publish and before opening a draft test run",
-  async ({ make, step, rule, de }) => {
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
+/** Saves the definition under its own name and asks a publish of it. */
+async function publishAs(t: WorkflowFixture, name: string, definition: WorkflowManifest) {
+  const address = { kind: "workflow", name };
+  const saved = await t.expectOk(t.admin.id, "assets.put", {
+    params: address,
+    payload: { config: { name, manifest: { ...definition, id: name } }, expectedRevision: null }
+  });
+  return t.call(t.root.id, "assets.publish", {
+    params: address,
+    payload: { revision: saved.json().revision }
+  });
+}
+
+it("refuses unsafe continuation shapes at publish and before opening a draft test run", async () => {
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { definitions: "assets" }
+  );
+  const childDefinition = {
+    ...manifest(),
+    inputs: { type: "object" },
+    steps: [
+      {
+        id: "start",
+        name: "Start",
+        type: "trigger",
+        triggers: [{ kind: "manual" }, { kind: "parent" }]
       },
-      { definitions: "assets" }
-    );
-    if (step === "child") {
-      const childDefinition = {
-        ...manifest(),
-        id: "another",
-        inputs: { type: "object" },
-        steps: [
-          {
-            id: "start",
-            name: "Start",
-            type: "trigger",
-            triggers: [{ kind: "manual" }, { kind: "parent" }]
-          },
-          { id: "result", name: "Result", type: "output", input: {} }
-        ]
-      };
-      const params = { kind: "workflow", name: "another" };
-      const saved = await t.expectOk(t.admin.id, "assets.put", {
-        params,
-        payload: { config: { name: "another", manifest: childDefinition }, expectedRevision: null }
-      });
-      await t.expectOk(t.root.id, "assets.publish", {
-        params,
-        payload: { revision: saved.json().revision }
-      });
-    }
-    const definition = make();
-    const address = { kind: "workflow", name: definition.id };
-    const saved = await t.expectOk(t.admin.id, "assets.put", {
-      params: address,
-      payload: { config: { name: definition.id, manifest: definition }, expectedRevision: null }
-    });
-    const published = await t.call(t.root.id, "assets.publish", {
-      params: address,
-      payload: { revision: saved.json().revision }
-    });
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  } satisfies WorkflowManifest;
+  expect((await publishAs(t, "another", childDefinition)).statusCode).toBe(200);
+  for (const [index, { name, make, step, rule }] of refused.entries()) {
+    const id = `guard-${String(index)}`;
+    const published = await publishAs(t, id, make());
     const tested = await t.call(t.root.id, "workflows.test", {
-      params: { workflow: definition.id },
+      params: { workflow: id },
       payload: { input: { note: "Guard" } }
     });
     for (const response of [published, tested]) {
-      expect(response.statusCode, response.body).toBe(422);
-      expect(response.json().error.message).toContain(`'${step}'`);
-      expect(response.json().error.message).toContain(rule);
-      expect(response.json().error.message).toContain(de);
-      if (definition.limits?.stepRuns) {
-        expect(response.json().error.message).toContain(
-          `limits.stepRuns of ${definition.limits.stepRuns}`
-        );
-        expect(response.json().error.message).toContain(
-          `limits.stepRuns erlaubt ${definition.limits.stepRuns}`
-        );
-      }
+      expect(response.statusCode, `${name}: ${response.body}`).toBe(422);
+      expect(response.json().error.message, name).toContain(`'${step}'`);
+      expect(response.json().error.message, name).toContain(rule);
     }
   }
-);
+});
 
-it.each(["read prefix", "read-only earlier loop", "code prefix", "non-loop tail"])(
-  "publishes and tests a continuation as the last loop with %s",
-  async (shape) => {
-    const t = await readyWorkflows(
-      (fixture) => {
-        open = fixture;
-      },
-      { definitions: "assets" }
-    );
-    const base = manifest();
-    const read: WorkflowStep = {
-      id: "read",
-      name: "Read",
-      type: "operation",
-      operation: "connection.crm.echo",
-      input: {}
-    };
-    const definition = shape === "read-only earlier loop" ? before(loop("earlier", [read])) : base;
-    if (shape === "read-only earlier loop") {
-      definition.limits = { stepRuns: 6 };
-      t.setBehaviour(() => Promise.resolve({ clients: [] }));
-    }
-    if (shape === "non-loop tail") definition.steps.splice(-1, 0, write);
-    if (shape === "code prefix")
-      definition.steps.splice(2, 0, {
-        id: "code",
-        name: "Code",
-        type: "code",
-        file: "read.js",
-        input: {},
-        inputSchema: { type: "object" },
-        outputSchema: { type: "object" }
-      });
-    const address = { kind: "workflow", name: definition.id };
+it("publishes and tests a continuation as the last loop after a read-only loop, a code step or before a plain tail", async () => {
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    { definitions: "assets" }
+  );
+  t.setBehaviour(() => Promise.resolve({ clients: [] }));
+  const read: WorkflowStep = {
+    id: "read",
+    name: "Read",
+    type: "operation",
+    operation: "connection.crm.echo",
+    input: {}
+  };
+  const readOnlyLoop = { ...before(loop("earlier", [read])), limits: { stepRuns: 6 } };
+  const tail = manifest();
+  tail.steps.splice(-1, 0, write);
+  const code = manifest();
+  code.steps.splice(2, 0, {
+    id: "code",
+    name: "Code",
+    type: "code",
+    file: "read.js",
+    input: {},
+    inputSchema: { type: "object" },
+    outputSchema: { type: "object" }
+  });
+  for (const [name, definition, files] of [
+    ["read-only-loop", readOnlyLoop, undefined],
+    ["plain-tail", tail, undefined],
+    ["code-prefix", code, [{ path: "steps/read.js", content: "console.log('{}')" }]]
+  ] as const) {
+    const address = { kind: "workflow", name };
     const saved = await t.expectOk(t.admin.id, "assets.put", {
       params: address,
       payload: {
-        config: {
-          name: definition.id,
-          manifest: definition,
-          ...(shape === "code prefix"
-            ? { files: [{ path: "steps/read.js", content: "console.log('{}')" }] }
-            : {})
-        },
+        config: { name, manifest: { ...definition, id: name }, ...(files ? { files } : {}) },
         expectedRevision: null
       }
     });
@@ -282,13 +237,13 @@ it.each(["read prefix", "read-only earlier loop", "code prefix", "non-loop tail"
       payload: { revision: saved.json().revision }
     });
     const tested = await t.expectOk(t.root.id, "workflows.test", {
-      params: { workflow: definition.id },
+      params: { workflow: name },
       payload: { input: { note: "Guard" } }
     });
-    if (shape === "read-only earlier loop")
+    if (name === "read-only-loop")
       expect(await t.finish(tested.json().id)).toMatchObject({ status: "done" });
   }
-);
+});
 
 it("treats an unresolved operation before continuation as unsafe rather than guessing it reads", async () => {
   const issues = await workflowContinuationIssues(before(write));

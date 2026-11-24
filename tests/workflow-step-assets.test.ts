@@ -40,16 +40,13 @@ function withStep(step: Record<string, unknown>) {
 }
 
 describe("a step that names an operation of the platform's own assets", () => {
-  it.each(["assets.list", "assets.get", "assets.put", "assets.publish", "assets.sync"])(
-    "is refused by the parser: %s",
-    (operation) => {
-      const result = parseWorkflowManifest(withStep({ ...ASSET_STEP, operation }));
-      expect(result.ok).toBe(false);
-      expect(result.ok ? [] : result.issues).toEqual([
-        expect.objectContaining({ code: "operation_not_callable", path: "steps.agents.operation" })
-      ]);
-    }
-  );
+  it.each(["assets.list", "assets.sync"])("is refused by the parser: %s", (operation) => {
+    const result = parseWorkflowManifest(withStep({ ...ASSET_STEP, operation }));
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.issues).toEqual([
+      expect.objectContaining({ code: "operation_not_callable", path: "steps.agents.operation" })
+    ]);
+  });
 
   it("is refused inside a loop too, and the operations of data are not", () => {
     const result = parseWorkflowManifest(

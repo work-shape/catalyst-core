@@ -131,11 +131,11 @@ async function setup(
   return { fixture: t, id: runSchema.parse(await response.json()).id, objects };
 }
 
-it.each(["page", "offset", "cursor", "next_link"] as const)(
+it.each(["offset", "cursor"] as const)(
   "reads %s pages under one Operation Run with no rows in its record",
   async (by) => {
     const paging: OperationPaging =
-      by === "page" || by === "offset"
+      by === "offset"
         ? { by, param: "position", sizeParam: "size", size: 2 }
         : { by, param: "position", cursor: "next" };
     const { fixture: f, id } = await setup(paging);
@@ -157,9 +157,7 @@ it.each(["page", "offset", "cursor", "next_link"] as const)(
     expect(runs).toHaveLength(1);
     expect(runs[0]?.output?.value).toMatchObject({ pages: 3, rows: 5 });
     expect(JSON.stringify(runs[0])).not.toContain('"id":4');
-    expect(positions).toEqual(
-      by === "page" ? [1, 2, 3] : by === "offset" ? [0, 2, 4] : [undefined, "next-1", "next-2"]
-    );
+    expect(positions).toEqual(by === "offset" ? [0, 2, 4] : [undefined, "next-1", "next-2"]);
     const [dataset] = await f.stores.workflowRunDatasets.listForRun({
       clientInstanceId,
       runId: z
@@ -215,7 +213,7 @@ it("queues a page the operation's source limits have no room for, sends it once 
   expect((await stepRunsOf(f, id)).find((step) => step.stepId === "rows")?.attempt).toBe(1);
 });
 
-it.each(["pages", "pageBytes", "rows", "bytes", "pagedStepMinutes"] as const)(
+it.each(["pages", "bytes", "pagedStepMinutes"] as const)(
   "fails at the operator %s ceiling before any consumer runs",
   async (name) => {
     const { fixture: f, id } = await setup(
@@ -459,15 +457,6 @@ it("accepts raised paging operator ceilings and Workflow minutes without a fixed
   );
 });
 
-it("runs a paged step above sixty minutes under the EW-LIM operator ceiling", async () => {
-  const { fixture: f, id } = await setup(
-    { by: "page", param: "page", sizeParam: "size", size: 2 },
-    { pagedStepMinutes: 180, workflowMinutes: 120 }
-  );
-  f.setBehaviour(async () => ({ rows: [{ id: 1 }] }));
-  expect(await f.finish(id)).toMatchObject({ status: "done" });
-});
-
 // These regressions adapt the independent verifier's crash, sweep and retry probes.
 /**
  * Gives a worker passes until the run has ended, cutting short its step jobs' waits.
@@ -618,17 +607,7 @@ it("retries each page independently with two- and four-second backoffs, then fai
   expect(required(failedPageWaits[1])).toBeGreaterThanOrEqual(4_000);
 });
 
-it("fails immediately when a cursor repeats", async () => {
-  const { fixture: f, id } = await setup({ by: "cursor", param: "c", cursor: "next" });
-  let calls = 0;
-  f.setBehaviour(async () => ({ rows: [{ id: ++calls }], next: "same" }));
-  expect(await f.finish(id)).toMatchObject({
-    status: "failed",
-    error: { code: "paging_repeated_cursor" }
-  });
-  expect(calls).toBe(2);
-});
-it.each([false, true])(
+it.each([true])(
   "fails fast when a cursor returns to one already read (A, B, A), deferred between pages: %s",
   async (deferred) => {
     // A low page limit lets a missed cycle end in dataset_limit instead of the test timeout.

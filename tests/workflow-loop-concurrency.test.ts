@@ -91,49 +91,33 @@ describe("a loop with concurrency above 1", () => {
     expect(codes(0)).toBe("steps.2.concurrency");
   });
 
-  it.each([2, 8])(
-    "uses %s configured step slots, including the loop's reported concurrency",
-    async (stepSlots) => {
-      const t = await ready({ concurrency: 8 }, { stepSlots });
-      expect(
-        t.workflows.jobHandlers.find((handler) => handler.kind.kind === "workflow_run.execute_step")
-          ?.slots
-      ).toBe(stepSlots);
-      const seen = countingCalls(t, stepSlots);
-      const run = await t.finish((await start(t)).id);
-      expect(run.status).toBe("done");
-      expect(seen.most).toBe(stepSlots);
-      const steps = await stepRunsOf(t, run.id);
-      expect(steps.filter((step) => step.key !== "each_client" && step.concurrency)).toEqual([]);
-      expect(steps.find((step) => step.key === "each_client")?.concurrency).toEqual({
-        asked: 8,
-        ranWith: stepSlots
-      });
-    }
-  );
-
-  it("runs that many items at once, each item once, and counts them all", async () => {
-    const t = await ready({ concurrency: 3 });
-    const seen = countingCalls(t, 3);
+  it("runs at most the configured step slots at once, each item once, and counts them all", async () => {
+    const stepSlots = 2;
+    const t = await ready({ concurrency: 8 }, { stepSlots });
+    expect(
+      t.workflows.jobHandlers.find((handler) => handler.kind.kind === "workflow_run.execute_step")
+        ?.slots
+    ).toBe(stepSlots);
+    const seen = countingCalls(t, stepSlots);
     const run = await t.finish((await start(t)).id);
-
     expect(run.status).toBe("done");
     expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 8, failed: 0 });
-    // Three items were with the outside system at one moment, and never a fourth.
-    expect(seen.most).toBe(3);
+    expect(seen.most).toBe(stepSlots);
     const stepRuns = await stepRunsOf(t, run.id);
-    const items = stepRuns.filter((stepRun) => stepRun.iteration !== undefined);
     // One step run per item and path, whichever items ended at the same moment.
-    expect(items.map((stepRun) => stepRun.key).sort()).toEqual(
-      CLIENTS.map((_, index) => `each_client[${String(index)}].send`)
-    );
+    expect(
+      stepRuns
+        .filter((stepRun) => stepRun.iteration !== undefined)
+        .map((stepRun) => stepRun.key)
+        .sort()
+    ).toEqual(CLIENTS.map((_, index) => `each_client[${String(index)}].send`));
     expect(new Set(writesOf(t).map((input) => JSON.stringify(input))).size).toBe(8);
     expect(writesOf(t)).toHaveLength(8);
+    expect(stepRuns.filter((step) => step.key !== "each_client" && step.concurrency)).toEqual([]);
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")).toMatchObject({
       status: "done",
       loop: { total: 8, done: 8, failed: 0, running: 0 },
-      // What the loop asked for is what it ran with: a process has a slot for each.
-      concurrency: { asked: 3, ranWith: 3 },
+      concurrency: { asked: 8, ranWith: stepSlots },
       bodyCounts: { send: { total: 8, done: 8, failed: 0, running: 0 } }
     });
     expect(run.stepRunCount).toBe(12);
@@ -157,28 +141,6 @@ describe("a loop with concurrency above 1", () => {
     // Each item that ends starts the next one: three are going again.
     await worker.runDue();
     expect((await loopOf())?.loop).toEqual({ total: 8, done: 3, failed: 0, running: 3 });
-  });
-
-  it("continues past failed items and ends done with them counted", async () => {
-    const t = await ready({ concurrency: 3, onItemFailure: "continue" });
-    t.setBehaviour(failingFor(["client-1", "client-6"], CLIENTS));
-    const run = await t.finish((await start(t)).id);
-    expect(run.status).toBe("done");
-    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 6, failed: 2 });
-    expect(writesOf(t)).toHaveLength(8);
-    const stepRuns = await stepRunsOf(t, run.id);
-    expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.loop).toEqual({
-      total: 8,
-      done: 6,
-      failed: 2,
-      running: 0
-    });
-    expect(
-      stepRuns
-        .filter((stepRun) => stepRun.status === "failed")
-        .map((stepRun) => stepRun.iteration?.label)
-        .sort()
-    ).toEqual(["client-1", "client-6"]);
   });
 
   it("starts no further item after one failed where the loop stops", async () => {

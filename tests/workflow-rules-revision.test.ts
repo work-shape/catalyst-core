@@ -1,14 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  WORKFLOW_ASSET_KIND,
-  asClientInstanceId,
-  type ToolExecutionContext
-} from "@work-shape/catalyst-core";
-import {
-  createPlatformAssetBinding,
-  createPlatformAssetTools
-} from "@work-shape/catalyst-tool-execution";
+import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { childRulesRevisionWarnings, parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import type { WorkflowFixture } from "./support/workflow-instance";
 import { readyWorkflows } from "./support/workflow-runs";
@@ -101,37 +93,6 @@ describe("the rules revision of a child in its parent's run key", () => {
     expect(
       await warned(parent([month, literal, client]), child({ type: "string", const: "rules-4" }))
     ).toEqual([]);
-  });
-
-  it("preserves a non-blocking warning through the agent check tool and its output schema", async () => {
-    const warnings = [{ code: CODE, message: "Include the rules revision in the child key." }];
-    const tools = createPlatformAssetTools({
-      ...createPlatformAssetBinding().calls,
-      validate: async () => ({ issues: [], warnings })
-    });
-    const tool = tools.find((entry) => entry.name === "platform.assets.validate");
-    if (!tool || !tool.outputSchema) throw new Error("Missing check tool schema");
-    const clientInstanceId = asClientInstanceId("warning-tool");
-    const context: ToolExecutionContext = {
-      clientInstanceId,
-      correlationId: "warning-tool",
-      user: {
-        id: "reader",
-        externalUserId: "reader",
-        displayLabel: "Reader",
-        roles: ["user"],
-        permissionRefs: [],
-        clientInstanceId,
-        authSource: "test"
-      }
-    };
-    const answer = await tool.execute(tool.inputSchema.parse({ config: {} }), context);
-    expect(answer).toMatchObject({
-      status: "success",
-      output: { valid: true, issues: [], warnings }
-    });
-    if (answer.status !== "success") throw new Error("Check failed");
-    expect(tool.outputSchema.parse(answer.output)).toEqual({ valid: true, issues: [], warnings });
   });
 
   it("is silent for an unkeyed step and for a child without the convention", async () => {

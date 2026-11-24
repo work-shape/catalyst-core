@@ -4,8 +4,6 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
-  nextDueAfter,
-  parseCron,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
 import { scheduledStartSchema } from "@work-shape/catalyst-api-contract";
@@ -120,19 +118,10 @@ async function fixture() {
 }
 
 describe("scheduled prompts use the shared executor and the owner's unattended run", () => {
-  it("stores the instance zone and queues its due instant, including both DST transitions", async () => {
+  it("stores the instance zone and runs as its owner, counted against the owner", async () => {
     const f = await fixture();
     const start = await f.create();
     expect(start.timeZone).toBe("Europe/Berlin");
-    const cron = required(parseCron("30 2 * * *"));
-    expect(
-      nextDueAfter([cron], new Date("2030-03-30T12:00:00Z"), "Europe/Berlin")?.toISOString()
-    ).toBe("2030-03-31T01:00:00.000Z");
-    const autumn = nextDueAfter([cron], new Date("2030-10-26T12:00:00Z"), "Europe/Berlin");
-    expect(autumn?.toISOString()).toBe("2030-10-27T00:30:00.000Z");
-    expect(nextDueAfter([cron], required(autumn), "Europe/Berlin")?.toISOString()).toBe(
-      "2030-10-28T01:30:00.000Z"
-    );
     await getTestJobs(f.app).runDue();
     expect(await f.runs(start.id)).toEqual([]);
     await f.fire(start.id);

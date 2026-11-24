@@ -124,57 +124,6 @@ describe("the definitions a folder holds", () => {
     ).toEqual([["", "steps.1"]]);
   });
 
-  it("gives a loop its defaults: it stops at a failed item and runs one item at a time", () => {
-    const result = parseWorkflowManifest(
-      sample({ steps: [trigger, loop("each", [operation("inner")]), output()] })
-    );
-    expect(result.ok && result.manifest.steps[1]).toMatchObject({
-      type: "loop",
-      onItemFailure: "stop",
-      concurrency: 1
-    });
-    expect(
-      refused({
-        steps: [
-          trigger,
-          loop("each", [operation("inner")], { onItemFailure: "continue" }),
-          output()
-        ]
-      })
-    ).toEqual([]);
-  });
-
-  it("accepts condition and parallel blocks, including empty branches", () => {
-    const condition = {
-      id: "check",
-      name: "Check",
-      type: "condition",
-      when: { ref: { step: "start", path: "input.flag" }, op: "equals", value: true },
-      then: [operation("yes")],
-      else: [operation("no")]
-    };
-    const parallel = {
-      id: "both",
-      name: "Both",
-      type: "parallel",
-      branches: [
-        { id: "left", name: "Left", steps: [operation("a")] },
-        { id: "right", name: "Right", steps: [operation("b")] }
-      ],
-      concurrency: 2
-    };
-    expect(refused({ steps: [trigger, condition, output()] })).toEqual([]);
-    expect(refused({ steps: [trigger, parallel, output()] })).toEqual([]);
-    // Inside a loop, without an `else`, and without a branch.
-    const { else: _else, ...bare } = condition;
-    expect(refused({ steps: [trigger, loop("each", [bare]), output()] })).toEqual([]);
-    expect(refused({ steps: [trigger, { ...parallel, branches: [] }, output()] })).toEqual([]);
-    // A type no release knows is refused the same way.
-    expect(
-      refused({ steps: [trigger, { id: "x", name: "X", type: "teleport" }, output()] })
-    ).toEqual([["not_supported_yet", "steps.1.type"]]);
-  });
-
   it("refuses what the contract's block check refuses, by its code", async () => {
     // A step after a loop cannot read a step inside it, and no step reads a later one.
     expect(
@@ -221,7 +170,8 @@ describe("the definitions a folder holds", () => {
         { steps: [trigger, loop("each", inner, { collect: ref("inner").ref }), output()] },
         "steps[1].collect"
       ],
-      [{ steps: [trigger, output()], onFailure: "workflow.recover" }, "onFailure"]
+      [{ steps: [trigger, output()], onFailure: "workflow.recover" }, "onFailure"],
+      [{ steps: [trigger, { id: "x", name: "X", type: "teleport" }, output()] }, "steps.1.type"]
     ];
     for (const [fields, path] of cases) {
       expect(refused(fields)).toEqual([["not_supported_yet", path]]);

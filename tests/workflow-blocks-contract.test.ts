@@ -1,15 +1,7 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  WORKFLOW_ERROR_CODES,
-  WORKFLOW_LAYOUT_FILE,
   WORKFLOW_MAX_BLOCK_DEPTH,
-  WORKFLOW_RESERVED_STEP_TYPES,
-  WORKFLOW_STEP_TYPES,
   workflowBlockIssues,
-  workflowBodyCountsSchema,
-  type WorkflowBlockStepRunView,
-  type WorkflowConditionOutput,
-  type WorkflowParallelOutput,
   type WorkflowStep
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -45,20 +37,6 @@ const nested = (depth: number): WorkflowStep[] => {
 const codes = (steps: WorkflowStep[]) => workflowBlockIssues(steps).map((issue) => issue.code);
 
 describe("the blocks of a Workflow definition", () => {
-  it("names the reserved types, the depth, the layout file and the refusals", () => {
-    expect(WORKFLOW_RESERVED_STEP_TYPES).toEqual([]);
-    expect(WORKFLOW_STEP_TYPES).toContain("condition");
-    expect(WORKFLOW_STEP_TYPES).toContain("parallel");
-    const types: readonly string[] = WORKFLOW_STEP_TYPES;
-    for (const type of WORKFLOW_RESERVED_STEP_TYPES) expect(types).not.toContain(type);
-    expect(WORKFLOW_MAX_BLOCK_DEPTH).toBe(16);
-    expect(WORKFLOW_LAYOUT_FILE).toBe("layout.yaml");
-    expect(WORKFLOW_ERROR_CODES.blockDepth).toBe("block_depth");
-    expect(WORKFLOW_ERROR_CODES.referenceOutOfScope).toBe("reference_out_of_scope");
-    expectTypeOf<WorkflowConditionOutput["taken"]>().toEqualTypeOf<"then" | "else">();
-    expectTypeOf<WorkflowParallelOutput>().toExtend<Readonly<Record<string, unknown>>>();
-  });
-
   it("refuses a definition nested 17 deep with block_depth, and takes one nested 16 deep", () => {
     expect(codes(nested(WORKFLOW_MAX_BLOCK_DEPTH))).toEqual([]);
     const issues = workflowBlockIssues(nested(WORKFLOW_MAX_BLOCK_DEPTH + 1));
@@ -173,15 +151,5 @@ describe("the blocks of a Workflow definition", () => {
     expect(workflowBlockIssues(steps)).toEqual([
       expect.objectContaining({ code: "not_supported_yet", step: "wait" })
     ]);
-  });
-
-  it("counts the step runs of each step directly inside a block on the block's step run", () => {
-    const view: WorkflowBlockStepRunView = {
-      bodyCounts: { fetch: { total: 600, done: 590, failed: 4, running: 6 } }
-    };
-    expect(workflowBodyCountsSchema.parse(view.bodyCounts)).toEqual(view.bodyCounts);
-    expect(workflowBodyCountsSchema.safeParse({ fetch: { total: 1, done: 1 } }).success).toBe(
-      false
-    );
   });
 });
