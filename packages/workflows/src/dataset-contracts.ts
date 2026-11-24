@@ -55,7 +55,7 @@ export async function checkDatasetContracts(
         throw new AppError("VALIDATION_FAILED", `The dataset row does not fit input '${field}'`, {
           reason: "dataset_schema_invalid"
         });
-      if (from?.type === "dataset" && step.type === "agent")
+      if (from?.type === "dataset" && step.type === "agent" && step.workspace !== true)
         throw new AppError("VALIDATION_FAILED", "Datasets in agent inputs require EW-14b", {
           reason: "not_supported_yet"
         });

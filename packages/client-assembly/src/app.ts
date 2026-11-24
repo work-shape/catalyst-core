@@ -1,4 +1,9 @@
-import { createWorkflowRunFiles, type WorkflowRunFiles } from "@work-shape/catalyst-workflows";
+import {
+  AGENT_WORKSPACE_TOOL_NAMES,
+  createWorkflowDatasets,
+  createWorkflowRunFiles,
+  type WorkflowRunFiles
+} from "@work-shape/catalyst-workflows";
 import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { createLogger } from "./logger";
@@ -77,6 +82,7 @@ import {
   createReadSkillTool,
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
+  createWorkspaceFileAccess,
   createWorkspaceToolDefinitions,
   describeRunAgentTool,
   WorkspaceCommandService
@@ -417,6 +423,19 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
+  // The workspaces of Workflow agent steps with `workspace: true`: their input is written in
+  // and a returned dataset read back by the platform, beside the agent's own tools. An instance
+  // that has not enabled the workspace tools has none, and such a step fails as it starts.
+  const enabledTools = releaseToolNames(config);
+  const agentWorkspaceFiles =
+    workspaceObjectStore && AGENT_WORKSPACE_TOOL_NAMES.every((name) => enabledTools.has(name))
+      ? createWorkspaceFileAccess({
+          clientInstanceId,
+          store: store.executionWorkspaces,
+          objects: workspaceObjectStore,
+          maxWorkspaceBytes: config.executionWorkspaces.command.maxWorkspaceBytes
+        })
+      : undefined;
   // HTML to PDF (PDF-1): the API serves it to frames, the process that runs tools to agents.
   const htmlPdfService = await createInstanceHtmlPdfClient(env, infrastructure.secrets);
   const pages = await createInstancePages({
@@ -846,7 +865,18 @@ export async function createClientInstanceExecutionAssembly(
       objects: filesObjects,
       now: () => new Date()
     });
+  // The worker of an agent step with a workspace reads the datasets of the step's input.
+  const workflowDatasets =
+    keepsRunFiles && filesObjects
+      ? createWorkflowDatasets({
+          clientInstanceId,
+          stores: store,
+          objects: filesObjects,
+          limits: config.workflows.datasets
+        })
+      : undefined;
   const modulesStarted = await moduleAssembly.start({
+    ...(agentWorkspaceFiles ? { agentWorkspaceFiles } : {}),
     knowledgeFieldExtractor: capabilityContributions.find((part) => part.knowledgeFieldExtractor)
       ?.knowledgeFieldExtractor,
     notices: createInstanceNotices({ config, clientInstanceId, mail: noticeMail }),
@@ -1002,6 +1032,8 @@ export async function createClientInstanceExecutionAssembly(
     shippedAgents,
     attachments,
     ...(capabilityRunFiles ? { runFiles: capabilityRunFiles } : {}),
+    ...(workflowDatasets ? { workflowDatasets } : {}),
+    ...(agentWorkspaceFiles ? { agentWorkspaceFiles } : {}),
     managedObjects,
     jobRetries: [...jobRetries, ...modulesStarted.jobRetries],
     workspaceObjectStore,

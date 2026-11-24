@@ -459,6 +459,11 @@ export type WorkflowStep =
          * instance's default chat binding where it is left out.
          */
         model?: string;
+        /**
+         * The agent works in an Execution Workspace of its own: its input as files, the
+         * workspace tools, and a dataset of its output as a file it wrote.
+         */
+        workspace?: boolean;
       })
   /** Puts a notice into an Inbox or sends a mail through the platform mailer. */
   | (WorkflowStepBase & {

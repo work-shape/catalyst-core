@@ -1,6 +1,11 @@
 import { conditionHolds } from "./condition-test";
 import { fitsSchema, recordStepInput, stepTextSchemas } from "./step-input";
 import { agentStepOutcome } from "./agent-step";
+import {
+  agentWorkspaceInput,
+  storeAgentOutputDatasets,
+  type WorkflowAgentWorkspaceFiles
+} from "./agent-workspace";
 import { valuePosition } from "./json";
 import { checkpointFrame } from "./continuation-checkpoint";
 import type { WorkflowLimitContext } from "./run-limits";
@@ -96,6 +101,8 @@ export type StepEnd =
       principal: import("@work-shape/catalyst-core").WorkflowRunPrincipal;
       /** The files of the run the input names: the agent gets them with its task. */
       files?: string[];
+      /** A step with a workspace: the task message, which names files instead of long values. */
+      workspace?: { task: JsonObject };
     }
   | { kind: "notice"; notice: NoticeSendInput }
   | { kind: "condition"; taken: "then" | "else" }
@@ -150,6 +157,11 @@ export interface StepExecutorOptions {
   stepFiles: WorkflowStepFiles;
   /** Missing where the instance runs no sandbox: a code step then fails without waiting. */
   codeRunner?: WorkflowCodeRunner;
+  /**
+   * The Execution Workspaces of agent steps' threads, which an agent step with a workspace
+   * reads its returned datasets from. Missing where the instance has none.
+   */
+  agentWorkspace?: Pick<WorkflowAgentWorkspaceFiles, "read">;
 }
 
 /** What one attempt of a step is given: its run, the run's definition and the attempt's end. */
@@ -286,6 +298,44 @@ export function createStepExecutor(options: StepExecutorOptions) {
       return { kind: "failed", error: error.toRunError(), systemic: false, call };
     }
     return { kind: "done", output: outcome.value, call };
+  }
+
+  /**
+   * The output of an agent step with a workspace once its run ended: each dataset the answer
+   * names by the path of a file in the thread's workspace, stored as the step's own.
+   */
+  async function agentOutputDatasets(
+    attempt: StepAttempt,
+    step: Extract<WorkflowStep, { type: "agent" }>,
+    value: JsonValue
+  ): Promise<JsonValue> {
+    if (!namesDatasetType(step.outputSchema)) return value;
+    const { datasets, agentWorkspace } = options;
+    const child = await stores.childAgentRuns.readWorkflowAgentRun({
+      clientInstanceId,
+      stepRunId: attempt.stepRun.id
+    });
+    if (!datasets || !agentWorkspace || !child)
+      throw new WorkflowStepFailure(
+        "dataset_storage_unavailable",
+        "This instance keeps no datasets or no workspaces"
+      );
+    const maxBytes = attempt.definition.limits?.datasetBytes;
+    return storeAgentOutputDatasets({
+      value,
+      outputSchema: step.outputSchema,
+      types: attempt.definition.types,
+      rowBytes: datasets.limits.rowBytes,
+      read: (path) => agentWorkspace.read({ conversationId: child.conversationId, path }),
+      store: (dataset) =>
+        datasets.write({
+          run: attempt.run,
+          stepRun: attempt.stepRun,
+          ...dataset,
+          ...(maxBytes === undefined ? {} : { maxBytes }),
+          signal: attempt.signal
+        })
+    });
   }
 
   /** The files of the run a value names, each checked to be the run's own. */
@@ -680,19 +730,48 @@ export function createStepExecutor(options: StepExecutorOptions) {
           return { kind: "loop", items };
         }
         case "agent": {
+          const workspace = step.workspace === true;
           const ended = await agentStepOutcome(stores, run, stepRun);
           if (ended) {
-            if (ended.kind === "done") withinStepData(ended.output, "The agent output");
-            return ended;
+            if (ended.kind !== "done") return ended;
+            const output = workspace
+              ? await agentOutputDatasets(attempt, step, ended.output)
+              : ended.output;
+            withinStepData(output, "The agent output");
+            return { kind: "done", output };
           }
           const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The input of the agent step");
           await recordStepInput(stores.workflowRuns, scope, input);
-          if (holdsDatasetReference(input))
+          if (holdsDatasetReference(input) && !workspace)
             throw new WorkflowStepFailure(
               "not_supported_yet",
               "Agent steps do not receive datasets yet"
             );
+          if (workspace) {
+            // Its commands run in the sandbox a code step's script runs in.
+            if (!options.codeRunner || !options.agentWorkspace)
+              throw new WorkflowStepFailure(
+                "runner_unavailable",
+                "This instance gives an agent step no workspace: Execution Workspaces are off, have no sandbox, or its workspace tools are not enabled"
+              );
+            if (holdsDatasetReference(input) || namesDatasetType(step.outputSchema)) {
+              if (!options.datasets)
+                throw new WorkflowStepFailure(
+                  "dataset_storage_unavailable",
+                  "This instance has no files object store"
+                );
+              for (const ref of datasetReferences(input))
+                await options.datasets.reader({ id: ref.$dataset, runId: run.id, reference: ref });
+              await checkDatasetValues(
+                input,
+                step.inputSchema,
+                attempt.definition,
+                run.id,
+                options.datasets
+              );
+            }
+          }
           // The files the input names are the run's own: the agent reads them as attachments.
           const files = await checkedFiles(run, input);
           fitsSchema(
@@ -719,7 +798,8 @@ export function createStepExecutor(options: StepExecutorOptions) {
             input,
             principal: actor,
             ...(call ? { tester: call.actor } : {}),
-            ...(files.length > 0 ? { files: files.map((file) => file.$file) } : {})
+            ...(files.length > 0 ? { files: files.map((file) => file.$file) } : {}),
+            ...(workspace ? { workspace: { task: agentWorkspaceInput(input).task } } : {})
           };
         }
         case "code":

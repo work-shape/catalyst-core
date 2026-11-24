@@ -12,6 +12,7 @@ import {
   type WorkflowRunPrincipal,
   type WorkflowStepRun
 } from "@work-shape/catalyst-core";
+import { agentFacingOutputSchema } from "./agent-workspace";
 import { indexWorkflowSteps } from "./definition";
 
 /** A terminal Child Agent Run answers its step; an open one leaves the step waiting. */
@@ -67,9 +68,14 @@ export async function agentStepOutcome(
     conversationId: child.conversationId
   });
   const last = messages.filter((message) => message.role === "assistant").at(-1);
-  // The engine validates the answer again before a later step reads it (check 100).
+  // The engine validates the answer again before a later step reads it (check 100). A step
+  // with a workspace answers each dataset with the path of its file; the step stores it after.
   const error = agentOutputError(
-    declared?.type === "agent" ? declared.outputSchema : undefined,
+    declared?.type !== "agent"
+      ? undefined
+      : declared.workspace === true
+        ? agentFacingOutputSchema(declared.outputSchema)
+        : declared.outputSchema,
     last
   );
   if (error) return { kind: "failed", systemic: false, error };
@@ -113,6 +119,8 @@ export async function startAgentStep(
     principal: WorkflowRunPrincipal;
     tester?: AuthenticatedUser;
     files?: string[];
+    /** A step with a workspace: the task message names files the worker writes from `input`. */
+    workspace?: { task: JsonObject };
   },
   title: string,
   retainedUntil: string
@@ -124,8 +132,9 @@ export async function startAgentStep(
     agentName: workflowAgentName(run.workflow, stepRun.stepId),
     principal: end.principal,
     ...(end.tester ? { tester: end.tester } : {}),
-    task: JSON.stringify(end.input),
+    task: JSON.stringify(end.workspace?.task ?? end.input),
     ...(end.files?.length ? { files: end.files } : {}),
+    ...(end.workspace ? { workspaceInput: end.input } : {}),
     title,
     correlationId: run.correlationId,
     retainedUntil

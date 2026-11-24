@@ -243,6 +243,21 @@ export function readWorkflowAgentFiles(
 
 const workflowAgentFilesSchema = z.object({ fileIds: z.array(z.string().min(1)).min(1) });
 
+/**
+ * The key of a Workflow agent step's task message that holds the step's whole input where the
+ * step has a workspace. The agent's worker writes it into the workspace as files before the
+ * first turn; the message's text names the files instead of holding long values.
+ */
+export const WORKFLOW_AGENT_WORKSPACE_METADATA_KEY = "workflowWorkspace";
+
+/** The input a task message's worker writes into the workspace, or `undefined` where none. */
+export function readWorkflowAgentWorkspaceInput(
+  metadata: JsonObject | undefined
+): JsonObject | undefined {
+  const value = metadata?.[WORKFLOW_AGENT_WORKSPACE_METADATA_KEY];
+  return isJsonObject(value) && isJsonObject(value.input) ? value.input : undefined;
+}
+
 /** The copy map is stored after attachment setup, including when no handler takes a file. */
 export function workflowAgentFilesAttached(metadata: JsonObject | undefined): boolean {
   const files = metadata?.[WORKFLOW_AGENT_FILES_METADATA_KEY];

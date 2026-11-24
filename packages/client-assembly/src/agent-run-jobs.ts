@@ -13,7 +13,13 @@ import {
 import { setTimeout as delay } from "node:timers/promises";
 import type { ChatAttachmentService } from "@work-shape/catalyst-server";
 import { createUploadFileContent } from "@work-shape/catalyst-capability-sdk";
-import type { WorkflowRunFiles } from "@work-shape/catalyst-workflows";
+import {
+  stageAgentWorkspace,
+  WorkflowStepFailure,
+  type WorkflowAgentWorkspaceFiles,
+  type WorkflowDatasets,
+  type WorkflowRunFiles
+} from "@work-shape/catalyst-workflows";
 import {
   AppError,
   agentBuildsAssets,
@@ -65,6 +71,10 @@ interface AgentRunExecutionAssembly {
   attachments?: WorkflowFileAttachments;
   /** The files of Workflow runs; absent where the instance keeps none. */
   runFiles?: Pick<WorkflowRunFiles, "read">;
+  /** The datasets of Workflow runs; absent where the instance keeps none. */
+  workflowDatasets?: Pick<WorkflowDatasets, "reader">;
+  /** The workspaces of agent steps' threads; absent where the instance has none. */
+  agentWorkspaceFiles?: Pick<WorkflowAgentWorkspaceFiles, "write" | "maxBytes">;
 }
 
 /** The job kinds that execute Agent Runs, for the process that serves them. */
@@ -85,6 +95,7 @@ export function createClientInstanceAgentRunJobs(
       ),
     loadWorkflowAgent: (run) => workflowAgentInput(execution.store, run),
     ...withWorkflowFiles(execution),
+    ...withWorkflowWorkspace(execution),
     loadWorkflowAgentDraft: async (run) => {
       const call = await workflowAgentCall(execution.store, execution.operationCalls.registry, run);
       return call && "draft" in call ? call.draft : undefined;
@@ -363,6 +374,66 @@ async function attachWorkflowFiles(
     claimedAt: new Date().toISOString()
   });
   return attachmentManifest;
+}
+
+/**
+ * Writes the input of a Workflow agent step with a workspace into its thread's workspace before
+ * the first turn: what the run may read of its datasets and files, as files.
+ */
+function withWorkflowWorkspace(
+  execution: AgentRunExecutionAssembly
+): Pick<AgentRunJobsOptions, "stageWorkflowWorkspace"> {
+  const { agentWorkspaceFiles: workspace, store, runFiles, workflowDatasets } = execution;
+  if (!workspace) return {};
+  return {
+    async stageWorkflowWorkspace({ run, input, signal }) {
+      const step = run.workflowStepRunId
+        ? await store.workflowRuns.getStepRun({
+            clientInstanceId: run.clientInstanceId,
+            id: run.workflowStepRunId
+          })
+        : undefined;
+      const ownerUserId = run.ownerUserId ?? run.principalId;
+      if (!step || !ownerUserId)
+        throw new AppError("NOT_FOUND", "Workflow agent step is unavailable");
+      try {
+        await stageAgentWorkspace({
+          conversationId: run.conversationId,
+          ownerUserId,
+          stepInput: input,
+          workspace,
+          signal,
+          sources: {
+            async rows(reference) {
+              if (!workflowDatasets)
+                throw new AppError("CONFLICT", "This instance keeps no datasets", {
+                  reason: "dataset_storage_unavailable"
+                });
+              const reader = await workflowDatasets.reader({
+                id: reference.$dataset,
+                runId: step.runId,
+                reference,
+                signal
+              });
+              return reader.rows;
+            },
+            async file(fileId) {
+              const read = await runFiles?.read(fileId);
+              if (!read) return undefined;
+              if (read.file.owner?.kind !== "workflow_run" || read.file.owner.id !== step.runId)
+                throw new AppError("NOT_FOUND", "The file is not available to this agent step");
+              return read.bytes;
+            }
+          }
+        });
+      } catch (error) {
+        // A dataset the run may no longer read, or one that expired, ends the run with its code.
+        if (error instanceof WorkflowStepFailure)
+          throw new AppError("CONFLICT", error.message, { reason: error.code });
+        throw error;
+      }
+    }
+  };
 }
 
 function withWorkflowFiles(

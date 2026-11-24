@@ -9,6 +9,7 @@ import {
   SUBAGENT_ANSWER_MAX_LENGTH,
   SUBAGENT_FILES_MAX,
   WORKFLOW_AGENT_FILES_METADATA_KEY,
+  WORKFLOW_AGENT_WORKSPACE_METADATA_KEY,
   WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES,
   WORKFLOW_STEP_TRANSCRIPT_TEXT_MAX_CHARS,
   WORKFLOW_STEP_TRANSCRIPT_TOOL_INPUT_MAX_CHARS,
@@ -170,9 +171,15 @@ export function createPostgresChildAgentRunStore(
         role: "user",
         text: input.task,
         // The files of the run the agent gets: its worker attaches them before the first turn.
-        metadata: input.files?.length
-          ? { [WORKFLOW_AGENT_FILES_METADATA_KEY]: { fileIds: [...input.files] } }
-          : {},
+        metadata: {
+          ...(input.files?.length
+            ? { [WORKFLOW_AGENT_FILES_METADATA_KEY]: { fileIds: [...input.files] } }
+            : {}),
+          // The step's whole input, which the worker writes into the run's workspace.
+          ...(input.workspaceInput
+            ? { [WORKFLOW_AGENT_WORKSPACE_METADATA_KEY]: { input: input.workspaceInput } }
+            : {})
+        },
         createdAt: at
       });
       const [row] = await db
@@ -271,7 +278,14 @@ export function createPostgresChildAgentRunStore(
                       fileCopies: { ...input.fileCopies }
                     }
                   }
-                : {})
+                : {}),
+              // The input a step with a workspace has its worker write stays with its task.
+              ...(message.metadata[WORKFLOW_AGENT_WORKSPACE_METADATA_KEY] === undefined
+                ? {}
+                : {
+                    [WORKFLOW_AGENT_WORKSPACE_METADATA_KEY]:
+                      message.metadata[WORKFLOW_AGENT_WORKSPACE_METADATA_KEY]
+                  })
             }
           })
           .where(

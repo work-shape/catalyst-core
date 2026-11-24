@@ -21,6 +21,9 @@ export function workspaceListFilesTool(deps: WorkspaceToolDependencies) {
     group: "files",
     icon: "files",
     effect: "reading",
+    // It reaches only the workspace of the run's own thread, so a Workflow agent step with a
+    // workspace, whose run is its service principal's, may call it too.
+    auth: "principal",
     description:
       "List the files tracked in this conversation's execution workspace, each with path, size and checksum. These are the internal working files of the conversation, not Collaboration Workspace assets. The list is empty until a tool has put a file there. Read a text file with workspace.read_file; search or look into directories with a command in workspace.exec.",
     inputSchema: workspaceListFilesInputSchema,

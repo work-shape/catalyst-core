@@ -33,6 +33,9 @@ export function workspaceEditFileTool(deps: WorkspaceToolDependencies) {
     group: "files",
     icon: "text",
     effect: "changing",
+    // It reaches only the workspace of the run's own thread, so a Workflow agent step with a
+    // workspace, whose run is its service principal's, may call it too.
+    auth: "principal",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },
     // The project's instructions enter every run of everyone in the project (PRJ-3): the agent

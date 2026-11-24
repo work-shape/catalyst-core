@@ -17,6 +17,7 @@ import {
   readAssistantFinalMetadata,
   readUserMessageMetadata,
   readWorkflowAgentFiles,
+  readWorkflowAgentWorkspaceInput,
   workflowAgentFilesAttached,
   runFailureCodeOf,
   type AgentRun,
@@ -35,6 +36,7 @@ import {
   type ConversationId,
   type SteeredUserMessage,
   type JobControl,
+  type JsonObject,
   type JobSchedule,
   type OperationDraftContext,
   type PlatformStores,
@@ -112,6 +114,16 @@ export interface AgentRunJobsOptions {
     fileIds: readonly string[];
     signal: AbortSignal;
   }): Promise<AttachmentManifest>;
+  /**
+   * A Workflow agent step's run with a workspace: writes the step's input into its thread's
+   * workspace as files before the first turn. Absent where the process has no workspaces:
+   * such a run fails.
+   */
+  stageWorkflowWorkspace?(input: {
+    run: AgentRun;
+    input: JsonObject;
+    signal: AbortSignal;
+  }): Promise<void>;
   /** A Workflow agent step's run in a draft test: the draft its calls carry. */
   loadWorkflowAgentDraft?(run: AgentRun): Promise<OperationDraftContext | undefined>;
   execute: ExecuteAgentRun;
@@ -626,6 +638,19 @@ async function reconstructInput(
         }
       );
     attachmentManifest = await options.attachWorkflowFiles({ run, fileIds: workflowFiles, signal });
+  }
+  // A step with a workspace gets its input as files there, once, before its first turn.
+  const workspaceInput = run.workflowStepRunId
+    ? readWorkflowAgentWorkspaceInput(message.metadata)
+    : undefined;
+  if (workspaceInput && !resumeState && signal) {
+    if (!options.stageWorkflowWorkspace)
+      throw new AppError(
+        "CONFLICT",
+        "This instance has no workspaces, so the agent step cannot work in one",
+        { reason: "runner_unavailable" }
+      );
+    await options.stageWorkflowWorkspace({ run, input: workspaceInput, signal });
   }
   const workflowAgent = run.workflowStepRunId ? await workflowAgentOf(options, run) : undefined;
   const above = run.parentRunId ? await ancestorsOf(options, run.parentRunId) : undefined;

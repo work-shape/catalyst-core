@@ -1,4 +1,5 @@
 import type { DataStores } from "@work-shape/catalyst-data-stores";
+import type { WorkflowAgentWorkspaceFiles } from "@work-shape/catalyst-workflows";
 import type { InstanceConnections } from "./connections";
 import type {
   PublishNarrativeStoredData,
@@ -68,6 +69,8 @@ interface ModuleRuntime {
    * document, through the attachment handlers that keep it.
    */
   releaseConversationAttachments?(conversationId: ConversationId): Promise<void>;
+  /** The workspaces of Workflow agent steps' threads; absent where the instance has none. */
+  agentWorkspaceFiles?: Pick<WorkflowAgentWorkspaceFiles, "read">;
 }
 
 /** What a module adds once it has the call path. A module leaves out what it does not have. */

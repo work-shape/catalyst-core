@@ -12,6 +12,7 @@ import type { AttachmentManifest } from "./files";
 import type { RunAgentResult } from "./subagents";
 import type { ReasoningEffortConfig } from "./config";
 import type { AuthenticatedUser, WorkflowRunPrincipal } from "./identity";
+import type { JsonObject } from "./json";
 
 // The store of Child Agent Runs (CR-1): a subagent's start, the parent's wait for its
 // subagents, and what a parent and a person read of them. Apart from `subagents.ts`, which the
@@ -118,6 +119,11 @@ export interface ChildAgentRunStore {
      * agent's worker attaches them before the first turn (`WORKFLOW_AGENT_FILES_METADATA_KEY`).
      */
     files?: readonly string[];
+    /**
+     * The whole input of a step with a workspace, which the worker writes into it as files
+     * (`WORKFLOW_AGENT_WORKSPACE_METADATA_KEY`); `task` then names the files.
+     */
+    workspaceInput?: JsonObject;
     title: string;
     correlationId: string;
     retainedUntil: ISODateString;

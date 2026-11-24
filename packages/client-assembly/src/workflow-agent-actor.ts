@@ -1,4 +1,11 @@
-import { indexWorkflowSteps, testRunCall, workflowRunActor } from "@work-shape/catalyst-workflows";
+import {
+  AGENT_WORKSPACE_INSTRUCTIONS,
+  agentFacingOutputSchema,
+  indexWorkflowSteps,
+  testRunCall,
+  workflowAgentToolNames,
+  workflowRunActor
+} from "@work-shape/catalyst-workflows";
 import {
   AppError,
   type AgentRun,
@@ -35,7 +42,7 @@ export async function workflowAgentStep(
     (await stores.workflowRuns.readRunDefinition({ clientInstanceId, id: stepRun.runId }));
   const step = definition && indexWorkflowSteps(definition).get(stepRun.stepId)?.step;
   return stepRun && definition && step?.type === "agent"
-    ? { stepRun, step, tools: definition.tools ?? [] }
+    ? { stepRun, step, tools: workflowAgentToolNames(definition.tools ?? [], step) }
     : undefined;
 }
 
@@ -48,9 +55,16 @@ export async function workflowAgentInput(
   if (!found) throw new AppError("NOT_FOUND", "Workflow agent definition is unavailable");
   return {
     workflowRunId: found.stepRun.runId,
-    instructions: found.step.instructions,
+    // A step with a workspace is told where its input lies and how it answers a dataset.
+    instructions:
+      found.step.workspace === true
+        ? `${found.step.instructions}\n\n${AGENT_WORKSPACE_INSTRUCTIONS}`
+        : found.step.instructions,
     toolNames: found.tools,
-    outputSchema: found.step.outputSchema,
+    outputSchema:
+      found.step.workspace === true
+        ? agentFacingOutputSchema(found.step.outputSchema)
+        : found.step.outputSchema,
     ...(found.step.model === undefined ? {} : { modelBindingId: found.step.model })
   };
 }

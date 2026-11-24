@@ -52,6 +52,9 @@ export function workspaceExecTool(deps: WorkspaceToolDependencies) {
     group: "files",
     icon: "code",
     effect: "changing",
+    // It reaches only the workspace of the run's own thread, so a Workflow agent step with a
+    // workspace, whose run is its service principal's, may call it too.
+    auth: "principal",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },
     description:

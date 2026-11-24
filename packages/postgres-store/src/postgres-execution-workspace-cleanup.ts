@@ -26,7 +26,21 @@ export async function listExecutionWorkspaceCleanupTargets(
       on c.id = ew.conversation_id
      and c.client_instance_id = ew.client_instance_id
     where ew.client_instance_id = ${input.clientInstanceId}
-      and c.status <> 'active'
+      and (
+        c.status <> 'active'
+        -- A Workflow agent step's thread keeps its workspace as long as its run keeps its
+        -- values: once they are pruned, or the run is gone, the workspace goes.
+        or (
+          c.workflow_run_id is not null
+          and not exists (
+            select 1
+            from workflow_runs wr
+            where wr.client_instance_id = c.client_instance_id
+              and wr.id = c.workflow_run_id
+              and wr.data_pruned_at is null
+          )
+        )
+      )
       and (
         ew.status <> 'deleted'
         or exists (
