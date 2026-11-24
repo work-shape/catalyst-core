@@ -7,6 +7,33 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.48 — 2026-11-24
+
+### Changed
+
+- A Knowledge Base row in Build says how many documents were not ingested, as a warning ("9 not ingested"), where others were. It says "Ingestion failed" only where no document was ingested. The page of a Knowledge Base with more documents than it has read counts them too ("9 could not be read.").
+- `knowledge_bases.list_documents` answers `summary.failed`, the number of retained documents that failed.
+
+### Fixed
+
+- **Workflows:** a Workflow of a workspace whose `platform_event` trigger names a Knowledge Base of the instance now starts on that Knowledge Base's events. The publish accepted such a trigger and checked the account's right on the Knowledge Base, but the dispatcher heard only sources of the Workflow's own workspace and skipped the event without a trace. A workspace's Workflow now hears the events of its own workspace's sources and of the instance's, the sources it may name; another workspace's events still start nothing, and the account still needs the event's right on the source.
+- **Workflows:** a Workflow whose runs keep failing no longer fills its publisher's Inbox with one
+  "A Workflow run needs attention" notice per run. While the publisher has not marked the
+  Workflow's failure notice handled, the next failing run updates it: it counts every failing run
+  since it was opened, links the newest run and moves to the top of the Inbox. Once it is marked
+  handled, the next failing run opens a fresh notice. Each Workflow keeps its own notice. Notices
+  opened before this release stay as they are.
+
+### Database
+
+- **Workflows:** migration 0209 `workflow_failure_notice_coalesce` adds the nullable column
+  `workflow_failure_notices.notice_id`, a reference to `approval_requests` added `NOT VALID` and
+  set to null when the notice is deleted, and the column `failures` (`integer`, default `0`). No
+  row is rewritten and it gives up after a 5 s `lock_timeout`. Migration 0210
+  `workflow_failure_notice_index` builds the index `workflow_failure_notices_notice_idx`
+  concurrently. A rollback needs no step: an older release does not read the columns and sends
+  one notice per failing run again.
+
 ## 0.8.0-rc.47 — 2026-11-23
 
 ### Added
