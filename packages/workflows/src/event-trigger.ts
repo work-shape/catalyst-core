@@ -27,9 +27,9 @@ import type { RunOrigin } from "./scheduled-start";
 // The `platform_event` trigger (EW-4). The audit record of an event of
 // `WORKFLOW_TRIGGER_EVENTS` queues one job in its own transaction (`workflowEventJobOf`); the
 // job starts a run of each published Workflow whose trigger names the event and matches its
-// source, once per Workflow and event. A Workflow of a workspace hears only the events of its
-// own workspace's sources, one of the instance hears them all, and a run starts only where the
-// Workflow's account may read the event's source. The event carries ids, names and counts. An
+// source, once per Workflow and event. A Workflow of a workspace hears the events of the
+// sources it may name, those of its own workspace and of the instance, one of the instance hears
+// them all, and a run starts only where the Workflow's account may read the event's source. The event carries ids, names and counts. An
 // event older than `WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS` when its job runs starts nothing.
 
 /** The source of an event as rights are decided on it. */
@@ -180,8 +180,13 @@ export function createEventTrigger(options: EventTriggerOptions): RegisteredJobH
             name: revision.manifest.id
           });
           if (asset?.status !== "active") continue;
-          // A Workflow of a workspace hears the events of its own workspace only.
-          if (asset.scope.kind === "workspace" && asset.scope.workspaceId !== source.workspaceId)
+          // A Workflow of a workspace hears the events of its own workspace's sources and of the
+          // instance's, never another workspace's.
+          if (
+            asset.scope.kind === "workspace" &&
+            source.workspaceId !== undefined &&
+            asset.scope.workspaceId !== source.workspaceId
+          )
             continue;
           let prepared: PreparedStart;
           try {
