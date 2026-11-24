@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { KNOWLEDGE_BASE_ASSET_KIND, type DataStoreRecord } from "@work-shape/catalyst-core";
+import {
+  KNOWLEDGE_BASE_ASSET_KIND,
+  type AssetScope,
+  type DataStoreRecord
+} from "@work-shape/catalyst-core";
 import { WORKFLOW_TRIGGER_EVENT_MAX_AGE_MS } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
@@ -64,7 +68,11 @@ function onSync(id: string, filter?: Record<string, string>) {
 }
 
 /** A Knowledge Base as its record and asset hold it: what an event's source is read from. */
-async function knowledgeBase(t: WorkflowFixture, name: string): Promise<string> {
+async function knowledgeBase(
+  t: WorkflowFixture,
+  name: string,
+  scope?: AssetScope
+): Promise<string> {
   await applyAtCurrentRevisions(t.stores.configAssets, {
     clientInstanceId,
     mutations: [
@@ -72,7 +80,8 @@ async function knowledgeBase(t: WorkflowFixture, name: string): Promise<string> 
         type: "upsert",
         kind: KNOWLEDGE_BASE_ASSET_KIND,
         name,
-        config: { name, description: "Contracts" }
+        config: { name, description: "Contracts" },
+        ...(scope ? { scope } : {})
       }
     ]
   });
@@ -268,6 +277,46 @@ describe("a platform event trigger", () => {
     await worker.runDue();
     const runs = await runsOf(t, "on-contracts");
     expect(runs).toHaveLength(1);
+  });
+
+  it("starts a workspace's Workflow on events of its workspace's and the instance's sources, never another workspace's", async () => {
+    const t = (fixture = await workflowFixture({ definitions: "assets" }));
+    const team = await t.sharedWorkspace("Team");
+    const other = await t.sharedWorkspace("Other team");
+    const shared = await knowledgeBase(t, "shared");
+    const own = await knowledgeBase(t, "own", { kind: "workspace", workspaceId: team });
+    const foreign = await knowledgeBase(t, "foreign", { kind: "workspace", workspaceId: other });
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "knowledge_base.read");
+    const manifest = onSync("team-on-sync");
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "workflow", name: manifest.id },
+      payload: {
+        config: { name: manifest.id, manifest },
+        expectedRevision: null,
+        workspaceId: team
+      }
+    });
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: "workflow", name: manifest.id },
+      payload: { revision: 1, workspaceId: team }
+    });
+
+    const events = [
+      await syncFinished(t, shared),
+      await syncFinished(t, own),
+      await syncFinished(t, foreign)
+    ];
+    const worker = t.worker();
+    await worker.runDue();
+    await worker.runDue();
+
+    const runs = await runsOf(t, manifest.id);
+    const started = await Promise.all(
+      runs.map((run) => t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id }))
+    );
+    expect(started.map((run) => run?.triggerEvent?.id).sort()).toEqual(
+      [events[0]?.id, events[1]?.id].sort()
+    );
   });
 
   it("refuses a definition that names an event outside the list or filters by another key", async () => {
