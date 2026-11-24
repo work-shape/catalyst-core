@@ -59,6 +59,7 @@ export const knowledge = defineTranslations({
     "knowledge.rowLastIngestion": "Last ingested {time}",
     "knowledge.rowNeverIngested": "not yet",
     "knowledge.rowIngestionFailed": "Ingestion failed",
+    "knowledge.rowNotIngested": "{count} not ingested",
     "knowledge.rowIngesting": "Ingesting",
     "knowledge.accessTitle": "Additional use rights",
     "knowledge.accessDescription":
@@ -359,6 +360,8 @@ export const knowledge = defineTranslations({
     "knowledge.tallyPendingOne": "1 is still being read.",
     "knowledge.tallyPendingMany": "{count} are still being read.",
     "knowledge.tallySomeFailed": "Some could not be read.",
+    "knowledge.tallyFailedCountOne": "1 could not be read.",
+    "knowledge.tallyFailedCountMany": "{count} could not be read.",
     "knowledge.tallySomePending": "Some are still being read.",
     "knowledge.addUpload": "Upload files",
     "knowledge.addConnect": "Connect a folder",
@@ -426,6 +429,7 @@ export const knowledge = defineTranslations({
     "knowledge.rowLastIngestion": "Zuletzt eingelesen {time}",
     "knowledge.rowNeverIngested": "noch nicht",
     "knowledge.rowIngestionFailed": "Einlesen fehlgeschlagen",
+    "knowledge.rowNotIngested": "{count} nicht eingelesen",
     "knowledge.rowIngesting": "Wird eingelesen",
     "knowledge.accessTitle": "Zusätzliche Nutzungsrechte",
     "knowledge.accessDescription":
@@ -734,6 +738,8 @@ export const knowledge = defineTranslations({
     "knowledge.tallyPendingOne": "1 wird noch gelesen.",
     "knowledge.tallyPendingMany": "{count} werden noch gelesen.",
     "knowledge.tallySomeFailed": "Einige konnten nicht gelesen werden.",
+    "knowledge.tallyFailedCountOne": "1 konnte nicht gelesen werden.",
+    "knowledge.tallyFailedCountMany": "{count} konnten nicht gelesen werden.",
     "knowledge.tallySomePending": "Einige werden noch gelesen.",
     "knowledge.addUpload": "Dateien hochladen",
     "knowledge.addConnect": "Ordner verbinden",

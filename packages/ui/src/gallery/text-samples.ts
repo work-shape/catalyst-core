@@ -33,10 +33,13 @@ export interface SampleGalleryText {
   buildContractsStatus: string;
   buildPolicies: string;
   buildPoliciesStatus: string;
+  buildProductSheets: string;
+  buildProductSheetsStatus: string;
   buildPrices: string;
   buildPricesStatus: string;
   stateIngesting: string;
   stateIngestionFailed: string;
+  stateNotIngested: string;
   assetBack: string;
   assetDiscardDraft: string;
   assetExport: string;
@@ -135,10 +138,13 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     buildContractsStatus: "1 source, 38 documents. Last ingestion yesterday.",
     buildPolicies: "Company policies",
     buildPoliciesStatus: "3 sources, 1,204 documents. Ingestion running.",
+    buildProductSheets: "Product sheets",
+    buildProductSheetsStatus: "2 sources, 640 documents.",
     buildPrices: "Price lists",
     buildPricesStatus: "1 source. The last ingestion failed.",
     stateIngesting: "Ingesting",
     stateIngestionFailed: "Ingestion failed",
+    stateNotIngested: "4 not ingested",
     assetBack: "Back to knowledge bases",
     assetDiscardDraft: "Discard draft",
     assetExport: "Export definition",
@@ -235,10 +241,13 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     buildContractsStatus: "1 Quelle, 38 Dokumente. Zuletzt gestern eingelesen.",
     buildPolicies: "Unternehmensrichtlinien",
     buildPoliciesStatus: "3 Quellen, 1.204 Dokumente. Wird eingelesen.",
+    buildProductSheets: "Produktblätter",
+    buildProductSheetsStatus: "2 Quellen, 640 Dokumente.",
     buildPrices: "Preislisten",
     buildPricesStatus: "1 Quelle. Das letzte Einlesen ist fehlgeschlagen.",
     stateIngesting: "Wird eingelesen",
     stateIngestionFailed: "Einlesen fehlgeschlagen",
+    stateNotIngested: "4 nicht eingelesen",
     assetBack: "Zurück zu den Wissensbasen",
     assetDiscardDraft: "Entwurf verwerfen",
     assetExport: "Definition exportieren",

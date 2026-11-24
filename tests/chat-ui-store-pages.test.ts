@@ -682,6 +682,45 @@ describe("a Knowledge Base on the list", () => {
     ).toBe("ingestion-failed");
   });
 
+  it("counts the documents not ingested as a warning, and fails only where none was", async () => {
+    const badge = async (summary: KnowledgeDocumentSummary) => {
+      const page = await mount(handbook, {
+        list: true,
+        knowledge: knowledgeSource({ summary: ready(summary) })
+      });
+      const found = page.querySelector("[data-knowledge-row-state]");
+      const said =
+        found === null
+          ? undefined
+          : {
+              state: found.getAttribute("data-knowledge-row-state"),
+              tone: found.getAttribute("data-knowledge-row-tone"),
+              text: found.textContent
+            };
+      for (const unmount of unmounts.splice(0)) unmount();
+      return said;
+    };
+    expect(await badge({ count: 8616, state: "indexed", failed: 0 })).toBeUndefined();
+    expect(await badge({ count: 8616, state: "failed", failed: 9 })).toEqual({
+      state: "not-ingested",
+      tone: "warning",
+      text: "9 not ingested"
+    });
+    expect(await badge({ count: 2400, state: "failed", failed: 1200 })).toMatchObject({
+      tone: "warning",
+      text: "1,200 not ingested"
+    });
+    expect(await badge({ count: 5, state: "failed", failed: 1 })).toMatchObject({
+      tone: "warning",
+      text: "1 not ingested"
+    });
+    expect(await badge({ count: 9, state: "failed", failed: 9 })).toEqual({
+      state: "ingestion-failed",
+      tone: "danger",
+      text: "Ingestion failed"
+    });
+  });
+
   it("reads no documents of one that answers from tables", async () => {
     const summaryReads: string[] = [];
     const structured: KnowledgeBaseState = {
