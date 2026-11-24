@@ -203,9 +203,9 @@ describe("usage breakdown", () => {
     ]);
     // A Workflow's agent step names its agent; a call no agent made, what it was made for.
     expect((await breakdown(clientInstanceId, "agent")).map((row) => row.key)).toEqual([
+      "digest_writer",
       ":purpose:conversation_title",
       ":purpose:knowledge_embedding",
-      "digest_writer",
       "quoter",
       "reader",
       "writer"
