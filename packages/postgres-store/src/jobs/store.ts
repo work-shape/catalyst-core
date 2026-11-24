@@ -149,6 +149,22 @@ export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => 
       const result = await retryJob(db, input);
       if (result.outcome === "requeued") enqueued();
       return result;
+    },
+    async listDead(kind, input) {
+      const rows = await db
+        .select()
+        .from(platformJobs)
+        .where(
+          and(
+            eq(platformJobs.clientInstanceId, input.clientInstanceId),
+            eq(platformJobs.kind, kind.kind),
+            eq(platformJobs.status, "dead"),
+            ...(input.afterId === undefined ? [] : [gt(platformJobs.id, input.afterId)])
+          )
+        )
+        .orderBy(asc(platformJobs.id))
+        .limit(input.limit);
+      return rows.map(mapJob);
     }
   };
   connections.set(store, db);

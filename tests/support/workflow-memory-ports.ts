@@ -101,7 +101,8 @@ export const unusedJobsStore: JobsStore = {
   pruneEndedJobs: unsupported,
   summarizeByKind: unsupported,
   listOverview: unsupported,
-  retry: unsupported
+  retry: unsupported,
+  listDead: unsupported
 };
 export const unusedActorAccess: ActorAccess = {
   scopeOf: unsupported,

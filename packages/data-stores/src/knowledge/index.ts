@@ -45,6 +45,7 @@ import {
   type OperationSource,
   type PlatformStores,
   type JobRetry,
+  type JobSchedule,
   type RegisteredAssetKind,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
@@ -60,6 +61,10 @@ import {
 } from "./definition";
 import { createKnowledgeRemovalJobs, enqueueKnowledgeRemoval } from "./removal";
 import { createKnowledgeFileCleanupJobs } from "./file-cleanup";
+import {
+  createKnowledgeExtractRecoveryHandler,
+  knowledgeExtractRecoverySchedule
+} from "./extract-recovery";
 import { createKnowledgeIndexJobHandler, type KnowledgeEmbed } from "./index-job";
 import { createKnowledgeOperationSource, createKnowledgeToolSource } from "./operations";
 import { keepKnowledgeCheck, type KnowledgeRuntime } from "./runtime";
@@ -123,6 +128,8 @@ export interface KnowledgeBases {
   ): {
     handlers: RegisteredJobHandler[];
     retries: JobRetry[];
+    /** The tick that queues again dead extract jobs of contents still pending. */
+    schedules: JobSchedule[];
   };
   /**
    * Original bytes of a live document; the calling operation checks knowledge_base.use. A
@@ -520,10 +527,12 @@ export function createKnowledgeBases(input: {
                   auditRecorder,
                   embedding: input.embedding,
                   embed
-                })
+                }),
+                createKnowledgeExtractRecoveryHandler(runtime)
               ]
             : [])
         ],
+        schedules: files ? [knowledgeExtractRecoverySchedule] : [],
         retries: [
           ...cleanup.retries,
           ...removal.retries,

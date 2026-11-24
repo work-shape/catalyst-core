@@ -329,6 +329,14 @@ export interface JobsStore {
    * commits or rolls back with what the caller puts back on the subject record.
    */
   retry(input: { clientInstanceId: ClientInstanceId; id: string }): Promise<RetryJobResult>;
+  /**
+   * The dead jobs of `kind` with their payloads as stored, by id after `afterId`, at most
+   * `limit`: for a sweep that brings back work a kind gave up on and retries it with `retry`.
+   */
+  listDead(
+    kind: JobKind,
+    input: { clientInstanceId: ClientInstanceId; afterId?: JobId; limit: number }
+  ): Promise<Job[]>;
 }
 
 /** A handler throws this when another attempt cannot help. The job becomes `failed`. */

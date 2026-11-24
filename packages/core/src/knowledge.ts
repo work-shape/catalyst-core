@@ -694,7 +694,8 @@ export const KNOWLEDGE_JOB_KINDS = {
   reindex: "knowledge_base.reindex",
   endWorkflowSource: "knowledge_base.end_workflow_source",
   expirePageCache: "knowledge_base.expire_page_cache",
-  sourceTick: "knowledge_base.source_tick"
+  sourceTick: "knowledge_base.source_tick",
+  recoverExtracts: "knowledge_base.recover_extracts"
 } as const;
 
 /** Chunks and optionally embeds a content in the configured ingestion process. */
@@ -765,12 +766,18 @@ export const knowledgeIndexJob = defineJobKind({
   concurrency: { global: KNOWLEDGE_INDEX_CONCURRENCY_DEFAULTS.total }
 });
 
-/** The extract job. Its worker's slots bound how many convert at once. */
+/**
+ * The extract job. Its worker's slots bound how many convert at once. Its attempts span about a
+ * quarter of an hour (1, 2, 4 and 8 minutes between them): a failure that ends in milliseconds,
+ * such as a store of files that is briefly down, would otherwise take a whole backlog through
+ * every attempt within the outage. Work it still gives up on is brought back by
+ * `knowledge_base.recover_extracts`.
+ */
 export const knowledgeExtractJob = defineJobKind({
   kind: KNOWLEDGE_BASE_EXTRACT_JOB_KIND,
   payloadSchema: knowledgeExtractJobPayloadSchema,
-  maxAttempts: 3,
-  backoff: { baseMs: 30_000, maxMs: 10 * 60_000 },
+  maxAttempts: 5,
+  backoff: { baseMs: 60_000, maxMs: 15 * 60_000 },
   leaseMs: 5 * 60_000,
   concurrency: { global: 2 }
 });
