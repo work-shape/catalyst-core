@@ -2,6 +2,7 @@ import { SCHEDULED_START_TOOL_NAMES } from "@work-shape/catalyst-tool-execution"
 import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runtime";
 import {
   ASK_QUESTION_TOOL_NAME,
+  HISTORY_TOOL_NAMES,
   CONVERSATION_RENAME_TOOL_NAME,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
@@ -111,6 +112,8 @@ export function agentListableToolNames(enabledByRelease: Iterable<string>): stri
       ...PLATFORM_MODULE_TOOL_NAMES,
       "read_skill",
       ASK_QUESTION_TOOL_NAME,
+      // Reach only the chat they are called in (RECALL-1), offered in every chat.
+      ...HISTORY_TOOL_NAMES,
       // Renames only the chat it is called in: not one of the platform tools an agent gets the
       // orientation and the platform's docs with.
       CONVERSATION_RENAME_TOOL_NAME,

@@ -10,6 +10,7 @@ import {
   type AssetScope,
   type AgentRunId,
   type ChatMessage,
+  type MessageId,
   type ModelBindingConfig,
   type ModelProviderConfig,
   type ReasoningEffortConfig,
@@ -190,6 +191,8 @@ export class ModelInput {
     providerContinuation?: ModelCompletion["continuation"];
     /** The continuation is the last run's reasoning on the model, not the compaction checkpoint. */
     fromTurn?: true;
+    /** The first stored message sent, where earlier ones were left out (RECALL-1). */
+    historyCut?: MessageId;
   }> {
     const persistedMessages = await this.options.conversationHistory.listMessages({
       clientInstanceId: context.clientInstanceId,
@@ -201,16 +204,16 @@ export class ModelInput {
     const { compactionEnabled } = options;
     if (options.withoutCheckpoint) {
       // What a conversation that never compacted sends: all of its history, no continuation.
+      const sent = compactionEnabled
+        ? history
+        : selectRecentCompleteHistory(
+            history,
+            this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
+          );
+      const historyCut = cutOf(history, sent, input.inputMessageId);
       return {
-        messages: await projectAgentVisibleHistory(
-          compactionEnabled
-            ? history
-            : selectRecentCompleteHistory(
-                history,
-                this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
-              ),
-          this.modelContextOptions(context)
-        )
+        messages: await projectAgentVisibleHistory(sent, this.modelContextOptions(context)),
+        ...(historyCut ? { historyCut } : {})
       };
     }
     const storedCheckpoint = compactionEnabled
@@ -264,8 +267,10 @@ export class ModelInput {
           history,
           this.options.historyMessageLimit ?? DEFAULT_CONVERSATION_HISTORY_LIMIT
         );
+    const historyCut = cutOf(history, activeHistory, input.inputMessageId);
     return {
       messages: await projectAgentVisibleHistory(activeHistory, this.modelContextOptions(context)),
+      ...(historyCut ? { historyCut } : {}),
       ...(checkpoint
         ? {
             providerContinuation: {
@@ -473,4 +478,18 @@ export function getSnapshotSkillMetadata(
       title,
       description
     }));
+}
+
+/**
+ * The first stored message a run sends its model where it leaves earlier ones out (RECALL-1):
+ * the compaction checkpoint or the first of the recent window. Where it sends none of the
+ * history, its input message. Nothing where it sends all of it.
+ */
+function cutOf(
+  history: readonly ChatMessage[],
+  sent: readonly ChatMessage[],
+  inputMessageId: MessageId | undefined
+): MessageId | undefined {
+  if (sent.length >= history.length) return undefined;
+  return sent[0]?.id ?? inputMessageId;
 }

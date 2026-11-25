@@ -272,6 +272,7 @@ function toolCallOf(
       ...(context.runtime.workflowAgent ? { workflowAgent: true } : {}),
       ...(context.runtime.unattended ? { unattended: true } : {}),
       ...(context.runtime.firstPartyRun ? { firstPartyRun: true } : {}),
+      ...(context.runtime.historyCut ? { historyCut: context.runtime.historyCut } : {}),
       toolRequest: request,
       operationRun: {
         id: context.runId,
@@ -502,6 +503,7 @@ export function createToolOperationRunner(
           ...(context.workflowAgent ? { workflowAgent: true } : {}),
           ...(context.unattended ? { unattended: true } : {}),
           ...(context.firstPartyRun ? { firstPartyRun: true } : {}),
+          ...(context.historyCut ? { historyCut: context.historyCut } : {}),
           ...(context.agentPreview ? { agentPreview: context.agentPreview } : {}),
           offeredDataToolNames: options.offeredDataToolNames,
           unreadableInput: options.unreadableInput

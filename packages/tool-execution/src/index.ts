@@ -50,6 +50,15 @@ export {
   type ConversationRenameCalls
 } from "./conversation-rename-tool";
 export {
+  HISTORY_TOOLS,
+  createHistoryTools,
+  type HistoryCalls,
+  type HistoryHit,
+  type HistoryRead,
+  type HistoryReadInput,
+  type HistorySearchInput
+} from "./history-tools";
+export {
   CONNECTION_PROPOSE_TOOL_NAME,
   OWN_SERVER_PROPOSAL_MODE,
   createConnectionProposeTool,

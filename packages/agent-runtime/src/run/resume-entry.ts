@@ -1,5 +1,6 @@
 import {
   AppError,
+  asMessageId,
   asToolCallId,
   readAgentRuntimeMessageMetadata,
   readUserMessageMetadata,
@@ -7,6 +8,7 @@ import {
   type AgentRunResumeState,
   type ChatMessage,
   type ConversationHistoryStore,
+  type MessageId,
   type ModelProviderConfig,
   type PausedToolCall,
   type RuntimeCallContext,
@@ -48,7 +50,9 @@ export async function resumedModelMessages(input: {
   compactionEnabled: boolean;
   systemMessage: ModelMessage;
   userMessage: ModelMessage;
-}): Promise<ModelMessage[]> {
+  /** The system message with the pointer to the earlier messages, where the history is cut. */
+  withPointer(systemMessage: ModelMessage, historyCut: MessageId | undefined): ModelMessage;
+}): Promise<{ messages: ModelMessage[]; historyCut?: MessageId }> {
   const { context, startInput, resume } = input;
   const persisted = await input.conversationHistory.listMessages({
     clientInstanceId: context.clientInstanceId,
@@ -74,17 +78,28 @@ export async function resumedModelMessages(input: {
     if (start < 0) {
       throw new AppError("NOT_FOUND", "The step a resumed run goes on from is not available");
     }
-    return [input.systemMessage, ...(await projectRunOwnMessages(own.slice(start), options))];
+    // The run compacted its own context: no message of the history is sent any more.
+    const historyCut = asMessageId(from.messageId);
+    return {
+      messages: [
+        input.withPointer(input.systemMessage, historyCut),
+        ...(await projectRunOwnMessages(own.slice(start), options))
+      ],
+      historyCut
+    };
   }
   const history = await input.modelInput.loadModelHistory(startInput, context, input.provider, {
     compactionEnabled: input.compactionEnabled
   });
-  return [
-    input.systemMessage,
-    ...history.messages,
-    input.userMessage,
-    ...(await projectRunOwnMessages(own, options))
-  ];
+  return {
+    messages: [
+      input.withPointer(input.systemMessage, history.historyCut),
+      ...history.messages,
+      input.userMessage,
+      ...(await projectRunOwnMessages(own, options))
+    ],
+    ...(history.historyCut ? { historyCut: history.historyCut } : {})
+  };
 }
 
 /** The run a row belongs to: its own steps and results, and the steers it took in (FU-2). */

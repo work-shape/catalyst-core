@@ -7,6 +7,8 @@ import {
   WorkflowAgentOutputInvalidError,
   WORKFLOW_STEP_DATA_MAX_BYTES,
   forbiddenPreviewTool,
+  HISTORY_CUT_POINTER,
+  RECALL_TOOLS,
   SUBJECT_TOOL_PREFIX,
   WORKSPACE_OPEN_TOOL_NAME,
   asUserId,
@@ -22,6 +24,7 @@ import {
   type AgentRunResumeState,
   type ConversationOfferSource,
   type LocaleCode,
+  type MessageId,
   type PreviewViewerKey,
   type PausedToolCall,
   type ProjectInstructions,
@@ -119,6 +122,8 @@ export class TurnLoop {
     const entry = input.resume
       ? await this.resumeEntry(state, runId, input, context, setup, model, input.resume.state)
       : await this.startEntry(runId, input, context, setup, model);
+    // The run's calls know where its history starts: the history tools reach what is before.
+    if (entry?.historyCut) context = { ...context, historyCut: { messageId: entry.historyCut } };
     if (entry) await this.runSteps(state, runId, input, context, setup, model, entry);
   }
 
@@ -571,13 +576,19 @@ export class TurnLoop {
         { compactionEnabled: on.compactionEnabled, model: on.modelSelection.model }
       );
       return {
-        messages: [systemMessage, ...history.messages, userMessage],
+        messages: [
+          withHistoryPointer(systemMessage, history.historyCut, on),
+          ...history.messages,
+          userMessage
+        ],
         providerContinuation: history.providerContinuation,
-        ...(history.fromTurn ? { fromTurn: true as const } : {})
+        ...(history.fromTurn ? { fromTurn: true as const } : {}),
+        ...(history.historyCut ? { historyCut: history.historyCut } : {})
       };
     };
     const start = await historyFor(model.current);
     return {
+      ...(start.historyCut ? { historyCut: start.historyCut } : {}),
       messages: start.messages,
       ownMessagesFrom: start.messages.length,
       firstStep: 0,
@@ -618,7 +629,11 @@ export class TurnLoop {
           ...(fromTurn ? {} : { withoutCheckpoint: true })
         });
         return {
-          messages: [systemMessage, ...rebuilt.messages, userMessage],
+          messages: [
+            withHistoryPointer(systemMessage, rebuilt.historyCut, on),
+            ...rebuilt.messages,
+            userMessage
+          ],
           providerContinuation: rebuilt.providerContinuation
         };
       }
@@ -639,7 +654,7 @@ export class TurnLoop {
     model: RunModel,
     resume: AgentRunResumeState
   ): Promise<StepEntry | undefined> {
-    const messages = await resumedModelMessages({
+    const { messages, historyCut } = await resumedModelMessages({
       runId,
       startInput: input,
       context,
@@ -649,7 +664,8 @@ export class TurnLoop {
       provider: model.current.modelSelection.provider,
       compactionEnabled: model.current.compactionEnabled,
       systemMessage: setup.systemMessage,
-      userMessage: setup.userMessage
+      userMessage: setup.userMessage,
+      withPointer: (systemMessage, cut) => withHistoryPointer(systemMessage, cut, model.current)
     });
     const repeatedToolCalls = new Map(Object.entries(resume.repeatedToolCalls));
     // The existing repeat counters survive a pause and include every attempted call of the
@@ -718,6 +734,7 @@ export class TurnLoop {
     if (finished.offerChanged || resume.toolCalls.some(isDataStoreUse))
       await this.reoffer(runId, input, context, setup, model);
     return {
+      ...(historyCut ? { historyCut } : {}),
       messages,
       ownMessagesFrom: messages.length,
       firstStep: resume.step + 1,
@@ -1150,7 +1167,10 @@ interface StepEntry {
     messages: ModelMessage[];
     providerContinuation: ModelCompletion["continuation"];
     fromTurn?: true;
+    historyCut?: MessageId;
   }>;
+  /** The first stored message of the history the entry sends, where it leaves earlier ones out. */
+  historyCut?: MessageId;
   /** The entry's continuation is the last run's reasoning, not the compaction checkpoint. */
   fromTurn?: true;
   /**
@@ -1164,6 +1184,26 @@ interface StepEntry {
   ): Promise<
     { messages: ModelMessage[]; providerContinuation?: ModelCompletion["continuation"] } | undefined
   >;
+}
+
+/**
+ * The system message with the sentence that earlier messages are out of view and which tools
+ * reach them (RECALL-1), where the history starts after the conversation's first message and
+ * the model is offered those tools. It goes last, into the part of the message that changes.
+ */
+function withHistoryPointer(
+  systemMessage: ModelMessage,
+  historyCut: MessageId | undefined,
+  model: Pick<ModelSetup, "tools">
+): ModelMessage {
+  if (
+    historyCut === undefined ||
+    typeof systemMessage.content !== "string" ||
+    !model.tools.some((tool) => tool.name === RECALL_TOOLS.historyRead)
+  ) {
+    return systemMessage;
+  }
+  return { ...systemMessage, content: `${systemMessage.content}\n\n${HISTORY_CUT_POINTER}` };
 }
 
 function isDataStoreUse(call: { toolName: string }): boolean {

@@ -4,6 +4,7 @@ import type { AppEditCalls } from "./app-edit-tool";
 import type { AppSaveCalls } from "./app-save-tool";
 import type { ConversationRenameCalls } from "./conversation-rename-tool";
 import type { DataStoreUseCalls } from "./data-store-use-tool";
+import type { HistoryCalls } from "./history-tools";
 import { createGetAssetTool, type PlatformAssetGetCalls } from "./platform-asset-tools/get";
 import { createOpenAssetTool, type PlatformAssetOpenCalls } from "./platform-asset-tools/open";
 import {
@@ -50,6 +51,7 @@ export interface PlatformAssetCalls
     AppEditCalls,
     ConversationRenameCalls,
     DataStoreUseCalls,
+    HistoryCalls,
     PlatformAssetGetCalls,
     PlatformAssetOpenCalls,
     PlatformAssetPutCalls,

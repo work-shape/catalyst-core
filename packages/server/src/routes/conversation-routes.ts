@@ -2,6 +2,7 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   asCollaborationWorkspaceId,
+  asMessageId,
   getSubjectUserId,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
@@ -12,6 +13,8 @@ import { ConversationWorkflow } from "../conversations/conversation-service";
 import { RunObservationWorkflow } from "../conversations/run-observation-service";
 import type { Route } from "../http/route";
 import { conversationReaderOffer } from "../conversations/reader-offer";
+import { requireConversationAccess } from "../conversations/conversation-access";
+import { searchConversationMessages } from "../conversations/conversation-recall";
 import { conversationIdParam, resolveRequestLocale, withRequestLocale } from "./request-context";
 import type { ResolvedChatServerOptions } from "../types";
 
@@ -67,6 +70,31 @@ export function registerConversationRoutes(route: Route, options: ResolvedChatSe
   route(apiOperations["conversations.messages.list"], ({ user, params }) =>
     runObservation.listMessages(conversationIdParam(params), user)
   );
+
+  // What was said in the conversation, for anyone who reads it (RECALL-1): the API's form of
+  // the search an agent makes of its own chat.
+  route(apiOperations["conversations.messages.search"], async ({ user, params, query }) => {
+    const conversation = await requireConversationAccess(
+      options,
+      conversationIdParam(params),
+      user
+    );
+    const found = await searchConversationMessages(options, {
+      conversationIds: [conversation.id],
+      query: query.query,
+      ...(query.before === undefined ? {} : { before: asMessageId(query.before) }),
+      limit: query.limit
+    });
+    return {
+      hits: found.hits.map(({ messageId, role, createdAt, snippet }) => ({
+        messageId,
+        role,
+        createdAt,
+        snippet
+      })),
+      more: found.more
+    };
+  });
 
   route(apiOperations["conversations.thread.get"], ({ user, params }) =>
     runObservation.getThreadSnapshot(conversationIdParam(params), user)

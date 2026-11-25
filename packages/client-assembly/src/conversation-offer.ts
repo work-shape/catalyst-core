@@ -15,6 +15,7 @@ import {
 } from "@work-shape/catalyst-connections";
 import {
   ASK_QUESTION_TOOL_NAME,
+  HISTORY_TOOL_NAMES,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
@@ -62,6 +63,7 @@ import {
   createAppSaveTool,
   createAskQuestionTool,
   createConversationRenameTool,
+  createHistoryTools,
   createAppEditTool,
   APP_EDIT_TOOL_NAME,
   createConnectionDraftTool,
@@ -557,6 +559,9 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(input.hasTool(WRITE_FILE_TOOL) ? [HTML_TO_PDF_TOOL_NAME] : []),
         ...(folder ? PROJECT_FOLDER_TOOLS : []),
         ASK_QUESTION_TOOL_NAME,
+        // Every chat's agent reaches what fell out of its context (RECALL-1); a subagent's or
+        // a Workflow step's thread is no chat and holds what its own run sent.
+        ...(conversation.kind === "chat" ? HISTORY_TOOL_NAMES : []),
         ...(skillNames.length > 0 || ownSkillNames.length > 0 ? [READ_SKILL_TOOL] : [])
       ]
         .filter((toolName) => input.hasTool(toolName))
@@ -867,6 +872,7 @@ export function createPlatformTools(
       createRunAgentTool(),
       createAskQuestionTool(),
       createConversationRenameTool(platformAssets.calls),
+      ...createHistoryTools(platformAssets.calls),
       createAppSaveTool(platformAssets.calls),
       createAppEditTool(platformAssets.calls),
       createDataStoreUseTool(platformAssets.calls),
