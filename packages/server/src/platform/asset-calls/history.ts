@@ -3,7 +3,8 @@ import { requireConversationAccess } from "../../conversations/conversation-acce
 import {
   readConversationMessages,
   recallAnchorOf,
-  searchConversationMessages
+  searchConversationMessages,
+  shownRecallHit
 } from "../../conversations/conversation-recall";
 import type { AssetCallScope } from "./scope";
 
@@ -35,12 +36,7 @@ export function historyCalls(scope: AssetCallScope): HistoryCalls {
         limit: input.limit
       });
       return {
-        hits: found.hits.map(({ messageId, role, createdAt, snippet }) => ({
-          messageId,
-          role,
-          createdAt,
-          snippet
-        })),
+        hits: found.hits.map(shownRecallHit),
         more: found.more
       };
     },

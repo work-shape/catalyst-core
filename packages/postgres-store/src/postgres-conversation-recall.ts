@@ -1,4 +1,4 @@
-import { sql as drizzleSql, type SQL } from "drizzle-orm";
+import { and, desc, exists, isNull, ne, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   asConversationId,
   asMessageId,
@@ -6,18 +6,22 @@ import {
   RECALL_SNIPPET_MAX_CHARS,
   RecallSearchTooBroadError,
   type ConversationRecallStore,
+  type RecallConversation,
   type RecallHit,
   type RecallMessage,
   type RecallRole
 } from "@work-shape/catalyst-core";
+import { listedConversations } from "./postgres-conversation-list-operations";
+import { conversationMessages } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";
-import { messages } from "./schema";
+import { conversations, messages } from "./schema";
 
 // Conversation recall over the store (RECALL): full text with the `simple` configuration,
 // computed when the search runs, through the index on a conversation's messages. Only the
 // user's and the agent's messages with text count: tool results, system notes and empty steps
 // are no part of what was said.
 
+type ConversationsInput = Parameters<ConversationRecallStore["listRecallConversations"]>[0];
 type SearchInput = Parameters<ConversationRecallStore["searchRecallMessages"]>[0];
 type ReadInput = Parameters<ConversationRecallStore["readRecallMessages"]>[0];
 
@@ -45,6 +49,44 @@ const said = (alias: string) =>
 /** The order messages were stored in, as the conversation shows them. */
 const position = (alias: string) =>
   drizzleSql.raw(`(${alias}.created_at, ${alias}.storage_ordinal)`);
+
+/**
+ * The project's chats its recall reaches for the person: what the project's list shows them
+ * (active chats they read, no Try conversation), with a message sent, without the
+ * personal-data mark, and never the calling conversation.
+ */
+export async function listRecallConversations(
+  db: PostgresConnection,
+  input: ConversationsInput
+): Promise<RecallConversation[]> {
+  const rows = await db
+    .select({
+      id: conversations.id,
+      title: conversations.title,
+      updatedAt: conversations.updatedAt
+    })
+    .from(conversations)
+    .where(
+      and(
+        listedConversations(db, {
+          clientInstanceId: input.clientInstanceId,
+          collaborationWorkspaceId: input.collaborationWorkspaceId,
+          scope: { kind: "viewer", userId: input.userId },
+          projectId: input.projectId
+        }),
+        // An unsent draft holds nothing that was said.
+        exists(conversationMessages(db)),
+        isNull(conversations.personalDataAt),
+        input.except === undefined ? undefined : ne(conversations.id, input.except)
+      )
+    )
+    .orderBy(desc(conversations.updatedAt), desc(conversations.id));
+  return rows.map((row) => ({
+    conversationId: asConversationId(row.id),
+    title: row.title,
+    updatedAt: new Date(row.updatedAt).toISOString()
+  }));
+}
 
 export async function searchRecallMessages(
   db: PostgresConnection,

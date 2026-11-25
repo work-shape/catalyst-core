@@ -902,6 +902,7 @@ export function createPostgresConversationsStore(
     | "listConversationsWithActiveRun"
     | "listConversationsSharedFromOutside"
     | "searchWorkspaceFiles"
+    | "listRecallConversations"
     | "searchRecallMessages"
     | "readRecallMessages"
     | "deleteModelProviderContinuation"
@@ -941,6 +942,7 @@ export function createPostgresConversationsStore(
     ): Promise<FoundFile[]> {
       return deps.searchWorkspaceFiles(input);
     },
+    listRecallConversations: (input) => deps.listRecallConversations(input),
     searchRecallMessages: (input) => deps.searchRecallMessages(input),
     readRecallMessages: (input) => deps.readRecallMessages(input),
     async listPrivateConversationsCreatedByUser(

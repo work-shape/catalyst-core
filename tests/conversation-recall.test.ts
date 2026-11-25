@@ -301,6 +301,27 @@ describe("the agent's search and read of its own chat", () => {
       "Die Checklisten vom anderen Chat"
     );
 
+    // A chat in no project is not offered the project's chats (RECALL-2).
+    const toolRows = async () =>
+      z
+        .object({ items: z.array(z.object({ role: z.string(), text: z.string() })) })
+        .parse(
+          (
+            await app.call(
+              "conversations.messages.list",
+              { params: { conversationId: chat } },
+              OWNER
+            )
+          ).json()
+        )
+        .items.filter((message) => message.role === "tool").length;
+    const before = await toolRows();
+    const offeredHistory = await ask("platform.history.search", { query: "checkliste" });
+    expect(offeredHistory).toMatchObject({ more: false });
+    expect(await toolRows()).toBe(before + 1);
+    await ask("platform.conversations.search", {});
+    expect(await toolRows()).toBe(before + 1);
+
     // The Operation Runs and audit rows of these calls hold counts, never the words.
     const runs = await app.stores.operationRuns.list({ clientInstanceId });
     const audit = await app.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });

@@ -132,6 +132,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.list": "Search the platform",
     "platform.history.search": "Search this chat",
     "platform.history.read": "Read earlier in this chat",
+    "platform.conversations.search": "Search this project's chats",
+    "platform.conversations.read": "Read a chat of this project",
     "platform.assets.open": "Open the asset",
     "platform.assets.get": "Read the asset",
     "platform.assets.validate": "Check the draft",
@@ -164,6 +166,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "platform.assets.list": "Plattform durchsuchen",
     "platform.history.search": "Diesen Chat durchsuchen",
     "platform.history.read": "Weiter oben in diesem Chat lesen",
+    "platform.conversations.search": "Chats dieses Projekts durchsuchen",
+    "platform.conversations.read": "Chat dieses Projekts lesen",
     "platform.assets.open": "Asset öffnen",
     "platform.assets.get": "Asset lesen",
     "platform.assets.validate": "Entwurf prüfen",
@@ -252,6 +256,10 @@ function readToolSubjectLabel(input: {
 }): string | undefined {
   if (input.toolName === "read_skill") {
     return readSkillSubjectLabel(input.args, input.result);
+  }
+  // A read of another chat of the project names the chat it read (RECALL-2).
+  if (input.toolName === "platform.conversations.read") {
+    return readRecordString(isRecord(input.result) ? input.result.output : undefined, "title");
   }
   if (input.toolName === CONVERSATION_RENAME_TOOL_NAME) {
     return readRecordString(input.args, "title");

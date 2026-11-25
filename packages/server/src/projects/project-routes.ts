@@ -8,6 +8,7 @@ import {
   type AuthenticatedUser,
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
+import { searchProjectConversations, shownRecallHit } from "../conversations/conversation-recall";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { displaysInline } from "../http/download";
 import { contentDisposition } from "../routes/conversation-file-routes";
@@ -140,6 +141,21 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
   });
 
   // Project files (PRJ-2). The service asks the project's audience on every call.
+  route(apiOperations["projects.conversations.search"], async ({ user, params, query }) => {
+    const found = await searchProjectConversations(options, user, {
+      projectId: params.projectId,
+      ...(query.query === undefined ? {} : { query: query.query }),
+      limit: query.limit
+    });
+    return {
+      conversations: found.conversations.map(({ hits, ...conversation }) => ({
+        ...conversation,
+        hits: hits.map(shownRecallHit)
+      })),
+      more: found.more
+    };
+  });
+
   route(apiOperations["projects.files.list"], ({ user, params }) =>
     files.listFiles(user, params.projectId)
   );

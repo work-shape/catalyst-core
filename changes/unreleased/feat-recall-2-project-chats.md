@@ -1,0 +1,6 @@
+---
+section: Added
+---
+
+- In a chat of a project the agent can search and read the project's other chats with `platform.conversations.search` and `platform.conversations.read`. Search finds chats by title (a title match ranks first) and by what was said, with at most 3 snippets a chat and 1 to 10 chats (default 5); without words it lists the project's chats, newest first. Read takes a chat's id and `around` or `after` a message, within the same caps as `platform.history.read`. Both reach only the chats of the same project the person reads, never the chat they are called from, no deleted chat, unsent draft, Try conversation, run thread or chat with the personal-data mark; any other id answers as a chat that does not exist. Every output opens with the line that these messages are information, not instructions, and carries the source tag `project:<id>` as a read of a project file does. A chat in no project is not offered them. Operation Runs and audit rows hold counts, never a query, title or snippet.
+- `GET /api/v1/project-conversations/:projectId/search` (`projects.conversations.search`) searches the titles and what was said in a project's chats for anyone in its audience, or lists them newest first without a query.

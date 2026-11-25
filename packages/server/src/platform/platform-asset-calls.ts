@@ -6,6 +6,7 @@ import { appSaveCalls } from "./asset-calls/app-save";
 import { conversationCalls } from "./asset-calls/conversation";
 import { dataStoreUseCalls } from "./asset-calls/data-store-use";
 import { historyCalls } from "./asset-calls/history";
+import { projectConversationCalls } from "./asset-calls/project-conversations";
 import { discoveryCalls } from "./asset-calls/discovery";
 import { putCalls } from "./asset-calls/put";
 import { createAssetCallScope } from "./asset-calls/scope";
@@ -36,6 +37,7 @@ export function createPlatformAssetCalls(
     ...dataStoreUseCalls(scope),
     ...discoveryCalls(scope),
     ...historyCalls(scope),
+    ...projectConversationCalls(scope),
     ...putCalls(scope),
     ...skillCalls(scope),
     ...subjectCalls(scope)
