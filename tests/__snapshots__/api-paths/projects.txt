@@ -2,6 +2,7 @@ conversations.draft_attachments.add_from_project  POST /api/v1/conversations/:co
 conversations.project_files.save  POST /api/v1/conversations/:conversationId/project-files
 conversations.project_instructions.get  GET /api/v1/conversations/:conversationId/project-instructions
 conversations.set_project  PUT /api/v1/conversations/:conversationId/project
+projects.conversations.search  GET /api/v1/project-conversations/:projectId/search
 projects.create  POST /api/v1/projects
 projects.delete  POST /api/v1/project-settings/:projectId/delete
 projects.files.delete  POST /api/v1/project-files/:projectId/delete

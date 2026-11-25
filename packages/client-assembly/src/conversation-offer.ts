@@ -16,6 +16,7 @@ import {
 import {
   ASK_QUESTION_TOOL_NAME,
   HISTORY_TOOL_NAMES,
+  PROJECT_CONVERSATION_TOOL_NAMES,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
@@ -64,6 +65,7 @@ import {
   createAskQuestionTool,
   createConversationRenameTool,
   createHistoryTools,
+  createProjectConversationTools,
   createAppEditTool,
   APP_EDIT_TOOL_NAME,
   createConnectionDraftTool,
@@ -562,6 +564,11 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         // Every chat's agent reaches what fell out of its context (RECALL-1); a subagent's or
         // a Workflow step's thread is no chat and holds what its own run sent.
         ...(conversation.kind === "chat" ? HISTORY_TOOL_NAMES : []),
+        // A chat in a project reaches the project's other chats (RECALL-2), which its
+        // audience reads every one of; a chat in no project reaches no other chat.
+        ...(conversation.kind === "chat" && conversation.projectId !== undefined
+          ? PROJECT_CONVERSATION_TOOL_NAMES
+          : []),
         ...(skillNames.length > 0 || ownSkillNames.length > 0 ? [READ_SKILL_TOOL] : [])
       ]
         .filter((toolName) => input.hasTool(toolName))
@@ -873,6 +880,7 @@ export function createPlatformTools(
       createAskQuestionTool(),
       createConversationRenameTool(platformAssets.calls),
       ...createHistoryTools(platformAssets.calls),
+      ...createProjectConversationTools(platformAssets.calls),
       createAppSaveTool(platformAssets.calls),
       createAppEditTool(platformAssets.calls),
       createDataStoreUseTool(platformAssets.calls),

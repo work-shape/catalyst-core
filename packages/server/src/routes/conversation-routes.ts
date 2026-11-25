@@ -14,7 +14,7 @@ import { RunObservationWorkflow } from "../conversations/run-observation-service
 import type { Route } from "../http/route";
 import { conversationReaderOffer } from "../conversations/reader-offer";
 import { requireConversationAccess } from "../conversations/conversation-access";
-import { searchConversationMessages } from "../conversations/conversation-recall";
+import { searchConversationMessages, shownRecallHit } from "../conversations/conversation-recall";
 import { conversationIdParam, resolveRequestLocale, withRequestLocale } from "./request-context";
 import type { ResolvedChatServerOptions } from "../types";
 
@@ -86,12 +86,7 @@ export function registerConversationRoutes(route: Route, options: ResolvedChatSe
       limit: query.limit
     });
     return {
-      hits: found.hits.map(({ messageId, role, createdAt, snippet }) => ({
-        messageId,
-        role,
-        createdAt,
-        snippet
-      })),
+      hits: found.hits.map(shownRecallHit),
       more: found.more
     };
   });

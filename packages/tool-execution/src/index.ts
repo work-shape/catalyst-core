@@ -59,6 +59,12 @@ export {
   type HistorySearchInput
 } from "./history-tools";
 export {
+  PROJECT_CONVERSATION_TOOLS,
+  createProjectConversationTools,
+  type ProjectConversationCalls,
+  type ProjectConversationMatch
+} from "./project-conversation-tools";
+export {
   CONNECTION_PROPOSE_TOOL_NAME,
   OWN_SERVER_PROPOSAL_MODE,
   createConnectionProposeTool,

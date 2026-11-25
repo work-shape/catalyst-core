@@ -74,16 +74,16 @@ export interface HistoryCalls {
   readHistory(context: ToolExecutionContext, input: HistoryReadInput): Promise<HistoryRead>;
 }
 
-const queryText = z
+export const queryText = z
   .string()
   .trim()
   .min(1)
   .max(RECALL_QUERY_MAX_CHARS)
   .regex(/^[^\u0000]*$/u, "must not contain a NUL character");
 
-const messageId = z.string().min(1).max(200);
+export const messageId = z.string().min(1).max(200);
 
-const recallMessageSchema = z.object({
+export const recallMessageSchema = z.object({
   messageId: z.string(),
   role: z.enum(RECALL_ROLES),
   createdAt: z.string(),
@@ -92,14 +92,14 @@ const recallMessageSchema = z.object({
   tools: z.array(z.string()).optional()
 });
 
-const hitSchema = z.object({
+export const hitSchema = z.object({
   messageId: z.string(),
   role: z.enum(RECALL_ROLES),
   createdAt: z.string(),
   snippet: z.string()
 });
 
-const readLimit = z
+export const readLimit = z
   .number()
   .int()
   .min(1)
@@ -107,7 +107,7 @@ const readLimit = z
   .default(RECALL_READ_DEFAULT_MESSAGES);
 
 /** At most one of the anchors a read names. */
-function oneAnchor(input: Record<string, unknown>, anchors: readonly string[]): boolean {
+export function oneAnchor(input: Record<string, unknown>, anchors: readonly string[]): boolean {
   return anchors.filter((anchor) => input[anchor] !== undefined).length <= 1;
 }
 

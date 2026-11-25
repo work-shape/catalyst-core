@@ -3,6 +3,7 @@ import { CATALYST_INTERNAL_AGENT_PROMPT } from "@work-shape/catalyst-agent-runti
 import {
   ASK_QUESTION_TOOL_NAME,
   HISTORY_TOOL_NAMES,
+  PROJECT_CONVERSATION_TOOL_NAMES,
   CONVERSATION_RENAME_TOOL_NAME,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_USE_TOOL_NAME,
@@ -114,6 +115,8 @@ export function agentListableToolNames(enabledByRelease: Iterable<string>): stri
       ASK_QUESTION_TOOL_NAME,
       // Reach only the chat they are called in (RECALL-1), offered in every chat.
       ...HISTORY_TOOL_NAMES,
+      // Reach the other chats of the project they are called in (RECALL-2).
+      ...PROJECT_CONVERSATION_TOOL_NAMES,
       // Renames only the chat it is called in: not one of the platform tools an agent gets the
       // orientation and the platform's docs with.
       CONVERSATION_RENAME_TOOL_NAME,
