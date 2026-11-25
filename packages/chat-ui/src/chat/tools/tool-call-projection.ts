@@ -130,6 +130,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   en: {
     "platform.context": "Check what this platform offers",
     "platform.assets.list": "Search the platform",
+    "platform.history.search": "Search this chat",
+    "platform.history.read": "Read earlier in this chat",
     "platform.assets.open": "Open the asset",
     "platform.assets.get": "Read the asset",
     "platform.assets.validate": "Check the draft",
@@ -160,6 +162,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   de: {
     "platform.context": "Angebot der Plattform prüfen",
     "platform.assets.list": "Plattform durchsuchen",
+    "platform.history.search": "Diesen Chat durchsuchen",
+    "platform.history.read": "Weiter oben in diesem Chat lesen",
     "platform.assets.open": "Asset öffnen",
     "platform.assets.get": "Asset lesen",
     "platform.assets.validate": "Entwurf prüfen",

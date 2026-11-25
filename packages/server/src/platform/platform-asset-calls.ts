@@ -5,6 +5,7 @@ import type { AssetWorkflowOptions } from "../types";
 import { appSaveCalls } from "./asset-calls/app-save";
 import { conversationCalls } from "./asset-calls/conversation";
 import { dataStoreUseCalls } from "./asset-calls/data-store-use";
+import { historyCalls } from "./asset-calls/history";
 import { discoveryCalls } from "./asset-calls/discovery";
 import { putCalls } from "./asset-calls/put";
 import { createAssetCallScope } from "./asset-calls/scope";
@@ -34,6 +35,7 @@ export function createPlatformAssetCalls(
     ...conversationCalls(scope),
     ...dataStoreUseCalls(scope),
     ...discoveryCalls(scope),
+    ...historyCalls(scope),
     ...putCalls(scope),
     ...skillCalls(scope),
     ...subjectCalls(scope)

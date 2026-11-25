@@ -157,6 +157,7 @@ export type OperationCallRuntime = Pick<
   | "workflowAgent"
   | "agentPreview"
   | "firstPartyRun"
+  | "historyCut"
 > & {
   /**
    * Set where the surface could not read the caller's input at all. The call then ends as an

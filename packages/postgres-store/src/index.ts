@@ -35,6 +35,7 @@ import {
   getModelProviderTurnContinuation as getPostgresModelProviderTurnContinuation
 } from "./postgres-model-provider-continuation-operations";
 import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
+import { readRecallMessages, searchRecallMessages } from "./postgres-conversation-recall";
 import {
   listConversationsForWorkspace as listPostgresConversationsForWorkspace,
   listConversationsSharedFromOutside as listPostgresConversationsSharedFromOutside,
@@ -170,6 +171,8 @@ function bindStores(
       listConversationsSharedFromOutside: (input) =>
         listPostgresConversationsSharedFromOutside(db, input),
       searchWorkspaceFiles: (input) => searchPostgresWorkspaceFiles(db, input),
+      searchRecallMessages: (input) => searchRecallMessages(db, input),
+      readRecallMessages: (input) => readRecallMessages(db, input),
       deleteModelProviderContinuation: (input) =>
         deletePostgresModelProviderContinuation(db, input),
       getModelProviderContinuation: (input) => getPostgresModelProviderContinuation(db, input),

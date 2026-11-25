@@ -29,6 +29,7 @@ import type {
   WorkspaceCommandStore
 } from "./execution-workspace";
 import type { FileSearchStore } from "./file-search";
+import type { ConversationRecallStore } from "./conversation-recall";
 import type { PlatformFileStore } from "./files";
 import type { AccessAdministrationStore } from "./access-administration-store";
 import type { RoleStore } from "./roles";
@@ -58,7 +59,8 @@ export interface ConversationsStore
     ConversationStore,
     ConversationRetentionStore,
     ModelProviderContinuationStore,
-    FileSearchStore {}
+    FileSearchStore,
+    ConversationRecallStore {}
 
 export interface AgentRunsStore extends AgentRunStore, RunObservationStore, AgentRunDecisionStore {}
 

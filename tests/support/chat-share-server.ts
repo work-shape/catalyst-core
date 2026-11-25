@@ -258,6 +258,7 @@ export function readingRoutes(runId: string): Record<string, TestCallInput> {
     "conversations.cost.get": {},
     "conversations.thread.get": {},
     "conversations.messages.list": {},
+    "conversations.messages.search": { query: { query: "word" } },
     "conversations.resources.list": {},
     "conversations.subagents.list": {},
     "conversations.structured_data.get": { params: { structuredDataResourceId: "sdr_missing" } },

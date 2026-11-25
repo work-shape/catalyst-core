@@ -14,6 +14,7 @@ import type {
   AgentRunId,
   ApiCredentialId,
   ClientInstanceId,
+  MessageId,
   ServicePrincipalId,
   WorkflowRunId
 } from "./ids";
@@ -250,6 +251,13 @@ export interface RuntimeCallContext {
    * started the run, so a person's Always allow reaches a worker's call only with this (OP-6).
    */
   firstPartyRun?: true;
+  /**
+   * Set while an Agent Run's call is made where the run did not send its model the whole
+   * history of its conversation (RECALL-1): the first stored message it did send. Every message
+   * stored before it is out of the model's view, behind a compaction checkpoint or the window of
+   * recent messages. Set by the runtime only, never read from a request.
+   */
+  historyCut?: { messageId: MessageId };
 }
 
 export function createUserPrincipal(user: AuthenticatedUser): AuthPrincipal {

@@ -8,6 +8,7 @@ conversations.follow_ups.steer  POST /api/v1/conversations/:conversationId/follo
 conversations.follow_ups.withdraw  POST /api/v1/conversations/:conversationId/follow-ups/:followUpId/withdraw
 conversations.list  GET /api/v1/conversations
 conversations.messages.list  GET /api/v1/conversations/:conversationId/messages
+conversations.messages.search  GET /api/v1/conversations/:conversationId/messages/search
 conversations.move  POST /api/v1/conversations/:conversationId/move
 conversations.reader_offer.get  GET /api/v1/conversations/:conversationId/reader-offer
 conversations.remove_person  DELETE /api/v1/conversations/:conversationId/people/:userId

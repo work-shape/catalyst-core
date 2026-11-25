@@ -191,6 +191,7 @@
     "conversations.follow_ups.withdraw": "conversation_access",
     "conversations.list": "own",
     "conversations.messages.list": "conversation_access",
+    "conversations.messages.search": "conversation_access",
     "conversations.move": "conversation_access",
     "conversations.project_instructions.get": "conversation_access",
     "conversations.reader_offer.get": "conversation_access",
