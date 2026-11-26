@@ -14,6 +14,7 @@ import {
   storeTextFile
 } from "./stored-text-file";
 import { freePath, withExtension } from "./web-download";
+import { oneSaveAtATime } from "./workspace-saves";
 
 // One file the platform saves into a conversation's execution workspace for a call that is no
 // workspace tool, such as a Connection operation that downloads: the store path web_download
@@ -47,21 +48,6 @@ export interface SaveWorkspaceFileInput {
 const OCTET_STREAM = "application/octet-stream";
 const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/u;
 
-// Saves into one workspace run one after another in this process, so two saves of one name
-// side by side, such as two subagents' downloads, never both take the same free path.
-const savesOfWorkspace = new Map<string, Promise<unknown>>();
-
-function oneAtATime<T>(key: string, work: () => Promise<T>): Promise<T> {
-  const before = savesOfWorkspace.get(key) ?? Promise.resolve();
-  const done = before.then(work, work);
-  const forget = () => {
-    if (savesOfWorkspace.get(key) === settled) savesOfWorkspace.delete(key);
-  };
-  const settled: Promise<void> = done.then(forget, forget);
-  savesOfWorkspace.set(key, settled);
-  return done;
-}
-
 export async function saveWorkspaceFile(
   deps: WorkspaceToolDependencies,
   input: SaveWorkspaceFileInput
@@ -70,7 +56,9 @@ export async function saveWorkspaceFile(
   if (!fileStore) return { status: "unavailable" };
   const workspace = await workspaceOf(deps, input);
   if (!workspace) return { status: "unavailable" };
-  return oneAtATime(workspace.id, () => saveInto(deps, { ...deps, fileStore }, workspace, input));
+  return oneSaveAtATime(workspace.id, () =>
+    saveInto(deps, { ...deps, fileStore }, workspace, input)
+  );
 }
 
 async function saveInto(

@@ -6,4 +6,4 @@ section: Added
 
 ### Fixed
 
-- Two files saved side by side into one workspace under one name, such as two subagents' downloads, no longer take the same path, so the second no longer replaces the first.
+- Two files saved side by side under one name into one workspace in one process, such as two subagents' downloads with `web_download` or a Connection operation, no longer take the same path, so the second no longer replaces the first.

@@ -102,7 +102,10 @@ export function createConnectionConversationFiles(
         if (file) return { byteSize: file.byteSize, read: file.read };
       }
       if (!input.workspace) return undefined;
-      if (rootId && !isAuthenticatedServicePrincipal(actor)) {
+      if (isAuthenticatedServicePrincipal(actor)) {
+        // Only the thread of a Workflow agent step, which has no root chat.
+        if (conversation.kind !== "run_thread" || rootId) return undefined;
+      } else if (rootId) {
         try {
           await requireConversationAccess(input, asConversationId(rootId), actor);
         } catch (error) {

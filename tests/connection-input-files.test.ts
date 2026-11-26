@@ -251,9 +251,27 @@ describe("which conversation file a person may open", () => {
         path === deck ? { byteSize: 7, read: () => Promise.resolve(BYTES) } : undefined
       )
     );
+    const stepThread = "conv_step";
+    const stores = {
+      ...instance.stores,
+      conversations: new Proxy(instance.stores.conversations, {
+        get(target, property) {
+          if (property !== "getConversation") return Reflect.get(target, property) as unknown;
+          return (scope: typeof clientInstanceId, id: string) =>
+            id === stepThread
+              ? Promise.resolve({
+                  ...root,
+                  id,
+                  kind: "run_thread",
+                  parentConversationId: undefined
+                })
+              : target.getConversation(scope, asConversationId(id));
+        }
+      })
+    };
     const files = createConnectionConversationFiles({
       clientInstanceId,
-      stores: instance.stores,
+      stores,
       attachments: {
         readConversationFile: (input) =>
           Promise.resolve({
@@ -280,9 +298,12 @@ describe("which conversation file a person may open", () => {
       await files.open(actor, { conversationId: own.conversationId, fileId: "outputs/none.pdf" })
     ).toBeUndefined();
     expect(openFile).toHaveBeenCalledTimes(2);
-    // A Workflow's agent reaches the workspace of its own thread, as its workspace tools do.
+    // A Workflow's agent reaches the workspace of its own step thread, and no chat's.
     expect(
-      (await files.open(service, { conversationId: own.conversationId, fileId: deck }))?.byteSize
+      await files.open(service, { conversationId: own.conversationId, fileId: deck })
+    ).toBeUndefined();
+    expect(
+      (await files.open(service, { conversationId: stepThread, fileId: deck }))?.byteSize
     ).toBe(7);
   });
 });
