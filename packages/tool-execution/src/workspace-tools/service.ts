@@ -33,7 +33,9 @@ import { previewWorkspaceImages } from "./preview-images";
 import { promoteWorkspaceArtifact } from "./promote-artifact";
 import { readWorkspaceFile } from "./read-file";
 import {
+  openWorkspaceFile,
   saveWorkspaceFile,
+  type OpenedWorkspaceFile,
   type SaveWorkspaceFileInput,
   type SavedWorkspaceFile
 } from "./saved-file";
@@ -106,5 +108,12 @@ export class WorkspaceCommandService {
   /** Saves a file a call that is no workspace tool made, such as a Connection operation's. */
   saveFile(input: SaveWorkspaceFileInput): Promise<SavedWorkspaceFile> {
     return saveWorkspaceFile(this.dependencies, input);
+  }
+
+  /** Opens a file by its path for a call that is no workspace tool, such as a Connection's. */
+  openFile(
+    input: Parameters<typeof openWorkspaceFile>[1]
+  ): Promise<OpenedWorkspaceFile | undefined> {
+    return openWorkspaceFile(this.dependencies, input);
   }
 }

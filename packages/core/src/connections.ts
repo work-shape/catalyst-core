@@ -274,8 +274,8 @@ export interface ConnectorOperationDescriptor {
   /** What the type or the outside system proposes. The Connection's accepted list decides. */
   proposedEffect: ConnectionOperationEffect;
   /**
-   * Top-level string fields of the input that name a file of the calling conversation by its
-   * fileId. The platform checks the caller may open it there and hands the type a bounded reader
+   * Top-level string fields of the input that name a file of the calling conversation: an
+   * attachment by its fileId, or a file of its execution workspace by its path. The platform checks the caller may open it there and hands the type a bounded reader
    * (`ConnectorContext.inputFiles`); the bytes never enter the input, a run or an audit row. It
    * stands beside the schema, and only a release's static catalog is read for it, so a schema an
    * outside system wrote can never claim a person's file.

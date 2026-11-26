@@ -564,9 +564,6 @@ export async function createClientInstanceExecutionAssembly(
     ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
     ...capabilityAttachmentHandlers
   ]);
-  connections?.bindConversationFiles(
-    createConnectionConversationFiles({ clientInstanceId, stores: store, attachments })
-  );
   const workspaceManagedObjectReader = workspaceObjectStore
     ? createExecutionWorkspaceManagedObjectReader({
         clientInstanceId,
@@ -770,6 +767,16 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
+  // A Connection operation takes an attachment or, where the instance has workspaces, a file of
+  // the conversation's workspace.
+  connections?.bindConversationFiles(
+    createConnectionConversationFiles({
+      clientInstanceId,
+      stores: store,
+      attachments,
+      ...(workspaceService ? { workspace: workspaceService } : {})
+    })
+  );
   // Where an instance has no workspace storage, an operation that saves a file is refused.
   if (workspaceService) {
     connections?.bindWorkspaceFiles(
