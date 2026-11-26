@@ -416,6 +416,7 @@ describe("the Connector type http_api", () => {
             ? { url: "https://mcp.example.test/mcp" }
             : { baseUrl: "https://api.example.test" },
         authScheme: "bearer",
+        credentialMode: "shared",
         operations: [
           {
             name: "read",

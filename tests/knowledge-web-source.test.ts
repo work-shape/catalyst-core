@@ -106,6 +106,7 @@ function contextFor(settings: Record<string, unknown>, on: Site = site): Connect
       revision: 1,
       settings: { requestsPerSecond: 10, ...settings },
       authScheme: "none",
+      credentialMode: "shared",
       operations: []
     },
     target: { ...target, address: "127.0.0.1", family: 4, network: "private" },

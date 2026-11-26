@@ -546,9 +546,12 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           ...(connection.catalogue === undefined
             ? {}
             : { catalogueEntry: connection.catalogue.entry }),
-          // A Knowledge Base can sync documents through it: its page offers it as a source.
+          // A Knowledge Base can sync documents through it: its page offers it as a source. A
+          // personal Connection never is one: ingestion keeps a shared binding.
           ...documentSourceAttributes(
-            options.connectorTypes.get(connection.connectorType)?.documentSource
+            connection.credentialMode === "user"
+              ? undefined
+              : options.connectorTypes.get(connection.connectorType)?.documentSource
           )
         }
       })

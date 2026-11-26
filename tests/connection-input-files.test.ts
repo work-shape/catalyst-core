@@ -262,7 +262,12 @@ describe("what a type may say about its credential and its operations", () => {
     network: "public"
   });
   const type = (
-    further: Partial<Pick<ConnectorTypeDefinition, "credentialTargets" | "operationRefusal">> = {}
+    further: Partial<
+      Pick<
+        ConnectorTypeDefinition,
+        "credentialTargets" | "operationRefusal" | "personalSignIn" | "authSchemes"
+      >
+    > = {}
   ): ConnectorTypeDefinition => ({
     type: "two_hosts",
     description: "Two hosts.",
@@ -337,10 +342,40 @@ describe("what a type may say about its credential and its operations", () => {
       connectorType: "two_hosts",
       settings: {},
       authScheme: "bearer",
+      credentialMode: "shared",
       operations: [{ name: "file_it", effect: "changing", exposure: ["agent"], enabled: true }]
     });
     expect(issues).toEqual([
       { message: "This sign-in is read-only", path: ["operations", 0, "name"] }
     ]);
+  });
+
+  it("takes a personal sign-in only on a type that declares it, and tells the refusal the mode", () => {
+    const modes: string[] = [];
+    const personal = (personalSignIn?: true) =>
+      findConnectorTypeIssues(
+        createConnectorTypeRegistry([
+          type({
+            authSchemes: ["oauth"],
+            ...(personalSignIn ? { personalSignIn } : {}),
+            operationRefusal: (_name, _settings, mode) => {
+              modes.push(mode);
+              return undefined;
+            }
+          })
+        ]),
+        {
+          connectorType: "two_hosts",
+          settings: {},
+          authScheme: "oauth",
+          credentialMode: "user",
+          operations: [{ name: "file_it", effect: "changing", exposure: ["agent"], enabled: true }]
+        }
+      );
+    expect(personal()).toMatchObject([
+      { message: expect.stringMatching(/^personal_oauth_required/u), path: ["credentialMode"] }
+    ]);
+    expect(personal(true)).toEqual([]);
+    expect(modes).toEqual(["user", "user"]);
   });
 });

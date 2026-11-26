@@ -287,6 +287,7 @@ describe("the sign-in detection of an mcp Connection", () => {
         revision: 1,
         settings: { url },
         authScheme: "none",
+        credentialMode: "shared",
         operations: []
       },
       target,

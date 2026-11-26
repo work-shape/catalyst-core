@@ -39,6 +39,7 @@ async function world(result: JsonValue, registry: Record<string, ResultShaper> =
       name: "test",
       revision: 1,
       authScheme: "none",
+      credentialMode: "shared",
       settings: { baseUrl: `http://127.0.0.1:${server.port}` },
       operations: []
     },
@@ -123,6 +124,7 @@ describe("HTTP result shapers and query wire names", () => {
       findConnectorTypeIssues(registry, {
         connectorType: "http_api",
         authScheme: "none",
+        credentialMode: "shared",
         settings: { baseUrl: "https://sample.example.test" },
         operations: [{ ...operation, ...value }]
       });

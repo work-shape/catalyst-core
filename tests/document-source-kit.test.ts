@@ -38,6 +38,7 @@ function contextWith(secret: string): ConnectorContext {
       revision: 1,
       settings: {},
       authScheme: "bearer",
+      credentialMode: "shared",
       operations: []
     },
     target,

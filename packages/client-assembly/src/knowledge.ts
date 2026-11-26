@@ -368,6 +368,8 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
       return Boolean(
         parsed.success &&
         parsed.data.enabled &&
+        // Ingestion keeps a shared binding: a personal Connection is never a source.
+        parsed.data.credentialMode === "shared" &&
         parts.connections?.connectorTypes.get(parsed.data.connectorType)?.documentSource
       );
     },
