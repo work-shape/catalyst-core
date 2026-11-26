@@ -120,13 +120,14 @@ export function catalogueLink(
 
 /**
  * The rows of the review step: each operation the part proposes, with the entry's effect. A
- * reading operation the entry recommends starts ticked; one it does not, and every changing
- * one, starts unticked.
+ * reading operation the entry recommends starts ticked; one it does not starts unticked. A
+ * changing one starts unticked too, except in a part that is personal alone, where each
+ * person's own rights at the service are the bound and the entry may tick it.
  */
 export function partCandidates(part: CataloguePartOffer): ApprovalCandidate[] {
   return part.operations.map((operation): ApprovalCandidate => {
     const declaration = operation.declaration ?? {};
-    const recommended = operation.recommended && operation.effect === "reading";
+    const recommended = tickedInAdvance(part, operation);
     if (typeof declaration.path === "string") {
       return {
         ...declaredCandidate({ ...declaration, effect: operation.effect }, operation.name),
@@ -146,7 +147,35 @@ export function partCandidates(part: CataloguePartOffer): ApprovalCandidate[] {
   });
 }
 
+/** Whether a part is personal alone: each person's own rights at the service are the bound. */
+function personalAlone(part: Pick<CataloguePartOffer, "credentialModes">): boolean {
+  return (
+    part.credentialModes !== undefined &&
+    part.credentialModes.length > 0 &&
+    part.credentialModes.every((mode) => mode === "user")
+  );
+}
+
+/**
+ * Whether the review step ticks an operation in advance: a reading one the entry recommends,
+ * and a changing one it recommends only in a part that is personal alone.
+ */
+export function tickedInAdvance(
+  part: Pick<CataloguePartOffer, "credentialModes">,
+  operation: Pick<CataloguePartOffer["operations"][number], "recommended" | "effect">
+): boolean {
+  return operation.recommended && (operation.effect === "reading" || personalAlone(part));
+}
+
 /** The operations the review step starts with ticked. */
 export function recommendedNames(part: CataloguePartOffer): string[] {
-  return readingNames(partCandidates(part));
+  const candidates = partCandidates(part);
+  const reading = new Set(readingNames(candidates));
+  return candidates
+    .filter(
+      (candidate) =>
+        reading.has(candidate.name) ||
+        (candidate.effect === "changing" && candidate.recommended === true)
+    )
+    .map((candidate) => candidate.name);
 }

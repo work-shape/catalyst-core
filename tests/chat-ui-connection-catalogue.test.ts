@@ -186,6 +186,14 @@ describe("the catalogue model", () => {
     expect(readingNames(candidates)).toEqual(["listClients"]);
   });
 
+  it("ticks a changing operation the entry recommends only in a part that is personal alone", () => {
+    const personal = { ...required(ledger.parts[0]), credentialModes: ["user" as const] };
+    expect(recommendedNames(personal)).toEqual(["listClients", "bookPosting"]);
+    expect(
+      recommendedNames({ ...personal, credentialModes: ["user" as const, "shared" as const] })
+    ).toEqual(["listClients"]);
+  });
+
   it("installs a Connection with no operation, and enables only what the admin approves", () => {
     const part = required(ledger.parts[0]);
     const offer = partOffer(ledger, part);

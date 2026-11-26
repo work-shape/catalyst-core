@@ -21,6 +21,7 @@ import type { EgressAllowEntry } from "../egress";
 import {
   entryParts,
   partSettings,
+  personalTicks,
   scopesForOperations,
   type CatalogueEntry,
   type CatalogueEntryOperation,
@@ -249,7 +250,10 @@ function setAt(target: JsonObject, path: readonly string[], value: string): void
   target[head] = child;
 }
 
-function operationView(operation: CatalogueEntryOperation): CatalogueOperationView {
+function operationView(
+  operation: CatalogueEntryOperation,
+  personal = false
+): CatalogueOperationView {
   const { name, group, title, description, effect, recommended, policy, ...request } = operation;
   const declaration: JsonObject = {
     ...(title === undefined ? {} : { title }),
@@ -265,8 +269,8 @@ function operationView(operation: CatalogueEntryOperation): CatalogueOperationVi
     ...(title === undefined ? {} : { title }),
     ...(description === undefined ? {} : { description }),
     effect,
-    // A changing operation is never ticked in advance, whatever an entry says.
-    recommended: recommended && effect === "reading",
+    // A changing operation is ticked in advance only in a part that is personal alone.
+    recommended: recommended && (effect === "reading" || personal),
     ...(Object.keys(declaration).length === 0 ? {} : { declaration })
   };
 }
@@ -458,7 +462,9 @@ export function createCatalogue(input: {
           ...(line.value === undefined ? {} : { value: line.value })
         })),
         hosts: definition.egress.map(hostLabel),
-        operations: definition.operations.map(operationView),
+        operations: definition.operations.map((operation) =>
+          operationView(operation, personalTicks(definition))
+        ),
         sharedAccountNote: definition.sharedAccountNote,
         documentSource: type.documentSource !== undefined
       });
