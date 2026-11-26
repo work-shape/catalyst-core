@@ -1,7 +1,0 @@
----
-section: Added
----
-
-- Every chat's agent can search and read its own earlier messages with `platform.history.search` and `platform.history.read`, also those no longer in its context behind a compaction checkpoint or the window of the last 20 messages. Neither takes a conversation: each reaches only the chat it is called in, for the person the agent acts for. Search takes words (each also finds longer forms, "Checkliste" finds "Checklisten"; a quoted phrase matches as a phrase) and by default only looks before the cut; read takes `around`, `after` or `before` a message id, and `before: "cut"` reads what was said just before the part the agent still sees. Only the text of the user's and the agent's messages is searched and read, never tool input or output; a read returns at most 30 messages and 24,000 characters, a message at most 6,000. Both only read and run without a card; their Operation Runs and audit rows hold counts, never the words, a snippet or a message.
-- Where a run does not send its model the conversation's whole history, its system message ends with the sentence that earlier messages are out of its context and which two tools reach them.
-- `GET /api/v1/conversations/:conversationId/messages/search` (`conversations.messages.search`) searches what the user and the agent said in a conversation, for anyone who reads it: up to 20 hits with a snippet of at most 300 characters, the match marked « ».
