@@ -1,5 +1,5 @@
 import { recordOf, type ApprovalCandidate } from "./connection-approval-model";
-import type { CataloguePartOffer } from "./connection-catalogue-model";
+import { tickedInAdvance, type CataloguePartOffer } from "./connection-catalogue-model";
 import type { ConnectionCredentialMode } from "./connection-form-model";
 
 // A catalogue part that signs in with OAuth (CAT-OAUTH-UI), without React: whose account it
@@ -89,7 +89,7 @@ export interface ReviewGroup {
  * A group with no operation, such as identity, has no rows and is left out.
  */
 export function reviewGroups(
-  part: Pick<CataloguePartOffer, "groups" | "operations">,
+  part: Pick<CataloguePartOffer, "groups" | "operations" | "credentialModes">,
   candidates: readonly ApprovalCandidate[],
   selected: ReadonlySet<string>
 ): ReviewGroup[] {
@@ -98,9 +98,7 @@ export function reviewGroups(
   );
   const recommended = new Set(
     part.operations.flatMap((operation) =>
-      operation.recommended && operation.effect === "reading" && operation.group !== undefined
-        ? [operation.group]
-        : []
+      tickedInAdvance(part, operation) && operation.group !== undefined ? [operation.group] : []
     )
   );
   const declared = part.groups ?? [];

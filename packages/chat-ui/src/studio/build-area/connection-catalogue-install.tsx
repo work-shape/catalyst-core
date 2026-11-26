@@ -23,6 +23,7 @@ import { selectedCandidates, type ApprovalCandidate } from "./connection-approva
 import {
   catalogueLink,
   partCandidates,
+  recommendedNames,
   partDefaults,
   partOffer,
   type CatalogueEntryOffer,
@@ -257,7 +258,10 @@ export function CatalogueInstall({
 
   const enterReview = (connected: TypedConnected) => {
     const candidates = partCandidates(part);
-    approval.reset(candidates);
+    approval.reset(candidates, {
+      selected: new Set(recommendedNames(part)),
+      effects: new Map()
+    });
     setRefusals(undefined);
     setStage({ step: "review", connected, candidates });
   };

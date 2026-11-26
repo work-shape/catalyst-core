@@ -165,10 +165,19 @@ const declaredParameterSchema = z
   .strict();
 
 /**
- * An operation the entry proposes. Its effect is the entry's; `recommended` ticks a reading
- * one in the review step; `policy` may only tighten. The declaration (method, path,
+ * An operation the entry proposes. Its effect is the entry's; `recommended` ticks it in the
+ * review step, a changing one only in a part that is personal alone (`personalTicks`); `policy` may only tighten. The declaration (method, path,
  * parameters) is for a type whose Connections declare their operations, such as `http_api`.
  */
+/**
+ * Whether the review step may tick a changing operation in advance: only in a part that is
+ * personal alone, where each person's own rights at the service are the bound (Felix,
+ * 2026-11-26). A shared part never does.
+ */
+export function personalTicks(part: { credentialModes: readonly string[] }): boolean {
+  return part.credentialModes.length > 0 && part.credentialModes.every((mode) => mode === "user");
+}
+
 const operationSchema = z
   .object({
     name: z
@@ -191,10 +200,6 @@ const operationSchema = z
     query: z.record(z.string(), declaredParameterSchema).optional()
   })
   .strict()
-  .refine((operation) => !(operation.recommended && operation.effect !== "reading"), {
-    message: "Only a reading operation is recommended: a changing one is never ticked in advance",
-    path: ["recommended"]
-  })
   .refine((operation) => !(operation.policy === "approval" && operation.effect !== "changing"), {
     message: "Only a changing operation can carry the policy 'approval'",
     path: ["policy"]
@@ -274,6 +279,14 @@ const partSchema = z
       issue("The default credential mode must be allowed", ["defaultCredentialMode"]);
     if (part.credentialModes.includes("user") && part.authScheme !== "oauth")
       issue("Personal mode requires OAuth", ["credentialModes"]);
+    if (!personalTicks(part))
+      part.operations.forEach((operation, index) => {
+        if (operation.recommended && operation.effect !== "reading")
+          issue(
+            "Only a reading operation is recommended: a changing one is ticked in advance only in a part that is personal alone",
+            ["operations", index, "recommended"]
+          );
+      });
     if ((part.authScheme === "oauth") !== (part.oauth !== undefined))
       issue("An OAuth part names its authorization server in oauth", ["oauth"]);
     if (part.authScheme === "oauth") {
