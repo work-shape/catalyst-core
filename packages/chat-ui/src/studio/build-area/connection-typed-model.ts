@@ -119,6 +119,70 @@ export function typedConnectionConfig(
   };
 }
 
+/**
+ * What a Connection's fields hold now, read from its settings at each field's dotted path, for
+ * its page to edit. Never the secret, and never a default the definition does not hold.
+ */
+export function typedStoredValues(
+  offer: ConnectorTypeOffer,
+  config: Record<string, unknown>
+): TypedValues {
+  const settings = recordOf(config.settings) ?? {};
+  const values: Record<number, string> = {};
+  offer.fields.forEach((field, index) => {
+    if (field.secret || field.setting === undefined) return;
+    const value = field.setting
+      .split(".")
+      .reduce<unknown>((at, key) => recordOf(at)?.[key], settings);
+    if (typeof value === "string") values[index] = value;
+    else if (typeof value === "number") values[index] = String(value);
+    else if (Array.isArray(value) && value.every((entry) => typeof entry === "string"))
+      values[index] = value.join(", ");
+  });
+  return values;
+}
+
+/** Every field that is not optional holds a value; the secret is written on its own. */
+export function typedSettingsComplete(offer: ConnectorTypeOffer, values: TypedValues): boolean {
+  return offer.fields.every(
+    (field, index) => field.secret || field.optional || (values[index] ?? "").trim() !== ""
+  );
+}
+
+/**
+ * The definition with each field's value at its setting, as the page edits it: an optional
+ * field left empty is taken out. Every other setting stays as it is, and the secret is not here.
+ */
+export function withTypedSettings(
+  config: Record<string, unknown>,
+  offer: ConnectorTypeOffer,
+  values: TypedValues
+): Record<string, unknown> {
+  const settings: Record<string, unknown> = structuredClone(recordOf(config.settings) ?? {});
+  offer.fields.forEach((field, index) => {
+    if (field.secret || field.setting === undefined) return;
+    const value = (values[index] ?? "").trim();
+    const path = field.setting.split(".");
+    if (value === "") removeAt(settings, path);
+    else setAt(settings, path, typedSettingValue(field, value));
+  });
+  return { ...config, settings };
+}
+
+function removeAt(target: Record<string, unknown>, path: readonly string[]): void {
+  const [head, ...rest] = path;
+  if (head === undefined) return;
+  if (rest.length === 0) {
+    delete target[head];
+    return;
+  }
+  const child = recordOf(target[head]);
+  if (child === undefined) return;
+  const copy = { ...child };
+  removeAt(copy, rest);
+  target[head] = copy;
+}
+
 function setAt(target: Record<string, unknown>, path: readonly string[], value: unknown): void {
   const [head, ...rest] = path;
   if (head === undefined) return;

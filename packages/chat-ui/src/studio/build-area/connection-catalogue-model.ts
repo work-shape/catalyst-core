@@ -110,6 +110,25 @@ export function partDefaults(part: CataloguePartOffer): TypedValues {
   );
 }
 
+/**
+ * The form of the part a Connection was installed from (`config.catalogue`), as its page shows
+ * and edits it: the entry's fields, not an address and a key. Nothing where the instance no
+ * longer lists the entry or the part, or where the part made another type.
+ */
+export function installedPartOffer(
+  config: Record<string, unknown>,
+  entries: readonly CatalogueEntryOffer[]
+): ConnectorTypeOffer | undefined {
+  const link = recordOf(config.catalogue);
+  const entry = entries.find((candidate) => candidate.id === link?.entry);
+  const part = entry?.parts.find(
+    (candidate) => candidate.part === link?.part && candidate.connectorType === config.connectorType
+  );
+  if (entry === undefined || part === undefined) return undefined;
+  const managed = recordOf(recordOf(config.settings)?.oauth)?.managedClient !== undefined;
+  return partOffer(entry, part, managed);
+}
+
 /** The link the Connection keeps to the entry it was installed from. */
 export function catalogueLink(
   entry: Pick<CatalogueEntryOffer, "id" | "version">,

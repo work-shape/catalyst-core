@@ -219,7 +219,7 @@ describe("the Connect card in place of a refused call", () => {
     ["needs_reconnect", "reconnect"]
   ] as const)("shows %s as %s, live and after the thread is read again", (state, expected) => {
     const connect = {
-      connection: { name: "gmail", title: "Gmail" },
+      connection: { name: "gmail", title: "Gmail", service: "gmail" },
       state,
       agentName: "assistant"
     };
@@ -260,6 +260,7 @@ describe("the Connect card in place of a refused call", () => {
     expect(connectCardOfRefusal(stored?.output)).toEqual({
       name: "gmail",
       title: "Gmail",
+      service: "gmail",
       personal: true,
       state: expected,
       agentName: "assistant"
@@ -400,6 +401,22 @@ describe("the Connect card", () => {
     expect(render("connected", ACCOUNT)).toContain(ACCOUNT);
     expect(render("ask_admin")).not.toContain("<button");
     expect(render("ask_admin", undefined, true)).not.toContain("<button");
+  });
+
+  it("leads with the service's mark, not the title's initial, when it knows the service", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "en" },
+        createElement(ConnectionConnectCardView, {
+          title: "My mail",
+          name: "my-mail",
+          service: "gmail",
+          state: "connect"
+        })
+      )
+    );
+    expect(markup).toContain('data-connection-icon="gmail"');
   });
 });
 

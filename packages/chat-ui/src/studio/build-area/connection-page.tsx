@@ -40,11 +40,13 @@ import type {
   BuildHeadActions
 } from "./build-asset-kind";
 import { ConnectionAboutEditor } from "./connection-about";
+import { installedPartOffer } from "./connection-catalogue-model";
 import { catalogueUpdateOf } from "./connection-catalogue-update-model";
 import { ConnectionCatalogueUpdate } from "./connection-catalogue-update";
 import {
   ConnectionSecretEditor,
   ConnectionSettingsEditor,
+  ConnectionTypedSettingsEditor,
   DiscoveredTools,
   TypeTools,
   typeToolsToApprove
@@ -152,7 +154,10 @@ export function ConnectionPage({
   const entries = source.useCatalogueEntries?.(source.mayTest(asset));
   const update = editing && entries ? catalogueUpdateOf(asset.config, entries) : undefined;
   const discovers = connectorType === "mcp";
-  const formEdits = offer === undefined;
+  // One installed from the catalogue edits with its entry's fields, never an address and a key.
+  const installed = typeof asset.config.catalogue === "object" && asset.config.catalogue !== null;
+  const formOffer = offer ?? (entries ? installedPartOffer(asset.config, entries) : undefined);
+  const formEdits = formOffer === undefined && !installed;
   const { config } = asset;
   const enabled = config.enabled !== false;
   // Each person connects their own account: the page's sign-in is the reader's own.
@@ -369,6 +374,44 @@ export function ConnectionPage({
     detail?.oauth && !personal ? (
       <SignInTechnical asset={asset} detail={detail} mayWrite={mayChange} />
     ) : undefined;
+  // A Connection that signs in shows no key under its status: the secret its form asks for, such
+  // as an app secret, is set under Settings, never shown.
+  const secretField = formOffer?.fields.find((field) => field.secret);
+  const formSecret =
+    editing && detail?.oauth && secretField ? (
+      <KeyValueList>
+        <KeyValue label={offerText(secretField.label, locale)}>
+          <div className="grid justify-items-start gap-1">
+            <Badge
+              data-connection-credential={detail.secret.state}
+              tone={
+                detail.secret.state === "set"
+                  ? "success"
+                  : detail.secret.state === "unreadable"
+                    ? "danger"
+                    : "neutral"
+              }
+            >
+              {t(
+                detail.secret.state === "set"
+                  ? "connections.credentialSet"
+                  : detail.secret.state === "unreadable"
+                    ? "connections.credentialUnreadable"
+                    : "connections.credentialNotSet"
+              )}
+            </Badge>
+            <ConnectionSecretEditor
+              name={asset.name}
+              revision={asset.revision}
+              secret={detail.secret}
+              source={source}
+              written={written}
+              label={offerText(secretField.label, locale)}
+            />
+          </div>
+        </KeyValue>
+      </KeyValueList>
+    ) : null;
   // What is set once and read seldom, folded under Settings.
   const settings: PageSection[] = [
     ...(editing
@@ -443,9 +486,25 @@ export function ConnectionPage({
               }
               {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
             />
+          ) : editing && formOffer ? (
+            <ConnectionTypedSettingsEditor
+              asset={asset}
+              frame={editing}
+              offer={formOffer}
+              written={written}
+              view={
+                <ConnectionSettings
+                  config={config}
+                  offer={formOffer}
+                  withDescription={false}
+                  technical={signInTechnical}
+                />
+              }
+            />
           ) : (
-            <ConnectionSettings config={config} offer={offer} technical={signInTechnical} />
+            <ConnectionSettings config={config} offer={formOffer} technical={signInTechnical} />
           )}
+          {formSecret}
         </>
       )
     },
