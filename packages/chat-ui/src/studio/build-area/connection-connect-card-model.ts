@@ -23,6 +23,8 @@ export interface ConnectCard {
   /** The Connection to sign in to, by its id, and the service in words. */
   name: string;
   title: string;
+  /** The Connection's `service`, whose mark leads the card, where the card knows it. */
+  service?: string;
   state: ConnectCardState;
   /** Connect signs the person's own account in; a shared Connection is connected for everyone. */
   personal: boolean;
@@ -82,6 +84,7 @@ export function connectCardOfRefusal(result: unknown): ConnectCard | undefined {
   return {
     name: request.connection.name,
     title: request.connection.title,
+    ...(request.connection.service === undefined ? {} : { service: request.connection.service }),
     personal: true,
     state: request.state === "needs_reconnect" ? "reconnect" : "connect",
     ...(request.agentName === undefined ? {} : { agentName: request.agentName })
@@ -95,8 +98,13 @@ function readSignInRequest(value: unknown): ToolConnectionSignInRequest | undefi
   if (name === undefined) return undefined;
   if (request?.state !== "not_connected" && request?.state !== "needs_reconnect") return undefined;
   const agentName = textOf(request.agentName);
+  const service = textOf(connection?.service);
   return {
-    connection: { name, title: textOf(connection?.title) ?? name },
+    connection: {
+      name,
+      title: textOf(connection?.title) ?? name,
+      ...(service === undefined ? {} : { service })
+    },
     state: request.state,
     ...(agentName === undefined ? {} : { agentName })
   };

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, FormNotice, ServiceMark } from "@work-shape/catalyst-ui";
+import { Button, Card, ConnectionIcon, FormNotice, ServiceMark } from "@work-shape/catalyst-ui";
 import {
   useInvalidatePersonalConnections,
   usePersonalConnectionsQuery
@@ -95,10 +95,13 @@ function HostedConnectCard({
   );
   // Whoever may create Connections opens the proposal; a writer of the one it names, its page.
   const open = host.open ?? (draft?.mayWrite === true ? host.openExisting : undefined);
+  // A proposal carries no service: the person's own list names it once the Connection is set up.
+  const service = card.service ?? own?.service;
   return (
     <ConnectionConnectCardView
       title={title}
       name={name}
+      {...(service ? { service } : {})}
       state={signIn.state.phase === "connected" ? "connected" : shown.state}
       unusable={shown.unusable === true}
       {...(own?.state === "connected" && own.account ? { account: own.account } : {})}
@@ -119,6 +122,7 @@ const LINES: Record<Exclude<ConnectCardState, "connected">, TranslationKey> = {
 export function ConnectionConnectCardView({
   title,
   name,
+  service,
   state,
   account,
   signIn,
@@ -127,6 +131,8 @@ export function ConnectionConnectCardView({
 }: {
   title: string;
   name: string;
+  /** The Connection's `service`: its mark leads the card, as on the Connections page. */
+  service?: string;
   state: ConnectCardState;
   /** Set up, but the viewer may not use it. */
   unusable?: boolean;
@@ -202,7 +208,11 @@ export function ConnectionConnectCardView({
       data-connection={name}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <ServiceMark name={title} size="lg" showName={false} />
+        {service ? (
+          <ConnectionIcon size="lg" service={service} />
+        ) : (
+          <ServiceMark name={title} size="lg" showName={false} />
+        )}
         <div className="grid min-w-0 flex-1 basis-48 gap-0.5">
           <p className="text-label text-foreground wrap-anywhere">{heading}</p>
           <p className="text-caption text-muted-foreground" data-connect-card-line="">

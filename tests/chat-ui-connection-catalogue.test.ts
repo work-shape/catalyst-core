@@ -11,6 +11,7 @@ import {
   catalogueUpdateOf,
   changedSettings,
   entriesToShow,
+  installedPartOffer,
   managedSettings,
   partCandidates,
   partDefaults,
@@ -23,9 +24,11 @@ import {
   selectedCandidates,
   signsIn,
   typedConnectionConfig,
+  typedStoredValues,
   typesWithEntries,
   withApprovedOperations,
   withPartScopes,
+  withTypedSettings,
   type CatalogueEntryOffer,
   type ConnectionSource,
   type ConnectorTypeOffer
@@ -239,6 +242,33 @@ describe("the catalogue model", () => {
     expect([...typesWithEntries([ledger, files])]).toEqual(["http_api"]);
     expect(entriesToShow([files, ledger]).map((entry) => entry.id)).toEqual(["ledger", "files"]);
     expect(entriesToShow([{ ...ledger, parts: [] }])).toEqual([]);
+  });
+});
+
+describe("a Connection installed from an entry, on its page", () => {
+  it("edits with the entry's fields, writes only their settings, and leaves the secret apart", () => {
+    const installed = {
+      ...typedConnectionConfig(
+        partOffer(mailbox, part),
+        { name: "mail", title: "Mail", description: "" },
+        { 0: "client-1" }
+      ),
+      catalogue: catalogueLink(mailbox, part.part)
+    };
+    const offer = required(installedPartOffer(installed, [mailbox]));
+    expect(offer.fields.map((field) => field.setting ?? "secret")).toEqual([
+      "oauth.clientId",
+      "secret"
+    ]);
+    expect(typedStoredValues(offer, installed)).toEqual({ 0: "client-1" });
+    const written = withTypedSettings(installed, offer, { 0: " client-2 ", 1: "never written" });
+    const oauth = part.settings.oauth as Record<string, unknown>;
+    expect(written).toEqual({
+      ...installed,
+      settings: { ...part.settings, oauth: { ...oauth, clientId: "client-2" } }
+    });
+    // An instance that no longer lists the entry offers no form: the page shows what it holds.
+    expect(installedPartOffer(installed, [])).toBeUndefined();
   });
 });
 

@@ -4,7 +4,9 @@ import {
   Button,
   ConfirmDialog,
   EmptyState,
+  Field,
   FormNotice,
+  Input,
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
@@ -36,7 +38,16 @@ import {
 } from "./connection-form-model";
 import { connectionRefusalOf, type ConnectionRefusal } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
-import { typedCandidates, typedSurfaces, type ConnectorTypeOffer } from "./connection-typed-model";
+import {
+  offerText,
+  typedCandidates,
+  typedSettingsComplete,
+  typedStoredValues,
+  typedSurfaces,
+  withTypedSettings,
+  type ConnectorTypeOffer,
+  type TypedValues
+} from "./connection-typed-model";
 import { RefusalNotice } from "./refusal-notice";
 import type { ActionNotice } from "./build-model";
 
@@ -171,6 +182,110 @@ export function ConnectionSettingsEditor({
   );
 }
 
+/**
+ * The settings of a Connection whose type has a form of its own, such as one installed from the
+ * catalogue: shown as they are, and changed after Edit through the form's own fields, never an
+ * address and a key. The secret field is written on its own.
+ */
+export function ConnectionTypedSettingsEditor({
+  asset,
+  frame,
+  offer,
+  written,
+  view
+}: {
+  asset: BuildAsset;
+  frame: BuildAssetEditorProps;
+  offer: ConnectorTypeOffer;
+  written(): void;
+  /** The settings as the page shows them while nobody edits them. */
+  view: ReactNode;
+}) {
+  const { locale, t } = useTranslation();
+  const stored = typedStoredValues(offer, asset.config);
+  const [values, setValues] = useState<TypedValues>();
+  const write = useConnectionWrite(frame, written);
+  const fields = offer.fields.flatMap((field, index) =>
+    field.secret || field.setting === undefined ? [] : [{ field, index }]
+  );
+  const changed =
+    values !== undefined &&
+    fields.some(({ index }) => (values[index] ?? "").trim() !== (stored[index] ?? ""));
+  const { onUnsavedChange } = frame;
+  useEffect(() => {
+    onUnsavedChange(changed);
+    return () => onUnsavedChange(false);
+  }, [changed, onUnsavedChange]);
+
+  if (!values) {
+    return (
+      <div className="grid gap-3">
+        {view}
+        {fields.length > 0 ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="justify-self-start"
+            disabled={frame.saveBlocked}
+            onClick={() => setValues(stored)}
+          >
+            {t("connections.settingsEdit")}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="grid gap-4"
+      data-connection-typed-settings-form=""
+      onSubmit={(event) => {
+        event.preventDefault();
+        write
+          .write("settings", withTypedSettings(asset.config, offer, values))
+          .then((saved) => {
+            if (saved) setValues(undefined);
+          })
+          .catch(() => undefined);
+      }}
+    >
+      {fields.map(({ field, index }) => (
+        <Field
+          key={field.setting}
+          label={offerText(field.label, locale)}
+          hint={field.help === undefined ? undefined : offerText(field.help, locale)}
+          {...(field.optional ? { optional: true } : { required: true })}
+        >
+          <Input
+            {...(field.value === "number" ? { inputMode: "numeric" as const } : {})}
+            autoComplete="off"
+            spellCheck={false}
+            value={values[index] ?? ""}
+            data-connection-field={field.setting}
+            onChange={(event) =>
+              setValues((current) => ({ ...current, [index]: event.target.value }))
+            }
+          />
+        </Field>
+      ))}
+      {write.failure ? <RefusalNotice {...write.failure} /> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          size="sm"
+          loading={write.saving === "settings"}
+          disabled={!changed || !typedSettingsComplete(offer, values) || frame.saveBlocked}
+        >
+          {t("connections.settingsSave")}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setValues(undefined)}>
+          {t("connections.settingsCancel")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 /** What "Used by" lists: the agents that carry the Connection's tools and the other assets. */
 type KeyUsers = Pick<ConnectionDetail, "usedBy" | "usedByAssets">;
 
@@ -201,7 +316,8 @@ export function ConnectionSecretEditor({
   source,
   written,
   retest,
-  removal
+  removal,
+  label
 }: {
   name: string;
   /** The revision of the Connection the page shows: the key is for its addresses. */
@@ -217,6 +333,8 @@ export function ConnectionSecretEditor({
     config: Record<string, unknown>;
     usedBy: KeyUsers;
   };
+  /** The secret's name in the type's own form, such as an app secret. */
+  label?: string;
 }) {
   const { t } = useTranslation();
   const [value, setValue] = useState<string>();
@@ -274,7 +392,11 @@ export function ConnectionSecretEditor({
           .finally(() => setSaving(false));
       }}
     >
-      <ConnectionSecretField value={value} onChange={setValue} />
+      <ConnectionSecretField
+        value={value}
+        onChange={setValue}
+        {...(label === undefined ? {} : { label })}
+      />
       {result?.tone === "error" ? <FormNotice tone="error">{result.text}</FormNotice> : null}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" loading={saving} disabled={value === ""}>

@@ -363,14 +363,17 @@ export function CredentialModeField({
 /** The key, typed once. The browser is asked not to keep or offer it. */
 export function ConnectionSecretField({
   value,
-  onChange
+  onChange,
+  label
 }: {
   value: string;
   onChange(value: string): void;
+  /** The secret's name in the type's own form, such as an app secret. */
+  label?: string;
 }) {
   const { t } = useTranslation();
   return (
-    <Field label={t("connections.secret")} hint={t("connections.secretHint")}>
+    <Field label={label ?? t("connections.secret")} hint={t("connections.secretHint")}>
       <Input
         type="password"
         autoComplete="new-password"
