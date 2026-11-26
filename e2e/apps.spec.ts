@@ -190,6 +190,9 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       memberPage.getByTestId("app-edit").locator('[data-asset-status="draft"]')
     ).toHaveText("Draft · not live");
   } finally {
+    // The member leaves before the rights go. Their editor's frame asks what its actions come
+    // to once it has loaded, and asked after the revoke, the instance rightly answers 404.
+    await memberContext.close();
     for (const grantId of grants.reverse()) {
       const revoked = await requestWithOrigin(
         page,
@@ -199,7 +202,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       expect(revoked.ok()).toBe(true);
     }
   }
-  await memberContext.close();
   // The draft shows the change, and the host it added is held back until it is published.
   await page.reload();
   await expect(edit.locator('[data-asset-status="draft"]')).toHaveText("Draft · not live");
