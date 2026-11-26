@@ -1,10 +1,11 @@
 import {
   isAppError,
+  readObjectBytes,
   type ClientInstanceId,
   type ConversationId,
   type ExecutionWorkspace
 } from "@work-shape/catalyst-core";
-import { workspacePathFromFilename } from "../workspace-tool-results";
+import { normalizeWorkspaceFilePath, workspacePathFromFilename } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
 import {
   checkPathFitsWorkspace,
@@ -13,6 +14,7 @@ import {
   storeTextFile
 } from "./stored-text-file";
 import { freePath, withExtension } from "./web-download";
+import { oneSaveAtATime } from "./workspace-saves";
 
 // One file the platform saves into a conversation's execution workspace for a call that is no
 // workspace tool, such as a Connection operation that downloads: the store path web_download
@@ -54,6 +56,17 @@ export async function saveWorkspaceFile(
   if (!fileStore) return { status: "unavailable" };
   const workspace = await workspaceOf(deps, input);
   if (!workspace) return { status: "unavailable" };
+  return oneSaveAtATime(workspace.id, () =>
+    saveInto(deps, { ...deps, fileStore }, workspace, input)
+  );
+}
+
+async function saveInto(
+  deps: WorkspaceToolDependencies,
+  stores: Parameters<typeof storeTextFile>[0],
+  workspace: ExecutionWorkspace,
+  input: SaveWorkspaceFileInput
+): Promise<SavedWorkspaceFile> {
   const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id
@@ -73,7 +86,7 @@ export async function saveWorkspaceFile(
   const room = checkWorkspaceRoom(deps, files, target.value, input.bytes.byteLength);
   if (room.status === "failed") return { status: "too_large" };
   const stored = await storeTextFile(
-    { ...deps, fileStore },
+    stores,
     { clientInstanceId: input.clientInstanceId },
     {
       toolName: input.source,
@@ -93,7 +106,7 @@ export async function saveWorkspaceFile(
 
 async function workspaceOf(
   deps: WorkspaceToolDependencies,
-  input: SaveWorkspaceFileInput
+  input: Pick<SaveWorkspaceFileInput, "clientInstanceId" | "conversationId" | "ownerUserId">
 ): Promise<ExecutionWorkspace | undefined> {
   const { clientInstanceId, conversationId, ownerUserId } = input;
   try {
@@ -113,6 +126,45 @@ async function workspaceOf(
     if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
     throw error;
   }
+}
+
+/** A file of a conversation's execution workspace, as the platform reads it for a call. */
+export interface OpenedWorkspaceFile {
+  byteSize: number;
+  mimeType?: string;
+  read(): Promise<Uint8Array>;
+}
+
+/**
+ * Opens a file of the conversation's execution workspace by its path, for a call that is no
+ * workspace tool, such as a Connection operation that files it. A subagent's thread reads its
+ * root's workspace. Looked up, never created: nothing where the conversation has no workspace,
+ * is not active, or has no file at the path.
+ */
+export async function openWorkspaceFile(
+  deps: WorkspaceToolDependencies,
+  input: { clientInstanceId: ClientInstanceId; conversationId: ConversationId; path: string }
+): Promise<OpenedWorkspaceFile | undefined> {
+  const { objectStore } = deps;
+  if (!objectStore) return undefined;
+  const path = normalizeWorkspaceFilePath(input.path, deps.limits);
+  if (path.status === "failed") return undefined;
+  const workspace = await workspaceOf(deps, {
+    clientInstanceId: input.clientInstanceId,
+    conversationId: input.conversationId
+  });
+  if (!workspace) return undefined;
+  const file = await deps.store.executionWorkspaces.getWorkspaceFile({
+    clientInstanceId: input.clientInstanceId,
+    workspaceId: workspace.id,
+    path: path.value
+  });
+  if (!file) return undefined;
+  return {
+    byteSize: file.byteSize,
+    ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+    read: () => readObjectBytes(objectStore, file.objectKey)
+  };
 }
 
 /** The media type without its parameters, or the one of any bytes where it is not one. */

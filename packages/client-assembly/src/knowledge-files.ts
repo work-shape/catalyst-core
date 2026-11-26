@@ -74,13 +74,16 @@ export function createKnowledgeFiles(
 }
 
 /**
- * The files a Connection operation may take: a file of the conversation the call is made in, for
- * a person who may read it now. A subagent's thread holds no attachments of its own, so it is
- * resolved to its root chat, as every tool that takes a conversation file does. An agent step's
- * thread has no root chat and a service principal opens none: no other file source in this cut.
+ * The files a Connection operation may take, named by one field: an attachment of the
+ * conversation the call is made in, by its fileId, or else a file of its execution workspace, by
+ * its path, such as a deck the agent made. A subagent's thread holds no attachments of its own,
+ * so it is resolved to its root chat, as every tool that takes a conversation file does, and
+ * reads its root's workspace. A person must be allowed to open the root chat now. An agent
+ * step's thread has no root chat: it, and a service principal, reach only the workspace of the
+ * thread, as its workspace tools do.
  */
 export function createConnectionConversationFiles(
-  input: ConversationFileParts
+  input: ConversationFileParts & { workspace?: Pick<WorkspaceCommandService, "openFile"> }
 ): ConnectionConversationFiles {
   return {
     async open(actor, ref) {
@@ -91,10 +94,29 @@ export function createConnectionConversationFiles(
       if (!conversation) return undefined;
       const rootId =
         conversation.kind === "run_thread" ? conversation.parentConversationId : conversation.id;
-      if (!rootId) return undefined;
-      const file = await openConversationFile(input, actor, {
-        conversationId: rootId,
-        fileId: ref.fileId
+      if (rootId) {
+        const file = await openConversationFile(input, actor, {
+          conversationId: rootId,
+          fileId: ref.fileId
+        });
+        if (file) return { byteSize: file.byteSize, read: file.read };
+      }
+      if (!input.workspace) return undefined;
+      if (isAuthenticatedServicePrincipal(actor)) {
+        // Only the thread of a Workflow agent step, which has no root chat.
+        if (conversation.kind !== "run_thread" || rootId) return undefined;
+      } else if (rootId) {
+        try {
+          await requireConversationAccess(input, asConversationId(rootId), actor);
+        } catch (error) {
+          if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
+          throw error;
+        }
+      }
+      const file = await input.workspace.openFile({
+        clientInstanceId: input.clientInstanceId,
+        conversationId: conversation.id,
+        path: ref.fileId
       });
       return file && { byteSize: file.byteSize, read: file.read };
     }

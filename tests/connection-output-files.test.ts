@@ -132,6 +132,12 @@ describe("a file a Connection operation saves", () => {
         })
       ).path
     ).toBe("inputs/Q3-report-1.pdf");
+    const opened = await harness.service.openFile({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      path: "inputs/Q3-report-1.pdf"
+    });
+    expect(new TextDecoder().decode(await opened?.read())).toBe("two");
     const workspace = await harness.store.executionWorkspaces.getExecutionWorkspaceForConversation({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id
@@ -155,5 +161,40 @@ describe("a file a Connection operation saves", () => {
       .catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(AppError);
     expect(connectionCallReasonOf(refused)).toBe("output_file_too_large");
+  });
+
+  it("never gives two saves of one name side by side the same path", async () => {
+    // A slow listing lets both saves look before either writes, as two subagents' downloads can.
+    const harness = await createWorkspaceHarness({
+      serviceStore: (store) => ({
+        ...store,
+        executionWorkspaces: new Proxy(store.executionWorkspaces, {
+          get(target, property) {
+            const value = Reflect.get(target, property) as unknown;
+            if (property !== "listWorkspaceFiles" || typeof value !== "function") return value;
+            return async (...args: unknown[]) => {
+              const files: unknown = await Reflect.apply(value, target, args);
+              await new Promise((resolve) => setTimeout(resolve, 25));
+              return files;
+            };
+          }
+        })
+      })
+    });
+    const port = createConnectionWorkspaceFiles({
+      clientInstanceId: harness.clientInstanceId,
+      workspace: harness.service
+    });
+    const ref = { conversationId: harness.conversation.id, operation: OPERATION };
+    const file = { name: "Expose.pdf", bytes: encode("one") };
+
+    const saved = await Promise.all([
+      port.save(harness.context.user, ref, file),
+      port.save(harness.context.user, ref, file)
+    ]);
+    expect(saved.map(({ path }) => path).sort()).toEqual([
+      "inputs/Expose-1.pdf",
+      "inputs/Expose.pdf"
+    ]);
   });
 });

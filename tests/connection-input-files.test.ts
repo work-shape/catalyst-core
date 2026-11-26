@@ -192,13 +192,7 @@ describe("which conversation file a person may open", () => {
         asConversationId(own.conversationId)
       )
     );
-    const owner = required(
-      await instance.stores.users.getUser({
-        clientInstanceId,
-        userId: asUserId(required(root.createdByUserId))
-      })
-    );
-    const actor = identityOf(owner);
+    const actor = await ownerOf(instance, root.createdByUserId);
     const threadId = "conv_thread";
     const stores = {
       ...instance.stores,
@@ -226,17 +220,6 @@ describe("which conversation file a person may open", () => {
       }
     });
 
-    const service: WorkflowRunPrincipal = {
-      kind: "service",
-      id: createPlatformId<"ServicePrincipalId">("svc"),
-      displayLabel: "A service",
-      permissionRefs: [],
-      permissions: [],
-      clientInstanceId,
-      authSource: "workflow_run",
-      scopes: ["*"],
-      workflowRunId: createPlatformId<"WorkflowRunId">("wfr")
-    };
     const opened = await files.open(actor, own);
     expect(opened?.byteSize).toBe(4);
     expect(new TextDecoder().decode(await opened?.read())).toBe("scan");
@@ -250,7 +233,104 @@ describe("which conversation file a person may open", () => {
     ).toBeUndefined();
     expect(await files.open(service, own)).toBeUndefined();
   });
+
+  it("opens a file of the chat's workspace by its path, for whom may open the chat", async () => {
+    const { instance } = await instanceWithFiles();
+    const own = await conversationWithFile(instance, file, asMember);
+    const other = await conversationWithFile(instance, file);
+    const root = required(
+      await instance.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(own.conversationId)
+      )
+    );
+    const actor = await ownerOf(instance, root.createdByUserId);
+    const deck = "outputs/deck.pptx";
+    const openFile = vi.fn(({ path }: { path: string }) =>
+      Promise.resolve(
+        path === deck ? { byteSize: 7, read: () => Promise.resolve(BYTES) } : undefined
+      )
+    );
+    const stepThread = "conv_step";
+    const stores = {
+      ...instance.stores,
+      conversations: new Proxy(instance.stores.conversations, {
+        get(target, property) {
+          if (property !== "getConversation") return Reflect.get(target, property) as unknown;
+          return (scope: typeof clientInstanceId, id: string) =>
+            id === stepThread
+              ? Promise.resolve({
+                  ...root,
+                  id,
+                  kind: "run_thread",
+                  parentConversationId: undefined
+                })
+              : target.getConversation(scope, asConversationId(id));
+        }
+      })
+    };
+    const files = createConnectionConversationFiles({
+      clientInstanceId,
+      stores,
+      attachments: {
+        readConversationFile: (input) =>
+          Promise.resolve({
+            fileId: asManagedFileId(input.fileId),
+            filename: "scan.txt",
+            byteSize: 4,
+            bytes: new TextEncoder().encode("scan")
+          })
+      },
+      workspace: { openFile }
+    });
+
+    expect(
+      (await files.open(actor, { conversationId: own.conversationId, fileId: deck }))?.byteSize
+    ).toBe(7);
+    // An attachment's fileId is the attachment, never looked up in the workspace.
+    expect((await files.open(actor, own))?.byteSize).toBe(4);
+    expect(openFile).toHaveBeenCalledTimes(1);
+    // Another person's chat, and a path the workspace does not hold.
+    expect(
+      await files.open(actor, { conversationId: other.conversationId, fileId: deck })
+    ).toBeUndefined();
+    expect(
+      await files.open(actor, { conversationId: own.conversationId, fileId: "outputs/none.pdf" })
+    ).toBeUndefined();
+    expect(openFile).toHaveBeenCalledTimes(2);
+    // A Workflow's agent reaches the workspace of its own step thread, and no chat's.
+    expect(
+      await files.open(service, { conversationId: own.conversationId, fileId: deck })
+    ).toBeUndefined();
+    expect(
+      (await files.open(service, { conversationId: stepThread, fileId: deck }))?.byteSize
+    ).toBe(7);
+  });
 });
+
+const service: WorkflowRunPrincipal = {
+  kind: "service",
+  id: createPlatformId<"ServicePrincipalId">("svc"),
+  displayLabel: "A service",
+  permissionRefs: [],
+  permissions: [],
+  clientInstanceId,
+  authSource: "workflow_run",
+  scopes: ["*"],
+  workflowRunId: createPlatformId<"WorkflowRunId">("wfr")
+};
+
+async function ownerOf(
+  instance: Awaited<
+    ReturnType<ReturnType<typeof useKnowledgeFiles>["instanceWithFiles"]>
+  >["instance"],
+  userId: string | undefined
+) {
+  const owner = required(
+    await instance.stores.users.getUser({ clientInstanceId, userId: asUserId(required(userId)) })
+  );
+  return identityOf(owner);
+}
 
 describe("what a type may say about its credential and its operations", () => {
   const grant = (host: string): EgressGrant => ({

@@ -1,3 +1,4 @@
+import { oneSaveAtATime } from "./workspace-saves";
 import { z } from "zod";
 import {
   isJsonObject,
@@ -135,35 +136,41 @@ async function downloadIntoWorkspace(
     throw error;
   }
 
-  const files = await listFiles();
-  // A name the server or the address gives never replaces a file, such as an imported
-  // attachment of the same name: it gets the next free name. A path the agent named does.
-  const target =
-    namedPath ??
-    resolveTextFilePath(
-      freePath(
-        files,
-        withExtension(
-          workspacePathFromFilename(file.filename ?? filenameOf(file.finalUrl), "download"),
-          file.mediaType
-        )
-      ),
-      deps.limits
-    );
-  if (target.status === "failed") return target.result;
-  const fits = checkPathFitsWorkspace(files, target.value);
-  if (fits.status === "failed") return fits.result;
-  const room = checkWorkspaceRoom(deps, files, target.value, file.bytes.byteLength);
-  if (room.status === "failed") return room.result;
-  const stored = await storeTextFile({ ...deps, fileStore }, context, {
-    toolName: WEB_DOWNLOAD_TOOL_NAME,
-    workspace,
-    path: target.value,
-    bytes: file.bytes,
-    // A replaced file keeps nothing of what it was, such as the upload it came from.
-    existing: undefined,
-    mimeType: file.mediaType
+  // The free name is taken and written in one step per workspace.
+  const saved = await oneSaveAtATime(workspace.handle.id, async () => {
+    const files = await listFiles();
+    // A name the server or the address gives never replaces a file, such as an imported
+    // attachment of the same name: it gets the next free name. A path the agent named does.
+    const target =
+      namedPath ??
+      resolveTextFilePath(
+        freePath(
+          files,
+          withExtension(
+            workspacePathFromFilename(file.filename ?? filenameOf(file.finalUrl), "download"),
+            file.mediaType
+          )
+        ),
+        deps.limits
+      );
+    if (target.status === "failed") return target;
+    const fits = checkPathFitsWorkspace(files, target.value);
+    if (fits.status === "failed") return fits;
+    const room = checkWorkspaceRoom(deps, files, target.value, file.bytes.byteLength);
+    if (room.status === "failed") return room;
+    const stored = await storeTextFile({ ...deps, fileStore }, context, {
+      toolName: WEB_DOWNLOAD_TOOL_NAME,
+      workspace,
+      path: target.value,
+      bytes: file.bytes,
+      // A replaced file keeps nothing of what it was, such as the upload it came from.
+      existing: undefined,
+      mimeType: file.mediaType
+    });
+    return { status: "success" as const, value: stored };
   });
+  if (saved.status === "failed") return saved.result;
+  const stored = saved.value;
   const host = hostOf(file.finalUrl);
   return toolSuccess(
     {
