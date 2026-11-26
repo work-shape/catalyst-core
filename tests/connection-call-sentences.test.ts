@@ -57,7 +57,11 @@ const REASONS: ConnectionCallReason[] = [
   "item_not_found",
   "input_file_unavailable",
   "input_file_too_large",
-  "target_exists"
+  "target_exists",
+  "target_changed",
+  "item_protected",
+  "output_file_unavailable",
+  "output_file_too_large"
 ];
 
 /** A few reasons prove the call path; the sentence of every reason is checked above. */
