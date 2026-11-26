@@ -39,6 +39,7 @@ import {
   type ConnectionCredentialResolver,
   type ConnectionSignInEnding,
   type ConnectionConversationFiles,
+  type ConnectionWorkspaceFiles,
   type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
   type DataToolSource,
@@ -105,6 +106,12 @@ export interface InstanceConnections {
    * built after the Connections; until this is called, no operation opens a file.
    */
   bindConversationFiles(files: ConnectionConversationFiles): void;
+  /**
+   * Hands the operations that `producesFiles` the workspace they save into. The workspace tools
+   * are built after the Connections; until this is called, or where the instance has no
+   * workspace storage, such an operation is refused `output_file_unavailable`.
+   */
+  bindWorkspaceFiles(files: ConnectionWorkspaceFiles): void;
 }
 
 /**
@@ -329,6 +336,7 @@ async function buildInstanceConnections(
       })
     : undefined;
   let boundFiles: ConnectionConversationFiles | undefined;
+  let boundWorkspaceFiles: ConnectionWorkspaceFiles | undefined;
   const operations = {
     clientInstanceId,
     stores,
@@ -341,7 +349,11 @@ async function buildInstanceConnections(
     ownServers,
     conversationFiles: {
       open: (actor, ref) => boundFiles?.open(actor, ref) ?? Promise.resolve(undefined)
-    } satisfies ConnectionConversationFiles
+    } satisfies ConnectionConversationFiles,
+    // Read at each call, so a call knows before the type runs whether it has a workspace.
+    get workspaceFiles() {
+      return boundWorkspaceFiles;
+    }
   };
   const slots = new ConnectionCallSlots();
   const openDocumentSource = createDocumentSourceOpener(operations, slots);
@@ -355,6 +367,9 @@ async function buildInstanceConnections(
     reconnectNotice: createConnectionReconnectNoticeHandler(notices),
     bindConversationFiles(files) {
       boundFiles = files;
+    },
+    bindWorkspaceFiles(files) {
+      boundWorkspaceFiles = files;
     },
     ownServers,
     operationSource: createConnectionOperationSource(operations, slots),

@@ -130,6 +130,7 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
     store,
     conversation,
     objectStore,
+    service,
     tools,
     execution,
     context,

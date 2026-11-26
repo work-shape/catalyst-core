@@ -125,7 +125,7 @@ export function connectionExposureRefusal(
 /** One tool as the last discovery read it. Untrusted data. */
 export interface ConnectionCatalogEntry extends Omit<
   ConnectorOperationDescriptor,
-  "conversationFileFields"
+  "conversationFileFields" | "producesFiles"
 > {
   /**
    * sha256, hex, over the canonical JSON of name, description, inputSchema, outputSchema and
@@ -231,7 +231,15 @@ export const CONNECTION_CALL_REASONS = {
   /** The conversation file the input names is over `CONNECTION_INPUT_FILE_MAX_BYTES`. */
   input_file_too_large: "VALIDATION_FAILED",
   /** Something else already has the name the call would write. Nothing was changed. */
-  target_exists: "CONFLICT"
+  target_exists: "CONFLICT",
+  /** The item changed since the call read it, so the call did not replace or delete it. */
+  target_changed: "CONFLICT",
+  /** The item is one the Connection never changes, such as an allowed folder itself. */
+  item_protected: "CONFLICT",
+  /** The operation saves a file, and this call has no conversation workspace to save it in. */
+  output_file_unavailable: "CONFLICT",
+  /** The file is over `CONNECTION_OUTPUT_FILE_MAX_BYTES` or the room the workspace has left. */
+  output_file_too_large: "VALIDATION_FAILED"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type ConnectionCallReason = keyof typeof CONNECTION_CALL_REASONS;
@@ -296,7 +304,11 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   item_not_found: "the item is outside the Connection's boundary or is gone",
   input_file_unavailable: "the file is not available to this call in this conversation",
   input_file_too_large: "the file is larger than a Connection call takes",
-  target_exists: "something else already has this name; nothing was changed"
+  target_exists: "something else already has this name; nothing was changed",
+  target_changed: "the item changed since it was read; nothing was changed",
+  item_protected: "the connection never changes this item",
+  output_file_unavailable: "the call has no conversation workspace to save a file in",
+  output_file_too_large: "the file is larger than a Connection call may save"
 };
 
 /**
@@ -437,7 +449,15 @@ const CONNECTION_CALL_SENTENCES: Record<
   input_file_too_large: (c) =>
     `${c} did not run this action because the file is larger than the 25 MiB an action takes. Nothing was sent, and trying again will not help.`,
   target_exists: (c) =>
-    `${c} did not write the file because a different item already has this name there. Nothing was changed, and trying again will not help. Choose another name, or ask the person what to do.`
+    `${c} did not write the file because a different item already has this name there. Nothing was changed, and trying again will not help. Choose another name, or ask the person what to do.`,
+  target_changed: (c) =>
+    `${c} changed nothing because the item was changed by someone else after it was read. Read it again, and ask the person whether to go on.`,
+  item_protected: (c) =>
+    `${c} does not change this item: it is a folder the connection is limited to, or a folder that holds items the connection keeps out. Trying again will not help; work on single files inside it instead.`,
+  output_file_unavailable: (c) =>
+    `${c} did not run this action because it saves a file, and only an agent in a conversation with workspace tools can receive one. Nothing was read.`,
+  output_file_too_large: (c) =>
+    `${c} did not save the file because it is larger than the 50 MiB an action may save, or than the room left in the workspace. Nothing was kept; remove files that are no longer needed, or ask the person to share a smaller file.`
 };
 
 /** The display name as one word group of a sentence: one line, no control character, bounded. */

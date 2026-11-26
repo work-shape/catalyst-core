@@ -265,7 +265,7 @@ const EXTENSIONS: Readonly<Record<string, string>> = {
 };
 
 /** `path`, or the first of `name-1.ext`, `name-2.ext` ... that no file or folder takes. */
-function freePath(files: readonly { path: string }[], path: string): string {
+export function freePath(files: readonly { path: string }[], path: string): string {
   const taken = (candidate: string) =>
     files.some((file) => file.path === candidate || file.path.startsWith(`${candidate}/`));
   if (!taken(path)) return path;
@@ -280,7 +280,7 @@ function freePath(files: readonly { path: string }[], path: string): string {
 }
 
 /** A name with no extension gets the one of its media type, so the helpers recognise it. */
-function withExtension(path: string, mediaType: string): string {
+export function withExtension(path: string, mediaType: string): string {
   const name = path.split("/").at(-1) ?? path;
   if (/\.[a-z0-9]{1,16}$/iu.test(name)) return path;
   return `${path}${EXTENSIONS[mediaType] ?? ""}`;

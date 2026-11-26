@@ -32,6 +32,11 @@ import { listWorkspaceFiles } from "./list-files";
 import { previewWorkspaceImages } from "./preview-images";
 import { promoteWorkspaceArtifact } from "./promote-artifact";
 import { readWorkspaceFile } from "./read-file";
+import {
+  saveWorkspaceFile,
+  type SaveWorkspaceFileInput,
+  type SavedWorkspaceFile
+} from "./saved-file";
 import { writeWorkspaceFile } from "./write-file";
 
 /** The workspace tools as one object, for callers that run a tool without the registry. */
@@ -96,5 +101,10 @@ export class WorkspaceCommandService {
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspacePreviewImagesOutputSchema>>> {
     return previewWorkspaceImages(this.dependencies, input, context);
+  }
+
+  /** Saves a file a call that is no workspace tool made, such as a Connection operation's. */
+  saveFile(input: SaveWorkspaceFileInput): Promise<SavedWorkspaceFile> {
+    return saveWorkspaceFile(this.dependencies, input);
   }
 }

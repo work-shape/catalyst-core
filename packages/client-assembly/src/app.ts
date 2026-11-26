@@ -134,7 +134,11 @@ import {
   createInstanceInfrastructure,
   createWorkspacesStore
 } from "./infrastructure";
-import { createConnectionConversationFiles, createKnowledgeFiles } from "./knowledge-files";
+import {
+  createConnectionConversationFiles,
+  createConnectionWorkspaceFiles,
+  createKnowledgeFiles
+} from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
@@ -766,6 +770,12 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
+  // Where an instance has no workspace storage, an operation that saves a file is refused.
+  if (workspaceService) {
+    connections?.bindWorkspaceFiles(
+      createConnectionWorkspaceFiles({ clientInstanceId, workspace: workspaceService })
+    );
+  }
   const workspaceOpen = createInstanceWorkspaceOpen({ modules, stores: store, workspaceService });
   const tools = createToolDefinitions({
     config,

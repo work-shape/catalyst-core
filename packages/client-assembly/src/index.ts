@@ -18,7 +18,10 @@ export type {
   ManagedObjectAccessFactory
 } from "./capabilities";
 export type { AgentRunWorkerPlacement } from "./agent-run-jobs";
-export { createConnectionConversationFiles } from "./knowledge-files";
+export {
+  createConnectionConversationFiles,
+  createConnectionWorkspaceFiles
+} from "./knowledge-files";
 export {
   createClientInstanceApp,
   type ClientInstanceApp,

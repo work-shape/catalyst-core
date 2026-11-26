@@ -6,6 +6,7 @@ import {
   type ConnectionCatalog,
   type ConnectionConfig,
   type ConnectionConversationFiles,
+  type ConnectionWorkspaceFiles,
   type ConnectionCredentialResolver,
   type ConnectionStateRecord,
   type ConnectorTypeDefinition,
@@ -56,6 +57,11 @@ export interface ConnectionOperationSourceDeps {
   ownServers?: Pick<OwnServersSettings, "enabled">;
   /** Opens a conversation's file for an operation that takes one. Left out, none is opened. */
   conversationFiles?: ConnectionConversationFiles;
+  /**
+   * Saves a file an operation that `producesFiles` made into the calling conversation's
+   * workspace. Left out, such an operation is refused `output_file_unavailable`.
+   */
+  workspaceFiles?: ConnectionWorkspaceFiles;
 }
 
 /** One stored Connection as a reader of this package sees it. */

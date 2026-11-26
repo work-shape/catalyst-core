@@ -56,6 +56,7 @@ export function fingerprintOperation(descriptor: ConnectorOperationDescriptor): 
   if (descriptor.conversationFileFields !== undefined) {
     fingerprinted.conversationFileFields = [...descriptor.conversationFileFields];
   }
+  if (descriptor.producesFiles === true) fingerprinted.producesFiles = true;
   return sha256Hex(canonicalJson(fingerprinted));
 }
 
