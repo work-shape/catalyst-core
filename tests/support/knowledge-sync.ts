@@ -48,6 +48,7 @@ function context(signal: AbortSignal): ConnectorContext {
       revision: 1,
       settings: {},
       authScheme: "bearer",
+      credentialMode: "shared",
       operations: []
     },
     target,

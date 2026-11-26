@@ -4651,7 +4651,7 @@
         "",
         "## Personal OAuth bindings",
         "",
-        "A runtime Connection can select `credentialMode: user` with `authScheme: oauth` on `http_api` or `mcp`. Its operations accept exposure `agent` only. The mode is fixed when the Connection is created; a change returns `credential_mode_fixed`. Release-config Connections remain `shared`.",
+        "A runtime Connection can select `credentialMode: user` with `authScheme: oauth` on a Connector type that takes a personal sign-in (`personalSignIn`), such as `http_api` and `mcp`. Its operations accept exposure `agent` only. The mode is fixed when the Connection is created; a change returns `credential_mode_fixed`. Release-config Connections remain `shared`.",
         "",
         "The Connection's own secret is the OAuth client secret. Each person with `connection.use` starts their own sign-in through `POST /api/v1/connections/:name/oauth/start` and completes it in the same first-party browser session. Neither endpoint takes a credential subject or another person's user id. `catalyst connection connect` refuses personal Connections with `personal_connect_in_browser`; the refusal directs the person to Settings > You > Verbindungen.",
         "",

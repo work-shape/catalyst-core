@@ -768,6 +768,8 @@ export interface ConnectorContext {
     revision: number;
     settings: JsonObject;
     authScheme: string;
+    /** `user` where the credential is the calling person's own sign-in. */
+    credentialMode: ConnectionCredentialMode;
     /** The accepted operations, with the declaration of each where its type declares them. */
     operations: readonly ConnectionOperationConfig[];
   };
@@ -983,10 +985,15 @@ interface ConnectorTypeBase {
    */
   credentialTargets?(settings: JsonObject): readonly EgressTarget[];
   /**
-   * Why a Connection with these settings may not accept this operation of the type's catalog,
-   * such as a changing operation on a read-only sign-in. Every save of a Connection asks it.
+   * Why a Connection with these settings and credential mode may not accept this operation of
+   * the type's catalog, such as a changing operation on a read-only sign-in. Every save of a
+   * Connection asks it.
    */
-  operationRefusal?(operation: string, settings: JsonObject): string | undefined;
+  operationRefusal?(
+    operation: string,
+    settings: JsonObject,
+    credentialMode: ConnectionCredentialMode
+  ): string | undefined;
   /**
    * The type sends `idempotencyKey` of its context with a call. Only an operation of such a
    * type is called again under the key of an interrupted call.
@@ -994,6 +1001,11 @@ interface ConnectorTypeBase {
   carriesIdempotencyKey?: true;
   /** The type's part of an OAuth sign-in, where it offers the auth scheme `oauth`. */
   signIn?: ConnectorSignIn;
+  /**
+   * Each person may sign in for themselves: a Connection of the type takes the credential mode
+   * `user` with the auth scheme `oauth` (CS-9a, DBX-P). A type without it is shared only.
+   */
+  personalSignIn?: true;
   /**
    * The authorization server a Connection of this type names in its settings, where it names
    * one. Present, the sign-in reads it instead of discovering one, and the auth scheme
@@ -1349,7 +1361,10 @@ function oauthSchemeIssues(
 
 export function findConnectorTypeIssues(
   registry: ConnectorTypeRegistry,
-  connection: Pick<ConnectionConfig, "connectorType" | "settings" | "authScheme" | "operations">
+  connection: Pick<
+    ConnectionConfig,
+    "connectorType" | "settings" | "authScheme" | "credentialMode" | "operations"
+  >
 ): AssetValidationIssue[] {
   const type = registry.get(connection.connectorType);
   if (!type) {
@@ -1375,6 +1390,16 @@ export function findConnectorTypeIssues(
   } else if (settings.success && type.oauthEndpoints) {
     issues.push(...oauthSchemeIssues(type.oauthEndpoints(settings.data), connection.authScheme));
   }
+  if (
+    connection.credentialMode === "user" &&
+    connection.authScheme === "oauth" &&
+    type.personalSignIn !== true
+  ) {
+    issues.push({
+      message: `personal_oauth_required: connector type '${type.type}' takes no personal sign-in`,
+      path: ["credentialMode"]
+    });
+  }
   if (type.privateResults) {
     // Its results reach one person's own chat and nothing else: no App, Workflow or client.
     connection.operations.forEach((operation, index) => {
@@ -1389,7 +1414,7 @@ export function findConnectorTypeIssues(
   if (settings.success && type.operationRefusal) {
     const accepted = settings.data;
     connection.operations.forEach((operation, index) => {
-      const message = type.operationRefusal?.(operation.name, accepted);
+      const message = type.operationRefusal?.(operation.name, accepted, connection.credentialMode);
       if (message !== undefined) issues.push({ message, path: ["operations", index, "name"] });
     });
   }

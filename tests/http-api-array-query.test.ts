@@ -45,6 +45,7 @@ async function setup(schema?: JsonObject) {
       revision: 1,
       settings: { baseUrl },
       authScheme: "none",
+      credentialMode: "shared",
       operations: [declared]
     },
     target: {

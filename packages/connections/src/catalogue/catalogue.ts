@@ -313,33 +313,38 @@ function checkPart(
       enabled: true
     };
   });
-  const probe = connectionConfigSchema.safeParse({
-    name: definition.name,
-    displayName: entry.id,
-    service: entry.service,
-    catalogue: { entry: entry.id, part, version: entry.version },
-    connectorType: type.type,
-    ownerPrincipalId: "system",
-    settings,
-    authScheme: resolved.authScheme,
-    operations,
-    enabled: true,
-    origin: "runtime"
-  });
-  if (!probe.success) {
-    refuse(
-      entry,
-      `its ${part} part: ${probe.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`
+  // Each mode the part allows, with the scopes the install derives from the operations.
+  const probed = settingsWithScopes(definition, settings, operations);
+  for (const credentialMode of definition.credentialModes) {
+    const probe = connectionConfigSchema.safeParse({
+      name: definition.name,
+      displayName: entry.id,
+      service: entry.service,
+      catalogue: { entry: entry.id, part, version: entry.version },
+      connectorType: type.type,
+      ownerPrincipalId: "system",
+      settings: probed,
+      authScheme: resolved.authScheme,
+      credentialMode,
+      operations,
+      enabled: true,
+      origin: "runtime"
+    });
+    if (!probe.success) {
+      refuse(
+        entry,
+        `its ${part} part: ${probe.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`
+      );
+    }
+    const issues = findConnectorTypeIssues(registry, probe.data).filter(
+      (issue) => !(issue.path?.[0] === "settings" && filled.has(String(issue.path[1] ?? "")))
     );
-  }
-  const issues = findConnectorTypeIssues(registry, probe.data).filter(
-    (issue) => !(issue.path?.[0] === "settings" && filled.has(String(issue.path[1] ?? "")))
-  );
-  if (issues.length > 0) {
-    refuse(
-      entry,
-      `its ${part} part: ${issues.map((issue) => `${(issue.path ?? []).join(".")}: ${issue.message}`).join("; ")}`
-    );
+    if (issues.length > 0) {
+      refuse(
+        entry,
+        `its ${part} part: ${issues.map((issue) => `${(issue.path ?? []).join(".")}: ${issue.message}`).join("; ")}`
+      );
+    }
   }
   const secretFields = resolved.fields.filter((field) => field.secret).length;
   if ((resolved.authScheme === "none") !== (secretFields === 0)) {

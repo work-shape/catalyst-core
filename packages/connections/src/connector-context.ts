@@ -438,6 +438,7 @@ export async function openConnectorContext(
       revision: connection.revision,
       settings: settings.data,
       authScheme: config.authScheme,
+      credentialMode: config.credentialMode,
       operations: config.operations
     },
     target,
