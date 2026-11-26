@@ -7,6 +7,13 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.52 — 2026-11-26
+
+### Added
+
+- A Connection operation that takes a conversation file (`conversationFileFields`) also takes a file of the conversation's execution workspace by its path, such as a deck or PDF the agent made. An attachment's fileId is tried first; a person must be allowed to open the root chat, a Workflow agent step reaches its own thread's workspace. The bytes never pass through the model, the input, an Operation Run or audit; the 25 MiB bound holds.
+- Fixed: two files saved side by side under one name into one workspace in one process, such as two subagents' downloads with `web_download` or a Connection operation, no longer take the same path, so the second no longer replaces the first.
+
 ## 0.8.0-rc.51 — 2026-11-26
 
 ### Added
