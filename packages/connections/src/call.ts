@@ -14,6 +14,8 @@ import {
   connectionCallFailure,
   connectionCallReasonOf,
   CONNECTION_INPUT_FILE_MAX_BYTES,
+  CONNECTION_OUTPUT_FILE_MAX_BYTES,
+  connectionOperationName,
   isAppError,
   operationDenialError,
   personContextHeaderOf,
@@ -23,6 +25,7 @@ import {
   type ConnectorContext,
   type ConnectorInputFile,
   type ConnectorOperationDescriptor,
+  type ConnectorOutputFiles,
   type ConnectorTypeDefinition,
   type JsonValue,
   type OperationLimits,
@@ -587,6 +590,56 @@ async function openInputFiles(
   return files;
 }
 
+/**
+ * Where an operation that `producesFiles` saves, for each attempt of the call: the execution
+ * workspace of the agent's conversation the call is made in. Only a release's static catalog
+ * marks an operation, and a call with nowhere to save is refused before anything outside is
+ * contacted. A file over the bound is refused before the port sees it, so nothing of it is kept.
+ * An attempt made again after a refused token saves over the paths the attempt before saved
+ * under the same names, so a retry leaves no second copy.
+ */
+function openOutputFiles(
+  deps: ConnectionOperationSourceDeps,
+  found: Callable,
+  target: ConnectionCallTarget,
+  context: ConnectionCallContext
+): (() => ConnectorOutputFiles) | undefined {
+  if (!found.type.catalog || found.descriptor.producesFiles !== true) return undefined;
+  const { origin, actor } = context;
+  const workspaceFiles = deps.workspaceFiles;
+  if (origin?.kind !== "agent" || actor === undefined || workspaceFiles === undefined) {
+    throw connectionCallError("output_file_unavailable");
+  }
+  const ref = {
+    conversationId: origin.conversationId,
+    operation: connectionOperationName(target.connectionName, target.operationName)
+  };
+  const saved: { name: string; path: string }[] = [];
+  return () => {
+    const savedNow = new Set<string>();
+    return {
+      maxBytes: CONNECTION_OUTPUT_FILE_MAX_BYTES,
+      async save(file) {
+        if (file.bytes.byteLength > CONNECTION_OUTPUT_FILE_MAX_BYTES) {
+          throw connectionCallError("output_file_too_large");
+        }
+        const earlier = saved.find(
+          (entry) => entry.name === file.name && !savedNow.has(entry.path)
+        );
+        const answer = await workspaceFiles.save(actor, ref, {
+          name: file.name,
+          ...(file.mediaType === undefined ? {} : { mediaType: file.mediaType }),
+          bytes: file.bytes,
+          ...(earlier ? { replaces: earlier.path } : {})
+        });
+        savedNow.add(answer.path);
+        if (!earlier) saved.push({ name: file.name, path: answer.path });
+        return { path: answer.path, byteSize: answer.byteSize };
+      }
+    };
+  };
+}
+
 /** The Connection and the operation of a call as the source resolved them. */
 export interface ConnectionCallTarget {
   connectionName: string;
@@ -968,6 +1021,7 @@ async function call(
       aborted.promise,
       deadline.signal
     );
+    const outputFiles = openOutputFiles(deps, found, target, context);
     const key = idempotencyKeyOf(found, target, context.idempotencyKey);
     named.keyed = key.idempotencyKey !== undefined;
     let result: JsonValue;
@@ -1026,6 +1080,7 @@ async function call(
       const executing = type.execute(target.operationName, jsonInput, {
         ...connectorContext,
         ...(inputFiles === undefined ? {} : { inputFiles }),
+        ...(outputFiles === undefined ? {} : { outputFiles: outputFiles() }),
         ...(context.runtime.pageAddress ? { pageAddress: context.runtime.pageAddress } : {}),
         ...(context.runtime.previousPageAddress
           ? { previousPageAddress: context.runtime.previousPageAddress }

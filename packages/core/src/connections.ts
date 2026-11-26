@@ -281,6 +281,48 @@ export interface ConnectorOperationDescriptor {
    * outside system wrote can never claim a person's file.
    */
   conversationFileFields?: string[];
+  /**
+   * The operation saves files into the calling conversation's execution workspace through
+   * `ConnectorContext.outputFiles`, such as a download. Only a release's static catalog is read
+   * for it. A call outside an agent's conversation is refused before the type runs.
+   */
+  producesFiles?: true;
+}
+
+/** The largest file one Connection call saves into a conversation's workspace (50 MiB). */
+export const CONNECTION_OUTPUT_FILE_MAX_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Where an operation that `producesFiles` puts bytes: a file of the calling conversation's
+ * execution workspace, as `web_download` makes one. The bytes never enter the result, a run or
+ * an audit row; the answer is the file's workspace path. A file over
+ * `CONNECTION_OUTPUT_FILE_MAX_BYTES` or over the workspace's room is refused
+ * (`output_file_too_large`), and nothing is kept.
+ */
+export interface ConnectorOutputFiles {
+  readonly maxBytes: number;
+  save(file: {
+    name: string;
+    mediaType?: string;
+    bytes: Uint8Array;
+  }): Promise<{ path: string; byteSize: number }>;
+}
+
+/**
+ * Saves a file a Connection call produced into a conversation's execution workspace, for the
+ * acting person. Bound by the instance's assembly; without it no operation produces files.
+ */
+export interface ConnectionWorkspaceFiles {
+  /**
+   * `operation` is the operation's full name, which the file's record names as its source.
+   * `replaces` is a path this call saved before, which a retried attempt saves over; without it
+   * the file takes a free path from its name and never replaces another file.
+   */
+  save(
+    actor: AuthenticatedIdentity,
+    ref: { conversationId: string; operation: string },
+    file: { name: string; mediaType?: string; bytes: Uint8Array; replaces?: string }
+  ): Promise<{ path: string; byteSize: number }>;
 }
 
 /** The largest conversation file one Connection call is handed (25 MiB). */
@@ -798,6 +840,8 @@ export interface ConnectorContext {
    * (`conversationFileFields`). Already checked against the caller and the size bound.
    */
   inputFiles?: Readonly<Record<string, ConnectorInputFile>>;
+  /** Set on a call of an operation that `producesFiles`, in an agent's conversation only. */
+  outputFiles?: ConnectorOutputFiles;
   /** Ends when the call is cancelled or its deadline passes. */
   signal: AbortSignal;
 }

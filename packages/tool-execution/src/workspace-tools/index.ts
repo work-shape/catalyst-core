@@ -30,6 +30,7 @@ export {
   isWorkspaceInspectionArtifact
 } from "./preview-images";
 export { WorkspaceCommandService } from "./service";
+export type { SaveWorkspaceFileInput, SavedWorkspaceFile } from "./saved-file";
 export { HTML_TO_PDF_TOOL_NAME } from "./html-to-pdf";
 export { WEB_DOWNLOAD_TOOL_NAME } from "./web-download";
 

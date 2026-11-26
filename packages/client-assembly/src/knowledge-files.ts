@@ -1,12 +1,16 @@
 import { requireConversationAccess, type ChatAttachmentService } from "@work-shape/catalyst-server";
+import type { WorkspaceCommandService } from "@work-shape/catalyst-tool-execution";
 import {
   asConversationId,
   asManagedFileId,
+  connectionCallError,
+  getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type ConnectionConversationFiles,
+  type ConnectionWorkspaceFiles,
   type KnowledgeFiles,
   type ObjectStorage,
   type PlatformStores
@@ -93,6 +97,36 @@ export function createConnectionConversationFiles(
         fileId: ref.fileId
       });
       return file && { byteSize: file.byteSize, read: file.read };
+    }
+  };
+}
+
+/**
+ * Where a Connection operation that `producesFiles` saves: the execution workspace of the
+ * conversation the agent's call is made in, through the store path `web_download` takes. A
+ * subagent's thread saves into its root's workspace. A person's call creates the workspace
+ * where there is none yet; a service principal's call uses only one that exists, such as a
+ * Workflow agent step's with `workspace: true`. The record names the operation as its source.
+ */
+export function createConnectionWorkspaceFiles(input: {
+  clientInstanceId: ClientInstanceId;
+  workspace: Pick<WorkspaceCommandService, "saveFile">;
+}): ConnectionWorkspaceFiles {
+  return {
+    async save(actor, ref, file) {
+      const saved = await input.workspace.saveFile({
+        clientInstanceId: input.clientInstanceId,
+        conversationId: asConversationId(ref.conversationId),
+        ...(isAuthenticatedServicePrincipal(actor) ? {} : { ownerUserId: getSubjectUserId(actor) }),
+        source: ref.operation,
+        name: file.name,
+        ...(file.mediaType === undefined ? {} : { mediaType: file.mediaType }),
+        bytes: file.bytes,
+        ...(file.replaces === undefined ? {} : { replaces: file.replaces })
+      });
+      if (saved.status === "too_large") throw connectionCallError("output_file_too_large");
+      if (saved.status === "unavailable") throw connectionCallError("output_file_unavailable");
+      return { path: saved.path, byteSize: saved.byteSize };
     }
   };
 }

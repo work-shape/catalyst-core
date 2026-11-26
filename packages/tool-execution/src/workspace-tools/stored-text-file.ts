@@ -109,8 +109,9 @@ export async function storeTextFile(
   deps: WorkspaceToolDependencies & {
     fileStore: NonNullable<WorkspaceToolDependencies["fileStore"]>;
   },
-  context: ToolExecutionContext,
+  context: Pick<ToolExecutionContext, "clientInstanceId">,
   input: {
+    /** What the file's record names as its source, or as what modified it. */
     toolName: string;
     workspace: ResolvedWorkspaceHandle;
     path: string;
