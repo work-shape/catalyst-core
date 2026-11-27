@@ -3,8 +3,6 @@ import { connectionCategory } from "../../shared/connection-facts";
 import type { BuildAsset, BuildAssetKind, BuildAssetRow } from "./build-asset-kind";
 import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
-import { knownConnectorTypeLabel } from "./connection-form";
-import { ConnectedPeopleBadge } from "./connection-people";
 import { ConnectionsListLayout } from "./connections-list-layout";
 import { hiddenFromConnectionList, markArt, serviceFaceOf } from "./my-connections-model";
 import { HEALTH_VIEWS, listedHealth } from "./connection-status";
@@ -20,6 +18,13 @@ function releaseConnectionTitle(asset: Pick<BuildAsset, "config" | "name">): str
   if (origin !== "release") return undefined;
   return typeof displayName === "string" && displayName !== "" ? displayName : asset.name;
 }
+
+/** The health a row names: what somebody has to act on. One that works says nothing. */
+const NEEDS_ATTENTION: ReadonlySet<string> = new Set([
+  "failed",
+  "not_configured",
+  "secret_unreadable"
+]);
 
 /**
  * An incomplete Connection: an MCP server or a REST API that accepts no tool yet, such as one a
@@ -73,6 +78,11 @@ export const connectionKind: BuildAssetKind = {
         : t("connections.onlyForDeleted")
     };
   },
+  // A Connection of the instance says whose account it uses, which says whom it is for.
+  rowOmitsPlace: (asset) => asset.scope === undefined || asset.scope.kind === "instance",
+  searchFrom: 8,
+  // "New connection" sets one up for the instance: it stands on the tab that manages them.
+  newOnTab: "manage",
   listAside: {
     title: "connections.othersOwn",
     description: "connections.othersOwnText",
@@ -104,50 +114,39 @@ export const connectionKind: BuildAssetKind = {
   // An incomplete Connection is removed from its row, as from its page.
   rowRemovable: listedIncomplete,
   rowRemoveLabel: "connections.incompleteRemove",
-  // A row says whose account the Connection uses, in words: one shared access, or each
-  // person's own, then with how many people connected theirs for who may see them. An enabled
-  // shared Connection shows its health in the words of its page; a list of an instance that
-  // names no health shows that it is on.
+  // A row says at most two things beside its name: whose account the Connection uses, in
+  // words, with how many people connected theirs for who may change it; and what needs
+  // attention, if anything does. A Connection that works says nothing more.
   badges: (asset, t) => {
-    const { connectorType, enabled, health, personalSignIn } = asset.attributes ?? {};
+    const { enabled, health, personalSignIn, connectedPeople } = asset.attributes ?? {};
     const personal = personalSignIn === true;
     const own = listedOwnServer(asset) !== undefined;
     const listed = enabled === false ? undefined : listedHealth(health, personal);
-    const manages = asset.allowed?.includes("write") ?? false;
-    // The kind of server is a word for who sets it up, not for who only works with it.
-    const type =
-      manages && typeof connectorType === "string"
-        ? knownConnectorTypeLabel(connectorType, t)
-        : undefined;
+    const people = typeof connectedPeople === "string" ? Number(connectedPeople) : undefined;
     return (
       <>
-        {type ? <Chip size="sm">{type}</Chip> : null}
         {own ? null : (
           <Chip size="sm">
             {t(personal ? "connections.accountPersonal" : "connections.accountShared")}
+            {personal && people !== undefined && Number.isFinite(people) ? (
+              <span data-connection-people={people}>
+                {" · "}
+                {people} {t("connections.peopleConnectedShort")}
+              </span>
+            ) : null}
           </Chip>
         )}
         {listedIncomplete(asset) ? (
           <Badge tone="warning" data-connection-incomplete="">
             {t("connections.incomplete")}
           </Badge>
-        ) : null}
-        {enabled === false ? (
+        ) : enabled === false ? (
           <Badge tone="neutral" dot>
             {t("connections.disabled")}
           </Badge>
-        ) : personal && !own ? (
-          // Each person connects their own account: nothing here is ready or missing.
-          manages ? (
-            <ConnectedPeopleBadge name={asset.name} />
-          ) : null
-        ) : listedIncomplete(asset) ? null : listed && listed !== "personal" ? (
+        ) : listed && NEEDS_ATTENTION.has(listed) ? (
           <Badge tone={HEALTH_VIEWS[listed].tone} dot data-connection-list-health={listed}>
             {t(HEALTH_VIEWS[listed].label)}
-          </Badge>
-        ) : typeof enabled === "boolean" && !own ? (
-          <Badge tone="success" dot>
-            {t("connections.enabled")}
           </Badge>
         ) : null}
       </>

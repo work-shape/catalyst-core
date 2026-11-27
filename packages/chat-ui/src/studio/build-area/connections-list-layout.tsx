@@ -75,7 +75,7 @@ function InstanceConnections({
         </TabsTrigger>
       </TabsList>
       <TabsContent value="mine" className="min-w-0">
-        <MyConnectionsSection />
+        <MyConnectionsSection untitled />
       </TabsContent>
       <TabsContent value="manage" className="min-w-0">
         <Section

@@ -384,6 +384,13 @@ describe("pasted tools of a REST API (ACCEPT-2e)", () => {
       [...page.querySelectorAll("button")].find(
         (found) => found.textContent?.trim() === "New connection"
       );
+    // "New connection" stands on the tab that manages the instance's Connections.
+    const manage = () => page.querySelector<HTMLElement>('[data-connections-tab="manage"]');
+    await vi.waitFor(() => expect(manage()).not.toBeNull(), WAIT);
+    await act(async () => {
+      manage()?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      manage()?.click();
+    });
     await vi.waitFor(() => expect(newConnection()).toBeDefined(), WAIT);
     await act(async () => newConnection()?.click());
     await act(async () =>

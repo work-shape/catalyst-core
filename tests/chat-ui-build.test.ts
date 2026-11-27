@@ -363,7 +363,8 @@ describe("Studio frame", () => {
 
     expect(list).toContain(">CRM<");
     expect(list).toContain('href="/build/connections/crm"');
-    expect(list).toContain(">New connection<");
+    // "New connection" stands on the tab that manages them, not on the reader's own.
+    expect(list).not.toContain(">New connection<");
     // A kind that only lists has no page: its rows are no links and an asset's address shows the list.
     const listedOnly = [agentKind, skillKind, listedConnections];
     expect(

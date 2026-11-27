@@ -153,7 +153,7 @@ export function OwnServerCard({
   browser?: SignInBrowser;
 }) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const invalidate = useInvalidatePersonalConnections({ apiBaseUrl, authScope, client });
   const [changing, setChanging] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -181,6 +181,9 @@ export function OwnServerCard({
   );
   const connect = view === "off" ? undefined : ownActions(row).connect;
   const tools = row.ownServer.tools;
+  // Before the person connected, the card is its name, what it is and Connect: its address and
+  // its tools say something only once there is a sign-in behind them.
+  const before = view !== "off" && row.state === "not_connected";
 
   /** Ends the person's sign-in, then deletes the server: one confirmation for both. */
   const remove = async () => {
@@ -225,21 +228,27 @@ export function OwnServerCard({
               </span>
             )}
           </span>
-          <span className="text-caption text-muted-foreground wrap-anywhere">
-            {[
-              row.ownServer.host,
-              tools === 1
-                ? t("ownServers.toolCountOne")
-                : t("ownServers.toolCount", { count: tools })
-            ]
-              .filter((part) => part !== "")
-              .join(" · ")}
-          </span>
+          {before ? (
+            <span className="text-caption text-muted-foreground" data-own-server-before="">
+              {entry ? offerText(entry.description, locale) : t("myConnections.ownServerLine")}
+            </span>
+          ) : (
+            <span className="text-caption text-muted-foreground wrap-anywhere">
+              {[
+                row.ownServer.host,
+                tools === 1
+                  ? t("ownServers.toolCountOne")
+                  : t("ownServers.toolCount", { count: tools })
+              ]
+                .filter((part) => part !== "")
+                .join(" · ")}
+            </span>
+          )}
           {view === "off" ? (
             <span className="text-caption text-muted-foreground">{t("ownServers.offText")}</span>
-          ) : tools === 0 ? (
+          ) : tools === 0 && !before ? (
             <span className="text-caption text-muted-foreground" data-own-server-no-tools-yet="">
-              {t(view === "connected" ? "myConnections.noToolsYet" : "myConnections.connectFirst")}
+              {t("myConnections.noToolsYet")}
             </span>
           ) : null}
         </div>
@@ -272,7 +281,7 @@ export function OwnServerCard({
               )}
             </Button>
           ) : null}
-          {view === "off" ? null : (
+          {view === "off" || before ? null : (
             <Button
               size="sm"
               variant="outline"
@@ -284,7 +293,7 @@ export function OwnServerCard({
           )}
           <Button
             size="sm"
-            variant="outline"
+            variant={before ? "ghost" : "outline"}
             data-own-server-remove=""
             onClick={() => setAsking(true)}
           >

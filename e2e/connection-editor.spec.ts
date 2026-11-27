@@ -71,6 +71,8 @@ async function openDialog(page: Page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/build/connections");
   const main = page.getByRole("region", { name: "Studio" });
+  // "New connection" stands on the tab that manages the instance's Connections.
+  await main.locator('[data-connections-tab="manage"]').click();
   await main.getByRole("button", { name: "New connection" }).first().click();
   await expect(page.getByRole("dialog", { name: "New connection" })).toBeVisible();
   return { main, dialog: page.getByRole("dialog").first() };

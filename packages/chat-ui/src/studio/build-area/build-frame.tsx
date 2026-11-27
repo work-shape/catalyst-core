@@ -762,7 +762,8 @@ function BuildList({
   // agent adds no rows of its own (`ListLead`).
   const offerStands =
     entry.emptyBuild && startWithAgent && !list.error && !filtered && list.rows?.length === 0;
-  const headNew = offerStands ? undefined : newButton;
+  const onNewTab = editable?.newOnTab === undefined || view.tab === editable.newOnTab;
+  const headNew = offerStands || !onNewTab ? undefined : newButton;
   // A kind's own list page (`ListLayout`) reads every asset, whatever the search says:
   // unsearched, this is the list's own read.
   const ListLayout = editable?.ListLayout;
@@ -815,7 +816,7 @@ function BuildList({
           <>
             {place ? (
               <ScopeChip size="sm" scope={place.scope} name={place.name} />
-            ) : (
+            ) : entry.rowOmitsPlace?.(asset) ? null : (
               <AssetPlaceLine owner={asset.scope} />
             )}
             {entry.badges?.(asset, t)}
@@ -860,6 +861,14 @@ function BuildList({
     const rows = (list.rows ?? (listError && leadRows?.length ? [] : undefined))?.filter(
       (asset) => !inAside(asset) && !hidden(asset)
     );
+    // A short list is read at a glance: its search comes with enough rows to need one, and
+    // stays while it narrows them.
+    const searches =
+      entry.searchFrom === undefined ||
+      filtered ||
+      view.text !== "" ||
+      list.hasMore === true ||
+      (rows?.length ?? 0) + (leadRows?.length ?? 0) >= entry.searchFrom;
     return (
       <>
         {listError}
@@ -882,14 +891,16 @@ function BuildList({
           <div className="grid min-w-0 gap-3">
             <FilterBar
               search={
-                <Input
-                  type="search"
-                  leadingIcon={<Search />}
-                  aria-label={t(entry.searchLabel)}
-                  placeholder={t(entry.searchLabel)}
-                  value={view.text}
-                  onChange={(event) => onViewChange({ ...view, text: event.currentTarget.value })}
-                />
+                !searches ? undefined : (
+                  <Input
+                    type="search"
+                    leadingIcon={<Search />}
+                    aria-label={t(entry.searchLabel)}
+                    placeholder={t(entry.searchLabel)}
+                    value={view.text}
+                    onChange={(event) => onViewChange({ ...view, text: event.currentTarget.value })}
+                  />
+                )
               }
               filters={
                 <>
