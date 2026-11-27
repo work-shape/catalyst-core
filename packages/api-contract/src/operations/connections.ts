@@ -632,6 +632,18 @@ export const personalConnectionsSchema = z.object({
         .object({ entry: z.string(), part: z.enum(CATALOGUE_PARTS), version: z.number().int() })
         .optional(),
       /**
+       * Of a Connection installed from a catalogue entry: the service's name and its mark, so
+       * the person sees whose system they connect without the right to read the catalogue.
+       */
+      serviceTitle: localizedTextSchema.optional(),
+      mark: z.object({ color: z.string().optional(), logo: z.string().optional() }).optional(),
+      /**
+       * The agents that carry one of the Connection's tools, by the name people read, as far
+       * as the caller may read them. Absent on a person's own server, whose tools every agent
+       * that allows own servers is offered.
+       */
+      usedBy: z.array(z.string()).optional(),
+      /**
        * Only on an MCP server the caller added for themselves (PMCP), which is listed to its
        * owner alone, also while it is switched off: its host, whether it is on, and how many
        * tools its owner accepted.

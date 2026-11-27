@@ -41,7 +41,10 @@ import {
   PARAMETERS_MAX,
   RAW_MAX_CHARS,
   resolveBuildRights,
+  hiddenFromConnectionList,
+  myConnectionCards,
   serviceCards,
+  serviceFaceOf,
   TEXT_MAX_CHARS,
   VALUES_MAX,
   type BuildAsset,
@@ -56,8 +59,8 @@ import {
   type ConnectionSource,
   type ConnectionTestRun,
   type ConnectorTypeOffer,
-  type OwnServerEntry,
-  type ServiceCard
+  type MyConnectionCard,
+  type OwnServerEntry
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { platformContext } from "./chat-ui-build-fixtures";
@@ -1167,12 +1170,12 @@ describe("The operation details (CONN-PAGE 1)", () => {
   });
 });
 
-describe("The services on the Connections page (CAT-PAGE)", () => {
-  // "Dienste" on the Connections page (CAT-PAGE): one card per catalogue entry the reader can act
-  // on, with what is true of it here. These tests fail where a card set up here would offer a
-  // second install, where a reader who may make no Connection would be offered one, where an
-  // entry the operator has not named could be started, or where a person's own server would not
-  // say that they are connected.
+describe("The Connections page (CONN-IA)", () => {
+  // "Meine Verbindungen" holds what one person connects with their own account; the manage tab
+  // holds the instance's Connections and the services to install. These tests fail where a
+  // card would say the reader is connected when only the instance has the service, where a
+  // person would be offered a service twice, where a reader who manages nothing would be
+  // shown another person's server, or where an entry the operator has not named could start.
 
   const entry = (id: string, offered = true): CatalogueEntryOffer => ({
     id,
@@ -1213,193 +1216,122 @@ describe("The services on the Connections page (CAT-PAGE)", () => {
     signIn: "oauth",
     tools: []
   };
+  const ownNotes = {
+    name: "notes-a1b2c3",
+    title: "Notes",
+    service: "notes",
+    state: "not_connected" as const,
+    ownServer: { host: "notes.example.com", enabled: true, tools: 0 }
+  };
+  const mailbox = { name: "mail", title: "My mailbox", state: "connected" as const };
 
-  const statuses = (cards: readonly ServiceCard[]) =>
-    cards.map((card) => [card.id, card.status, card.action?.kind]);
-
-  describe("the services on the Connections page", () => {
-    it("says of each entry whether it is set up here, connected by the reader, or not yet", () => {
-      const cards = serviceCards({
-        entries: [entry("ask", false), entry("files"), entry("mail"), entry("crm")],
-        ownEntries: [],
-        connections: [
-          { name: "files-docs", attributes: { catalogueEntry: "files" } },
-          { name: "mail", attributes: { catalogueEntry: "mail" } },
-          { name: "own-mcp", attributes: {} }
-        ],
-        mine: [
-          // The reader's own account on the personal Connection set up from the mail entry.
-          { name: "mail", title: "Mail", state: "connected", catalogue: catalogueOf("mail") }
-        ],
-        mayCreate: true
-      });
-      expect(statuses(cards)).toEqual([
-        ["files", "set-up", "open"],
-        ["mail", "connected", "open"],
-        ["crm", "start", "install"],
-        // An entry the operator has not named comes last and opens nothing.
-        ["ask", "not-offered", undefined]
-      ]);
-      expect(cards.find((card) => card.id === "files")?.action).toEqual({
-        kind: "open",
-        name: "files-docs"
-      });
-    });
-
-    it("offers no install to a reader who may make no Connection, and no sign-in counts that is not", () => {
-      const cards = serviceCards({
-        entries: [entry("files"), entry("mail")],
-        ownEntries: [],
-        connections: [{ name: "mail", attributes: { catalogueEntry: "mail" } }],
-        mine: [
-          { name: "mail", title: "Mail", state: "needs_reconnect", catalogue: catalogueOf("mail") }
-        ],
-        mayCreate: false
-      });
-      expect(statuses(cards)).toEqual([["mail", "set-up", "open"]]);
-    });
-
-    it("offers a person's own server to add, and says when they added and connected it", () => {
-      const fresh = serviceCards({
-        entries: [],
-        ownEntries: [notes],
-        connections: [],
-        mine: [],
-        mayCreate: false
-      });
-      expect(statuses(fresh)).toEqual([["notes", "start", "add-own"]]);
-      expect(fresh[0]?.parts).toEqual(["own"]);
-
-      const row = {
-        name: "notes-a1b2c3",
-        title: "Notes",
-        service: "notes",
-        state: "connected" as const,
-        ownServer: { host: "notes.example.com", enabled: true, tools: 2 }
-      };
-      expect(
-        statuses(
-          serviceCards({
-            entries: [],
-            ownEntries: [notes],
-            connections: [],
-            mine: [row],
-            mayCreate: false
-          })
-        )
-      ).toEqual([["notes", "connected", "own-servers"]]);
-      expect(
-        statuses(
-          serviceCards({
-            entries: [],
-            ownEntries: [notes],
-            connections: [],
-            mine: [{ ...row, state: "needs_reconnect" }],
-            mayCreate: false
-          })
-        )
-      ).toEqual([["notes", "set-up", "own-servers"]]);
-      // A server of the same service moved to another host is no longer that entry.
-      expect(
-        statuses(
-          serviceCards({
-            entries: [],
-            ownEntries: [notes],
-            connections: [],
-            mine: [{ ...row, ownServer: { ...row.ownServer, host: "elsewhere.example.com" } }],
-            mayCreate: false
-          })
-        )
-      ).toEqual([["notes", "start", "add-own"]]);
-    });
-
-    it("counts only the reader's own servers, never another person's an admin's list shows", () => {
-      const others = [
-        {
-          name: "notes-carol",
-          attributes: { ownServer: "other", ownerLabel: "Carol", catalogueEntry: "notes" }
-        }
-      ];
-      expect(
-        statuses(
-          serviceCards({
-            entries: [entry("notes")],
-            ownEntries: [notes],
-            connections: others,
-            mine: [],
-            mayCreate: true
-          })
-        )
-      ).toEqual([["notes", "start", "install"]]);
-      expect(
-        statuses(
-          serviceCards({
-            entries: [],
-            ownEntries: [notes],
-            connections: others,
-            mine: [],
-            mayCreate: true
-          })
-        )
-      ).toEqual([["notes", "start", "add-own"]]);
-    });
-
-    it("shows one card for an entry that is both an admin's and a person's own, at its furthest", () => {
-      const cards = serviceCards({
-        entries: [entry("notes")],
-        ownEntries: [notes],
-        connections: [],
-        mine: [
-          {
-            name: "notes-a1b2c3",
-            title: "Notes",
-            service: "notes",
-            state: "connected",
-            ownServer: { host: "notes.example.com", enabled: true, tools: 2 }
-          }
-        ],
-        mayCreate: true
-      });
-      expect(statuses(cards)).toEqual([["notes", "connected", "own-servers"]]);
-      // The admin's words and parts stay.
-      expect(cards[0]?.parts).toEqual(["tools"]);
-    });
-
-    it("draws a button only where the click starts something, and links a set-up one", () => {
-      const cards = serviceCards({
-        entries: [entry("ask", false), entry("files"), entry("crm")],
-        ownEntries: [notes],
-        connections: [{ name: "files-docs", attributes: { catalogueEntry: "files" } }],
-        mine: [],
-        mayCreate: true
-      });
-      const markup = renderToStaticMarkup(
-        createElement(TranslationProvider, {
-          locale: "de",
-          children: createElement(CatalogueServices, {
-            cards,
-            hrefOf: (action) =>
-              action.kind === "open" ? `/build/connections/${action.name}` : undefined,
-            onAct() {}
-          })
-        })
-      );
-      expect(markup).toContain('href="/build/connections/files-docs"');
-      const card = (id: string) => {
-        const start = markup.indexOf(`data-catalogue-entry="${id}"`);
-        return markup.slice(start, markup.indexOf("</li>", start));
-      };
-      expect(card("crm")).toContain("data-catalogue-start");
-      expect(card("notes")).toContain("data-catalogue-start");
-      expect(card("files")).not.toContain("<button");
-      expect(card("ask")).not.toContain("<button");
-      expect(card("ask")).not.toContain("<a");
-    });
+  it("lists a person's accounts, then their own servers, then the services still to connect", () => {
+    const shown = (cards: readonly MyConnectionCard[]) =>
+      cards.map((card) => [card.kind, card.kind === "offer" ? card.entry.id : card.row.name]);
+    expect(shown(myConnectionCards({ connections: [mailbox], entries: [notes] }))).toEqual([
+      ["account", "mail"],
+      ["offer", "notes"]
+    ]);
+    // A service the person already added is their server's card, and is offered no second time.
+    expect(
+      shown(myConnectionCards({ connections: [ownNotes, mailbox], entries: [notes] }))
+    ).toEqual([
+      ["account", "mail"],
+      ["own", "notes-a1b2c3"]
+    ]);
+    // A server of the same service moved to another host is no longer that entry.
+    const moved = {
+      ...ownNotes,
+      ownServer: { ...ownNotes.ownServer, host: "elsewhere.example.com" }
+    };
+    expect(shown(myConnectionCards({ connections: [moved], entries: [notes] }))).toEqual([
+      ["own", "notes-a1b2c3"],
+      ["offer", "notes"]
+    ]);
   });
 
-  function catalogueOf(id: string) {
-    return { entry: id, part: "tools" as const, version: 1 };
-  }
+  it("keeps out of the instance's list what is the reader's own card or not theirs to act on", () => {
+    const own = { attributes: { ownServer: "reader", personalSignIn: true } };
+    const others = {
+      attributes: { ownServer: "other", ownerLabel: "Carol", personalSignIn: true }
+    };
+    const personal = { attributes: { personalSignIn: true } };
+    const shared = { attributes: { connectorType: "mcp" } };
+    const hidden = (mayManage: boolean) =>
+      [own, others, personal, shared].map((row) => hiddenFromConnectionList(row, mayManage));
+    // Who manages Connections sees each person's Connection and other people's servers.
+    expect(hidden(true)).toEqual([true, false, false, false]);
+    // Everybody else reads only the shared ones there.
+    expect(hidden(false)).toEqual([true, true, true, false]);
+  });
+
+  it("says of an entry only whether the instance has it, never that the reader is connected", () => {
+    const cards = serviceCards({
+      entries: [entry("ask", false), entry("files"), entry("crm"), entry("notes")],
+      connections: [
+        { name: "files-docs", attributes: { catalogueEntry: "files" } },
+        // Another person's own server is never the instance's install of an entry.
+        { name: "notes-carol", attributes: { ownServer: "other", catalogueEntry: "notes" } }
+      ]
+    });
+    expect(cards.map((card) => [card.id, card.status, card.action?.kind])).toEqual([
+      ["files", "installed", "open"],
+      ["crm", "start", "install"],
+      ["notes", "start", "install"],
+      // An entry the operator has not named comes last and opens nothing.
+      ["ask", "not-offered", undefined]
+    ]);
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(CatalogueServices, {
+          cards,
+          hrefOf: (action) =>
+            action.kind === "open" ? `/build/connections/${action.name}` : undefined,
+          onAct() {}
+        })
+      })
+    );
+    const card = (id: string) => {
+      const start = markup.indexOf(`data-catalogue-entry="${id}"`);
+      return markup.slice(start, markup.indexOf("</li>", start));
+    };
+    expect(card("files")).toContain('href="/build/connections/files-docs"');
+    expect(card("files")).toContain("Bereits eingerichtet");
+    expect(card("files")).not.toContain("<button");
+    expect(card("crm")).toContain("data-catalogue-start");
+    expect(card("ask")).not.toContain("<button");
+    expect(card("ask")).not.toContain("<a");
+  });
+
+  it("says in a row whose account a Connection uses, and names the service it was installed for", () => {
+    const kind = required(buildAssetKinds.find((candidate) => candidate.kind === "connection"));
+    const { t } = createTranslationContext("de");
+    const row = (attributes: Record<string, string | boolean>): BuildAssetRow => ({
+      id: "asset_files",
+      kind: "connection",
+      name: "files-docs",
+      title: "Team files",
+      attributes: { connectorType: "files_type", enabled: true, ...attributes },
+      scope: { kind: "instance" },
+      revision: 1,
+      // A reader who may not change it is told no number of people.
+      allowed: ["read"],
+      updatedAt: "2026-10-30T10:00:00.000Z"
+    });
+    const badges = (attributes: Record<string, string | boolean>) =>
+      renderToStaticMarkup(createElement("div", null, kind.badges?.(row(attributes), t)));
+    expect(badges({ health: "ok" })).toContain("Gemeinsamer Zugang");
+    // A type id the interface has no words for is not shown.
+    expect(badges({ health: "ok" })).not.toContain("files_type");
+    const personal = badges({ health: "needs_configuration", personalSignIn: true });
+    expect(personal).toContain("Jede Person mit eigenem Konto");
+    expect(personal).not.toContain("data-connection-list-health");
+    expect(
+      serviceFaceOf(row({ serviceTitle: "Files", serviceColor: "#2f6f4f" }).attributes)
+    ).toEqual({ title: "Files", mark: { color: "#2f6f4f" } });
+    expect(serviceFaceOf(row({}).attributes)).toBeUndefined();
+  });
 });
 
 describe("What the form of a Connection writes", () => {

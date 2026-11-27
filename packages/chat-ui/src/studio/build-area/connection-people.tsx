@@ -26,9 +26,10 @@ import {
   usePersonalConnectionsQuery
 } from "../../shared/api/personal-connections";
 import { formatDate, formatDateTime } from "../../shared/locale-format";
-import { useSettingsPage } from "../../shared/settings-page-context";
+import { useOptionalSettingsPage, useSettingsPage } from "../../shared/settings-page-context";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import {
+  connectedPeopleCount,
   mayRevoke,
   ownActions,
   ownSignInOf,
@@ -299,17 +300,49 @@ export function PersonalSignInSection({ name, title }: { name: string; title: st
  * the account the provider named, the state, since when and the last day it was used, and
  * Revoke. Revoking deletes the stored access; the grant at the provider stays.
  */
-export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayWrite: boolean }) {
+/** Who connected their own account to one personal Connection, for who may change it. */
+function useConnectionPeople(name: string) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const facts = usePersonalSignInFacts();
   const key = ["connection-people", apiBaseUrl, authScope, name];
   const people = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => client.connections.people({ params: { name }, signal }),
     retry: false
   });
+  return { key, people };
+}
+
+/**
+ * "3 people connected" on a personal Connection's row in the list, for who may change it. It
+ * shows nothing until the people are read, and nothing where the read is refused.
+ */
+export function ConnectedPeopleBadge({ name }: { name: string }) {
+  // Studio shown alone, as in a rendering of its frame, reads no instance.
+  return useOptionalSettingsPage() ? <InstancePeopleBadge name={name} /> : null;
+}
+
+function InstancePeopleBadge({ name }: { name: string }) {
+  const { t } = useTranslation();
+  const { people } = useConnectionPeople(name);
+  if (people.data === undefined) return null;
+  const count = connectedPeopleCount(people.data.people);
+  return (
+    <Badge tone={count === 0 ? "neutral" : "success"} dot data-connection-people={count}>
+      {count === 0
+        ? t("connections.peopleConnectedNone")
+        : count === 1
+          ? t("connections.peopleConnectedOne")
+          : t("connections.peopleConnected", { count })}
+    </Badge>
+  );
+}
+
+export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayWrite: boolean }) {
+  const { client } = useSettingsPage();
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const facts = usePersonalSignInFacts();
+  const { key, people } = useConnectionPeople(name);
   const [asking, setAsking] = useState<{ userId: string; name: string }>();
   const [revoking, setRevoking] = useState(false);
   const [failed, setFailed] = useState(false);

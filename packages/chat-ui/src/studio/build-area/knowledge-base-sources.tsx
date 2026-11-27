@@ -40,7 +40,9 @@ import {
   List,
   Picker,
   PickerButton,
+  ServiceMark,
   Spinner,
+  TextLink,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
@@ -83,6 +85,7 @@ import { useOptionalBuildNavigation } from "../../shared/build-route";
 import { requestBuildCreateDialog } from "./build-create-request";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 import { offerText } from "./connection-typed-model";
+import { markArt } from "./my-connections-model";
 import type { PagedItems } from "./paged-items";
 import { DataFlowRow, type DataFlowPage } from "./data-flows";
 import type { DataFlowRef } from "./data-flows-model";
@@ -432,8 +435,15 @@ function SourceItem({
   const titleId = useId();
   const named = browses && folders.length > 0;
   const searchable = status === undefined ? undefined : sourceItemCounts(status.items).searchable;
+  // The service the folders come from, where the Connection was installed for one: its mark
+  // and name lead the row, and the Connection stands under it.
+  const service = web ? undefined : choice?.service;
+  const navigation = useOptionalBuildNavigation();
+  const connectionPage =
+    !web && choice?.opens === true && navigation
+      ? { kindPath: CONNECTIONS_BUILD_PATH, name: entry.connection }
+      : undefined;
   const facts = [
-    ...(named ? [t("knowledgeSources.rowFrom", { connection: connectionTitle })] : []),
     ...(searchable === undefined
       ? []
       : [
@@ -443,7 +453,9 @@ function SourceItem({
                 count: new Intl.NumberFormat(locale).format(searchable)
               })
         ]),
-    ...(released ? [t("knowledgeSources.rowOriginals", { connection: connectionTitle })] : [])
+    ...(released
+      ? [t("knowledgeSources.rowOriginals", { connection: service?.title ?? connectionTitle })]
+      : [])
   ].join(" · ");
   const addressField = (key: "pages" | "prefixes" | "sitemaps") => (
     <Field label={t(`knowledgeSources.${key}`)} hint={t(`knowledgeSources.${key}Hint`)} optional>
@@ -523,19 +535,22 @@ function SourceItem({
     >
       <Disclosure open={unfolded} onOpenChange={setOpen}>
         <div className="flex min-w-0 items-start gap-3">
-          <IconTile>{web ? <Globe aria-hidden="true" /> : <Folder aria-hidden="true" />}</IconTile>
-          <div className="grid min-w-0 flex-1 gap-0.5">
+          {service ? (
+            <ServiceMark
+              name={service.title}
+              size="lg"
+              showName={false}
+              {...markArt(service.mark)}
+            />
+          ) : (
+            <IconTile>
+              {web ? <Globe aria-hidden="true" /> : <Folder aria-hidden="true" />}
+            </IconTile>
+          )}
+          <div className="grid min-w-0 flex-1 gap-0.5" data-knowledge-source-origin="">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span id={titleId} className="min-w-0 text-body font-medium wrap-anywhere">
-                {named
-                  ? folders.map((folder, index) => (
-                      <span key={folder}>
-                        {index === 0 ? null : ", "}
-                        <FolderName source={source} connection={entry.connection} folder={folder} />
-                      </span>
-                    ))
-                  : connectionTitle}
-                {named ? <KnowledgeSourceExcludedSuffix exclude={entry.exclude} /> : null}
+                {service?.title ?? connectionTitle}
               </span>
               {view === undefined || view.state === "current" || runs ? null : (
                 <Badge tone={view.tone} dot>
@@ -550,6 +565,57 @@ function SourceItem({
                 </Badge>
               ) : null}
             </div>
+            {/* The Connection the folders are read through: named under a service, and a link
+                to its page for who may open it. */}
+            {service || connectionPage ? (
+              <span
+                className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-caption text-muted-foreground"
+                data-knowledge-source-connection={entry.connection}
+              >
+                <Plug aria-hidden="true" className="size-3.5 shrink-0" />
+                {connectionPage && navigation ? (
+                  <TextLink
+                    className="min-w-0 wrap-anywhere"
+                    href={navigation.href(connectionPage)}
+                    onClick={(event) => {
+                      if (!opensHere(event)) return;
+                      event.preventDefault();
+                      navigation.open(connectionPage);
+                    }}
+                  >
+                    {service
+                      ? t("knowledgeSources.viaConnection", { connection: connectionTitle })
+                      : t("knowledgeSources.openConnection")}
+                  </TextLink>
+                ) : (
+                  <span className="min-w-0 wrap-anywhere">
+                    {t("knowledgeSources.viaConnection", { connection: connectionTitle })}
+                  </span>
+                )}
+              </span>
+            ) : null}
+            {named ? (
+              <ul
+                className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-caption text-foreground"
+                aria-label={t("knowledgeSources.chosenFolders")}
+                data-knowledge-source-paths=""
+              >
+                {folders.map((folder, index) => (
+                  <li key={folder} className="flex min-w-0 items-center gap-1">
+                    <Folder
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 wrap-anywhere">
+                      <FolderName source={source} connection={entry.connection} folder={folder} />
+                      {index === folders.length - 1 ? (
+                        <KnowledgeSourceExcludedSuffix exclude={entry.exclude} />
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {facts === "" ? null : (
               <span className="text-caption text-muted-foreground">{facts}</span>
             )}

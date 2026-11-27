@@ -412,7 +412,8 @@ describe("Studio frame", () => {
     const others = list.slice(othersAt);
 
     expect(yours).toContain(">CRM<");
-    expect(yours).toContain(">My notes<");
+    // The reader's own server is a card under "My connections", not a row of this list.
+    expect(list).not.toContain(">My notes<");
     expect(yours).not.toContain("Carol");
     expect(others).toContain(">Notes of Carol<");
     expect(others).toContain(">Only for Carol<");

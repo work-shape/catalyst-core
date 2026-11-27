@@ -607,6 +607,52 @@ describe("the Connection routes", () => {
     expect(await toolsFor(t.lena.id)).toEqual({ connections: [] });
   });
 
+  it("tell a person of their own connection the service it is for and the agents that use it", async () => {
+    const t = await fixture();
+    await t.seed("mailbox", {
+      connectorType: "mcp",
+      credentialMode: "user",
+      authScheme: "oauth",
+      catalogue: { entry: "mail", part: "tools", version: 1 }
+    });
+    await t.seed("shared");
+    const management = createConnectionManagement({
+      ...t.sourceDeps,
+      catalogue: {
+        entries: [
+          {
+            id: "mail",
+            version: 1,
+            service: "mail",
+            title: { en: "Mail", de: "Post" },
+            description: "Reads mail.",
+            category: "mail",
+            examplePrompts: [],
+            mark: { color: "#2f6f4f" },
+            offered: true,
+            parts: []
+          }
+        ]
+      }
+    });
+    const mine = await management.myConnections(t.kai.id, () => true, false, [
+      { title: "Inbox helper", toolNames: ["connection.mailbox.echo", "connection.shared.echo"] },
+      { title: "Other", toolNames: ["connection.shared.echo"] }
+    ]);
+    // Only what each person connects themselves is listed, never a shared Connection.
+    expect(mine.connections).toEqual([
+      {
+        name: "mailbox",
+        title: "Connection mailbox",
+        catalogue: { entry: "mail", part: "tools", version: 1 },
+        serviceTitle: { en: "Mail", de: "Post" },
+        mark: { color: "#2f6f4f" },
+        usedBy: ["Inbox helper"],
+        state: "not_connected"
+      }
+    ]);
+  });
+
   it("offer the Connector types with a form to whoever may make a Connection", async () => {
     const t = await fixture();
     const crm = await t.seed("crm");

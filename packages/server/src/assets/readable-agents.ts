@@ -15,10 +15,13 @@ export interface ReadableAgent {
 /**
  * The agents of the instance the caller may read, each with the names its definition lists: what
  * a "used by" may name. An agent the caller may not read is left out, its name included.
+ * The agents a list of the caller's own connections names may also be ones they only use.
  */
 export async function readableAgents(
   options: Pick<ChatServerOptions, "clientInstanceId" | "configAssets">,
-  access: ActorAccess
+  access: ActorAccess,
+  /** Also the agents the caller may only use: a person knows by name whom they chat with. */
+  orUsable = false
 ): Promise<ReadableAgent[]> {
   const kind = options.configAssets.kinds.get(AGENT_ASSET_KIND);
   if (!kind) return [];
@@ -28,7 +31,9 @@ export async function readableAgents(
   });
   return agents.flatMap((agent) => {
     const resource = accessResource(agent.kind, agent.name, agent.scope, agent.id);
-    if (!access.authorize(kind.actions.read, resource).allowed) return [];
+    const rights = orUsable ? [kind.actions.read, kind.actions.use] : [kind.actions.read];
+    if (!rights.some((right) => right !== undefined && access.authorize(right, resource).allowed))
+      return [];
     let title = agent.name;
     try {
       title = kind.summarize(agent.config).title;

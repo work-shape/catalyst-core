@@ -19,6 +19,7 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
 import type { DataFlows } from "./data-flows-model";
+import { serviceFaceOf, type ServiceFace } from "./my-connections-model";
 import { useOwnedChoices, type OwnedChoicesRead } from "./owned-choices";
 import type { MoreRead, PagedItems } from "./paged-items";
 import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
@@ -197,6 +198,10 @@ export interface KnowledgeChoice {
   sourceFull?: string;
   /** For a Connection: the shortest `changes` poll its type allows, in minutes. */
   sourceMinChanges?: number;
+  /** For a Connection: the service it was installed for, by name and mark, where it has one. */
+  service?: ServiceFace;
+  /** For a Connection: the reader may open its page. */
+  opens?: true;
 }
 
 /** One folder of a source, as a person chooses it. */
@@ -885,12 +890,17 @@ function toSourceChoice(asset: {
   title: string;
   description?: string;
   attributes?: Record<string, unknown>;
+  allowed?: readonly string[];
 }): KnowledgeChoice {
   const connectorType = asset.attributes?.connectorType;
   const sourceFull = asset.attributes?.sourceFull;
   const sourceMinChanges = asset.attributes?.sourceMinChanges;
+  const service = serviceFaceOf(asset.attributes);
   return {
     ...toKnowledgeChoice(asset),
+    ...(service === undefined ? {} : { service }),
+    // A use holder is listed the Connection and may not read its page.
+    ...(asset.allowed?.includes("read") === true ? { opens: true as const } : {}),
     ...(typeof connectorType === "string" ? { connectorType } : {}),
     ...(asset.attributes?.browsesFolders === true ? { browsesFolders: true as const } : {}),
     ...(typeof sourceFull === "string" ? { sourceFull } : {}),

@@ -44,6 +44,15 @@ export function connectorTypeLabel(type: string, t: TranslationContextValue["t"]
   return key === undefined ? type : t(key);
 }
 
+/** A Connector type in words where the interface has them: a raw type id says nothing to a reader. */
+export function knownConnectorTypeLabel(
+  type: string,
+  t: TranslationContextValue["t"]
+): string | undefined {
+  const key = CONNECTOR_TYPE_LABELS.get(type);
+  return key === undefined ? undefined : t(key);
+}
+
 /** How a Connection proves itself, in words. A scheme the interface does not know keeps its id. */
 export function authSchemeLabel(scheme: string, t: TranslationContextValue["t"]): string {
   const key = AUTH_SCHEME_LABELS.get(scheme);

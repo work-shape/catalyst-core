@@ -14,12 +14,10 @@ import {
   ChoiceList,
   ConfirmDialog,
   Dialog,
-  EmptyState,
   Field,
   FormNotice,
   InlineError,
   Input,
-  Section,
   ServiceMark,
   SkeletonList,
   Spinner,
@@ -33,11 +31,7 @@ import { useInvalidatePersonalConnections } from "../../shared/api/personal-conn
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { readRefusalDetails } from "./build-refusals";
-import {
-  takeOwnServerAdd,
-  useRequestedOwnServerAdd,
-  type OwnServerAddRequest
-} from "./own-server-request";
+import { markArt } from "./my-connections-model";
 import { ConnectionApprovalList, useApprovalChoice } from "./connection-approval";
 import {
   discoveredCandidates,
@@ -62,9 +56,7 @@ import {
 import { offerText } from "./connection-typed-model";
 import {
   entryToolStart,
-  ownServerAddedMessage,
   ownServerAddressIssue,
-  ownServerEntryOf,
   ownServerConfig,
   ownServerHostOf,
   ownServerName,
@@ -147,101 +139,10 @@ export interface OwnServerAdded {
 }
 
 /**
- * "Your MCP servers": the person's own servers as cards and the button that adds one, which
- * shows while they may add one. Nothing while they have none and may add none.
+ * One own server: name, host, state, its tools, and what its owner does with it. A server with
+ * no tool accepted yet says so: no agent gets anything from it until its owner picks some.
  */
-export function OwnServersSection({
-  rows,
-  mayAdd,
-  entries = [],
-  browser
-}: {
-  rows: readonly OwnServerRow[];
-  mayAdd: boolean;
-  /** The catalogue entries the person may add as their own server (PMCP-CAT). */
-  entries?: readonly OwnServerEntry[];
-  browser?: SignInBrowser;
-}) {
-  const { t } = useTranslation();
-  const { tellConversation } = useSettingsPage();
-  const [adding, setAdding] = useState<{ proposed?: OwnServerAddRequest; key: number }>();
-  // An agent's proposal from a chat (PMCP-CHAT) opens the add screen filled, once, where the
-  // person may add a server; nothing is saved before they press Connect.
-  const requested = useRequestedOwnServerAdd();
-  useEffect(() => {
-    if (requested === undefined) return;
-    takeOwnServerAdd(requested);
-    if (mayAdd) setAdding((current) => ({ proposed: requested, key: (current?.key ?? 0) + 1 }));
-  }, [requested, mayAdd]);
-  const proposed = adding?.proposed;
-  const from = proposed?.from;
-  if (rows.length === 0 && !mayAdd) return null;
-  return (
-    <Section
-      layout="stacked"
-      title={t("ownServers.title")}
-      description={t("ownServers.description")}
-      action={
-        mayAdd ? (
-          <Button
-            size="sm"
-            data-own-server-add=""
-            onClick={() => setAdding((current) => ({ key: (current?.key ?? 0) + 1 }))}
-          >
-            {t("ownServers.add")}
-          </Button>
-        ) : undefined
-      }
-      data-own-servers=""
-    >
-      {rows.length === 0 ? (
-        <EmptyState layout="inline" data-own-servers-empty="">
-          {t("ownServers.empty")}
-        </EmptyState>
-      ) : (
-        <ul className="grid min-w-0 gap-3" aria-label={t("ownServers.title")}>
-          {rows.map((row) => (
-            <li key={row.name} className="min-w-0">
-              <OwnServerCard
-                row={row}
-                entry={ownServerEntryOf(row, entries)}
-                {...(browser ? { browser } : {})}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      {adding ? (
-        <OwnServerAddDialog
-          key={adding.key}
-          onClose={() => setAdding(undefined)}
-          entries={entries}
-          {...(proposed
-            ? {
-                initial: {
-                  url: proposed.url,
-                  title: proposed.title,
-                  ...(proposed.entry === undefined ? {} : { entry: proposed.entry })
-                }
-              }
-            : {})}
-          {...(from && tellConversation
-            ? {
-                // The conversation whose agent proposed the server hears once that it is added.
-                onAdded: (added: OwnServerAdded) => {
-                  tellConversation(from, ownServerAddedMessage(added, t)).catch(() => undefined);
-                }
-              }
-            : {})}
-          {...(browser ? { browser } : {})}
-        />
-      ) : null}
-    </Section>
-  );
-}
-
-/** One own server: name, host, state, its tools, and what its owner does with it. */
-function OwnServerCard({
+export function OwnServerCard({
   row,
   entry,
   browser
@@ -310,7 +211,7 @@ function OwnServerCard({
   return (
     <Card padding="md" className="grid min-w-0 gap-3 p-3" data-own-server-card={name}>
       <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <ServiceMark name={title} size="lg" showName={false} {...markProps(entry)} />
+        <ServiceMark name={title} size="lg" showName={false} {...markArt(entry?.mark)} />
         <div className="grid min-w-0 flex-1 basis-48 gap-1">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-label wrap-anywhere">{title}</span>
@@ -336,6 +237,10 @@ function OwnServerCard({
           </span>
           {view === "off" ? (
             <span className="text-caption text-muted-foreground">{t("ownServers.offText")}</span>
+          ) : tools === 0 ? (
+            <span className="text-caption text-muted-foreground" data-own-server-no-tools-yet="">
+              {t(view === "connected" ? "myConnections.noToolsYet" : "myConnections.connectFirst")}
+            </span>
           ) : null}
         </div>
         <span className="flex flex-wrap items-center gap-2">
@@ -798,7 +703,7 @@ export function OwnServerAddDialog({
                           name={offerText(candidate.title, locale)}
                           size="md"
                           showName={false}
-                          {...markProps(candidate)}
+                          {...markArt(candidate.mark)}
                         />
                       }
                       data-own-server-entry={candidate.id}
@@ -1325,10 +1230,3 @@ function OwnServerToolsDialog({
 }
 
 /** The mark of a catalogue entry for a service mark: its logo, or its colour. */
-function markProps(
-  entry: Pick<OwnServerEntry, "mark"> | undefined
-): { logo: string } | { color: string } | Record<never, never> {
-  if (entry?.mark.logo !== undefined) return { logo: entry.mark.logo };
-  if (entry?.mark.color !== undefined) return { color: entry.mark.color };
-  return {};
-}

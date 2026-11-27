@@ -6,10 +6,6 @@ import { defineTranslations } from "./translation-area";
 export const personalConnections = defineTranslations({
   en: {
     "settings.personalConnections": "Connections",
-    "personalConnections.description":
-      "Your own accounts at other services. Agents use them only in your private chats.",
-    "personalConnections.empty":
-      "No connection asks for your own account yet. An administrator sets them up.",
     "personalConnections.loadFailed": "Your connections could not be loaded.",
     "personalConnections.yourAccounts": "Your accounts",
     "personalConnections.stateConnected": "Connected as {account}",
@@ -59,10 +55,6 @@ export const personalConnections = defineTranslations({
   },
   de: {
     "settings.personalConnections": "Verbindungen",
-    "personalConnections.description":
-      "Deine eigenen Konten bei anderen Diensten. Agents nutzen sie nur in deinen privaten Chats.",
-    "personalConnections.empty":
-      "Noch keine Verbindung fragt nach deinem eigenen Konto. Eine Administratorin oder ein Administrator richtet sie ein.",
     "personalConnections.loadFailed": "Deine Verbindungen ließen sich nicht laden.",
     "personalConnections.yourAccounts": "Deine Konten",
     "personalConnections.stateConnected": "Verbunden als {account}",

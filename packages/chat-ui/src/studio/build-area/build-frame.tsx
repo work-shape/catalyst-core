@@ -83,7 +83,10 @@ import {
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
 
 /** What the reader typed and chose, per kind, so the way back keeps both. */
-type ListView = BuildListFilter;
+type ListView = BuildListFilter & {
+  /** The tab of a kind that lays out its own list page (`ListLayout`). */
+  tab?: string;
+};
 
 const firstListView: ListView = { text: "" };
 
@@ -150,7 +153,7 @@ function BuildFrameBody({
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
   const [asking, setAsking] = useState(false);
-  /** Where the kind's own dialog starts, as the section above its list asked (`ListHead`). */
+  /** Where the kind's own dialog starts, as its list page asked (`ListLayout`). */
   const [askedStart, setAskedStart] = useState<string>();
   /** The kind's import dialog is open over its list. */
   const [importing, setImporting] = useState(false);
@@ -760,9 +763,11 @@ function BuildList({
   const offerStands =
     entry.emptyBuild && startWithAgent && !list.error && !filtered && list.rows?.length === 0;
   const headNew = offerStands ? undefined : newButton;
-  // A kind's section above the list (`ListHead`) reads every asset, whatever the search says:
+  // A kind's own list page (`ListLayout`) reads every asset, whatever the search says:
   // unsearched, this is the list's own read.
-  const ListHead = editable?.ListHead;
+  const ListLayout = editable?.ListLayout;
+  // Rows the kind shows elsewhere on its page, or that are not the reader's to act on.
+  const hidden = (asset: BuildAssetRow) => editable?.listHides?.(asset, state.canCreate) === true;
   const unfiltered = source.useList(entry.kind, { text: "" });
 
   // A row of the list, or of the kind's section below it (`listAside`).
@@ -843,7 +848,9 @@ function BuildList({
   };
   const aside = entry.listAside;
   const inAside = (asset: BuildAssetRow) => aside?.holds(asset) === true;
-  const asideRows = aside ? (list.rows ?? []).filter(inAside) : [];
+  const asideRows = aside
+    ? (list.rows ?? []).filter((asset) => inAside(asset) && !hidden(asset))
+    : [];
 
   // The rows a kind adds come first, in the same list, under the same search and filters.
   const listBody = (lead: BuildListLead) => {
@@ -851,7 +858,7 @@ function BuildList({
     // Where the assets could not be read, the kind's own rows still show under the list's error.
     // Rows of the kind's section below the list (`listAside`) stand there, not here.
     const rows = (list.rows ?? (listError && leadRows?.length ? [] : undefined))?.filter(
-      (asset) => !inAside(asset)
+      (asset) => !inAside(asset) && !hidden(asset)
     );
     return (
       <>
@@ -965,6 +972,18 @@ function BuildList({
     listBody(NO_LEAD)
   );
 
+  const asideSection =
+    aside && asideRows.length > 0 ? (
+      <Section
+        layout="stacked"
+        title={t(aside.title)}
+        description={aside.description ? t(aside.description) : undefined}
+        data-build-list-aside=""
+      >
+        <List aria-label={t(aside.title)}>{asideRows.map(assetRow)}</List>
+      </Section>
+    ) : null;
+
   return (
     <>
       <PageHeader
@@ -994,36 +1013,24 @@ function BuildList({
         }
       />
       {loadError}
-      {ListHead ? (
-        <>
-          <ListHead
-            rows={unfiltered.rows}
-            canCreate={state.canCreate}
-            hrefOf={hrefOf}
-            open={onOpen}
-            create={onNew}
-          />
-          <Section
-            layout="stacked"
-            title={editable?.listTitle ? t(editable.listTitle) : t(entry.label)}
-            data-build-list-section=""
-          >
-            {listed}
-          </Section>
-        </>
+      {ListLayout ? (
+        <ListLayout
+          rows={unfiltered.rows}
+          canCreate={state.canCreate}
+          hrefOf={hrefOf}
+          open={onOpen}
+          create={onNew}
+          list={listed}
+          aside={asideSection}
+          tab={view.tab}
+          onTabChange={(tab) => onViewChange({ ...view, tab })}
+        />
       ) : (
-        listed
+        <>
+          {listed}
+          {asideSection}
+        </>
       )}
-      {aside && asideRows.length > 0 ? (
-        <Section
-          layout="stacked"
-          title={t(aside.title)}
-          description={aside.description ? t(aside.description) : undefined}
-          data-build-list-aside=""
-        >
-          <List aria-label={t(aside.title)}>{asideRows.map(assetRow)}</List>
-        </Section>
-      ) : null}
       {cliOpen ? (
         <Dialog
           open

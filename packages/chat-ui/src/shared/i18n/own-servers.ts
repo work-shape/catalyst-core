@@ -4,11 +4,7 @@ import { defineTranslations } from "./translation-area";
 // dialog on You > Connections.
 export const ownServers = defineTranslations({
   en: {
-    "ownServers.title": "Your MCP servers",
-    "ownServers.description":
-      "MCP servers you added yourself. Only you use them, in your private chats.",
     "ownServers.add": "Add MCP server",
-    "ownServers.empty": "You have not added an MCP server yet.",
     "ownServers.addressLabel": "Address",
     "ownServers.addressHint": "The address of the server, such as https://example.com/mcp.",
     "ownServers.addressPlaceholder": "https://example.com/mcp",
@@ -93,11 +89,7 @@ export const ownServers = defineTranslations({
     "ownServers.proposalService": "Connect {title}"
   },
   de: {
-    "ownServers.title": "Deine MCP-Server",
-    "ownServers.description":
-      "MCP-Server, die du selbst hinzugefügt hast. Nur du nutzt sie, in deinen privaten Chats.",
     "ownServers.add": "MCP-Server hinzufügen",
-    "ownServers.empty": "Du hast noch keinen MCP-Server hinzugefügt.",
     "ownServers.addressLabel": "Adresse",
     "ownServers.addressHint": "Die Adresse des Servers, etwa https://example.com/mcp.",
     "ownServers.addressPlaceholder": "https://example.com/mcp",

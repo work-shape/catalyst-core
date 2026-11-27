@@ -116,14 +116,16 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
   route.operation(apiOperations["connections.mine"], {
     authorize: () => ({ allowed: true }),
     module: CONNECTIONS_MODULE,
-    execute: (_input, context) =>
+    execute: async (_input, context) =>
       required().myConnections(
         context.actor.id,
         (resource) => context.access.authorize(CONNECTION_ACTIONS.use, resource).allowed,
         // Who may add an MCP server for themselves, as the self-add create decides it; the
         // operator's switch is read with the list.
         isFirstPartyPerson(context.actor) &&
-          context.access.authorize(CONNECTION_ACTIONS.addOwn).allowed
+          context.access.authorize(CONNECTION_ACTIONS.addOwn).allowed,
+        // Only agents the caller may read or use are named as using a Connection.
+        await readableAgents(options, context.access, true)
       )
   });
   route.operation(apiOperations["connections.people"], {
