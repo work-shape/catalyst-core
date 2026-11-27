@@ -7,6 +7,18 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.53 — 2026-11-27
+
+### Changed
+
+- A catalogue part that is personal alone (`credentialModes: [user]`) may recommend a changing operation, which the install review then starts ticked: each person's own rights at the service are the bound. A part with a shared mode still never ticks a changing operation in advance.
+
+### Fixed
+
+- A Connection installed from a catalogue entry edits under "Address and access" with the entry's own fields, not the MCP server form. Where it signs in, its secret field, such as an app secret, can be entered or replaced there.
+- The Connect card in a conversation leads with the service's mark, as the Connections page does, instead of the title's first letter.
+- The browser test of a published App no longer fails at random: the second member's page closes before the test revokes their rights on the App, so the editor frame's late context request no longer meets the revoke and its 404.
+
 ## 0.8.0-rc.52 — 2026-11-26
 
 ### Added
