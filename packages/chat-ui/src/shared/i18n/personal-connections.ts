@@ -7,7 +7,6 @@ export const personalConnections = defineTranslations({
   en: {
     "settings.personalConnections": "Connections",
     "personalConnections.loadFailed": "Your connections could not be loaded.",
-    "personalConnections.yourAccounts": "Your accounts",
     "personalConnections.stateConnected": "Connected as {account}",
     "personalConnections.stateConnectedUnnamed": "Connected",
     "personalConnections.stateNotConnected": "Not connected",
@@ -56,7 +55,6 @@ export const personalConnections = defineTranslations({
   de: {
     "settings.personalConnections": "Verbindungen",
     "personalConnections.loadFailed": "Deine Verbindungen ließen sich nicht laden.",
-    "personalConnections.yourAccounts": "Deine Konten",
     "personalConnections.stateConnected": "Verbunden als {account}",
     "personalConnections.stateConnectedUnnamed": "Verbunden",
     "personalConnections.stateNotConnected": "Nicht verbunden",

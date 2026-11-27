@@ -1228,5 +1228,3 @@ function OwnServerToolsDialog({
     </Dialog>
   );
 }
-
-/** The mark of a catalogue entry for a service mark: its logo, or its colour. */

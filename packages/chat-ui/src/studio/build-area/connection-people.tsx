@@ -295,11 +295,6 @@ export function PersonalSignInSection({ name, title }: { name: string; title: st
   );
 }
 
-/**
- * Who connected their own account to a personal Connection, for who may change it: the person,
- * the account the provider named, the state, since when and the last day it was used, and
- * Revoke. Revoking deletes the stored access; the grant at the provider stays.
- */
 /** Who connected their own account to one personal Connection, for who may change it. */
 function useConnectionPeople(name: string) {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
@@ -337,6 +332,11 @@ function InstancePeopleBadge({ name }: { name: string }) {
   );
 }
 
+/**
+ * Who connected their own account to a personal Connection, for who may change it: the person,
+ * the account the provider named, the state, since when and the last day it was used, and
+ * Revoke. Revoking deletes the stored access; the grant at the provider stays.
+ */
 export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayWrite: boolean }) {
   const { client } = useSettingsPage();
   const { t } = useTranslation();

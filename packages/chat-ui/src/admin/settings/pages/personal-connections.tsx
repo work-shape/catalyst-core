@@ -15,7 +15,7 @@ export function PersonalConnectionsPage() {
         title={t("settings.personalConnections")}
         description={t("myConnections.description")}
       />
-      <MyConnectionsSection title={t("personalConnections.yourAccounts")} />
+      <MyConnectionsSection title={t("myConnections.title")} />
     </>
   );
 }

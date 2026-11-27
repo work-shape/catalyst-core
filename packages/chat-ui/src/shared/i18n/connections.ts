@@ -19,7 +19,7 @@ export const connections = defineTranslations({
     "myConnections.empty":
       "Nothing here needs your own account yet. An administrator sets that up.",
     "myConnections.emptyMayAdd":
-      "You have not connected anything yet. When an agent needs your own account with a service, it shows up here.",
+      "You have not connected anything yet. When an agent needs your own account with a service, the service shows up here.",
     "myConnections.usedBy": "Used by {agents}",
     "myConnections.usedByNone": "No agent uses this connection yet",
     "myConnections.connectLabel": "Connect {title}",
@@ -33,7 +33,7 @@ export const connections = defineTranslations({
       "What agents, apps and workflows work with. Each row says whose account it uses.",
     "connections.sharedTitle": "Set up by your organisation",
     "connections.sharedText":
-      "These run on one shared access. There is nothing for you to connect: agents work with them wherever you may use them.",
+      "These run on one shared access. There is nothing for you to connect: agents use them in your chats by themselves.",
     "connections.accountShared": "One shared access",
     "connections.accountPersonal": "Each person's own account",
     "connections.peopleConnected": "{count} people connected",
@@ -376,9 +376,9 @@ export const connections = defineTranslations({
       "Deine eigenen Konten bei anderen Diensten. Nur du nutzt sie, und Agenten nur in deinen privaten Chats.",
     "myConnections.addOwn": "Eigenen Server hinzufügen",
     "myConnections.empty":
-      "Hier braucht noch nichts dein eigenes Konto. Eine Administratorin oder ein Administrator richtet das ein.",
+      "Noch braucht keine Verbindung dein eigenes Konto. Eine Administratorin oder ein Administrator richtet das ein.",
     "myConnections.emptyMayAdd":
-      "Du hast noch nichts verbunden. Sobald ein Agent dein eigenes Konto bei einem Dienst braucht, steht es hier.",
+      "Du hast noch nichts verbunden. Sobald ein Agent dein eigenes Konto bei einem Dienst braucht, erscheint der Dienst hier.",
     "myConnections.usedBy": "Genutzt von {agents}",
     "myConnections.usedByNone": "Noch kein Agent nutzt diese Verbindung",
     "myConnections.connectLabel": "{title} verbinden",
@@ -393,7 +393,7 @@ export const connections = defineTranslations({
       "Womit Agenten, Apps und Workflows arbeiten. Jede Zeile sagt, wessen Konto sie nutzt.",
     "connections.sharedTitle": "Von deiner Organisation eingerichtet",
     "connections.sharedText":
-      "Diese Verbindungen laufen über einen gemeinsamen Zugang. Du musst nichts verbinden: Agenten arbeiten damit, wo du sie nutzen darfst.",
+      "Diese Verbindungen laufen über einen gemeinsamen Zugang. Du musst nichts verbinden: Agenten nutzen sie in deinen Chats von selbst.",
     "connections.accountShared": "Gemeinsamer Zugang",
     "connections.accountPersonal": "Jede Person mit eigenem Konto",
     "connections.peopleConnected": "{count} Personen verbunden",

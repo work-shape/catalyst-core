@@ -593,7 +593,19 @@ function SourceItem({
                 )}
               </span>
             ) : null}
-            {folders.length > 0 ? (
+            {folders.length === 0 ? null : !browses ? (
+              <span
+                className="flex min-w-0 items-center gap-1 text-caption text-foreground"
+                data-knowledge-source-paths=""
+              >
+                <Folder aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+                {folders.length === 1
+                  ? t("knowledgeSources.pickCountOne")
+                  : t("knowledgeSources.pickCount", {
+                      count: new Intl.NumberFormat(locale).format(folders.length)
+                    })}
+              </span>
+            ) : (
               <ul
                 className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-caption text-foreground"
                 aria-label={t("knowledgeSources.chosenFolders")}
@@ -606,11 +618,7 @@ function SourceItem({
                       className="size-3.5 shrink-0 text-muted-foreground"
                     />
                     <span className="min-w-0 wrap-anywhere">
-                      {browses ? (
-                        <FolderName source={source} connection={entry.connection} folder={folder} />
-                      ) : (
-                        folder
-                      )}
+                      <FolderName source={source} connection={entry.connection} folder={folder} />
                       {index === folders.length - 1 ? (
                         <KnowledgeSourceExcludedSuffix exclude={entry.exclude} />
                       ) : null}
@@ -618,7 +626,7 @@ function SourceItem({
                   </li>
                 ))}
               </ul>
-            ) : null}
+            )}
             {facts === "" ? null : (
               <span className="text-caption text-muted-foreground">{facts}</span>
             )}

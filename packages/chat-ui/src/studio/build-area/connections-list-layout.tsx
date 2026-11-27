@@ -44,8 +44,9 @@ function InstanceConnections({
 }: BuildListLayoutProps) {
   const { t } = useTranslation();
   if (!canCreate) {
-    // Nothing to read here where every Connection of the list is the reader's own card.
-    const shared = rows?.some((row) => !hiddenFromConnectionList(row, false)) === true;
+    // Nothing to read here where every Connection of the list is the reader's own card. A list
+    // that is not read yet, or could not be, still says so.
+    const shared = rows === undefined || rows.some((row) => !hiddenFromConnectionList(row, false));
     return (
       <>
         <MyConnectionsSection />

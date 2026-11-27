@@ -6,7 +6,7 @@ export const connectionCatalogue = defineTranslations({
   en: {
     "connectionCatalogue.installTitle": "Add services",
     "connectionCatalogue.installText":
-      "Ready-made connections to common services. You set one up once, for everyone you give it to.",
+      "Ready-made connections to common services. You set one up once, for everyone who should use it.",
     "connectionCatalogue.statusInstalled": "Already set up",
     "connectionCatalogue.partTools": "For agents",
     "connectionCatalogue.partSource": "As a Knowledge Base source",
@@ -60,7 +60,7 @@ export const connectionCatalogue = defineTranslations({
   de: {
     "connectionCatalogue.installTitle": "Dienste hinzufügen",
     "connectionCatalogue.installText":
-      "Vorbereitete Verbindungen zu gängigen Diensten. Du richtest sie einmal ein, für alle, denen du sie gibst.",
+      "Vorbereitete Verbindungen zu gängigen Diensten. Du richtest sie einmal ein, für alle, die sie nutzen sollen.",
     "connectionCatalogue.statusInstalled": "Bereits eingerichtet",
     "connectionCatalogue.partTools": "Für Agenten",
     "connectionCatalogue.partSource": "Als Quelle einer Wissensdatenbank",

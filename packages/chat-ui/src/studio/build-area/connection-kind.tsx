@@ -57,7 +57,9 @@ export const connectionKind: BuildAssetKind = {
   Editor: ConnectionAssetEditor,
   CreateDialog: ConnectionCreateDialog,
   ListLayout: ConnectionsListLayout,
-  listHides: hiddenFromConnectionList,
+  // Who may change one Connection reads its row as who manages them all does.
+  listHides: (asset, mayManage) =>
+    hiddenFromConnectionList(asset, mayManage || (asset.allowed?.includes("write") ?? false)),
   // A person's own server is for that person alone, whatever its place. Another person's,
   // which an admin sees to switch off or delete, stands below the reader's own (PMCP).
   rowPlace: (asset, t) => {
@@ -139,7 +141,7 @@ export const connectionKind: BuildAssetKind = {
           manages ? (
             <ConnectedPeopleBadge name={asset.name} />
           ) : null
-        ) : listed && listed !== "personal" ? (
+        ) : listedIncomplete(asset) ? null : listed && listed !== "personal" ? (
           <Badge tone={HEALTH_VIEWS[listed].tone} dot data-connection-list-health={listed}>
             {t(HEALTH_VIEWS[listed].label)}
           </Badge>
