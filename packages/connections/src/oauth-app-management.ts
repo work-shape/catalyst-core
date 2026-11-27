@@ -40,9 +40,7 @@ export interface OAuthAppInput {
 type Deps = ConnectionOperationSourceDeps & { keyring?: SecretKeyring };
 
 /** The server a Connection's settings name, where it can use an app; nothing otherwise. */
-function oauthAppEndpointsOf(
-  connection: StoredConnection
-): ConnectorOAuthEndpoints | undefined {
+function oauthAppEndpointsOf(connection: StoredConnection): ConnectorOAuthEndpoints | undefined {
   const { type, config } = connection;
   if (config.authScheme !== "oauth" || type?.oauthEndpoints === undefined) return undefined;
   const settings = type.settingsSchema.safeParse(config.settings);
@@ -65,7 +63,7 @@ export function createOAuthAppManagement(deps: Deps) {
     stores: PlatformStores,
     keyring: SecretKeyring,
     connection: StoredConnection
-  ): Promise<{ value: string; version: number } | undefined> {
+  ): Promise<{ value: string; nonce: Uint8Array } | undefined> {
     const origin = connection.type
       ? connectionOriginOf(connection.type, connection.config)
       : undefined;
@@ -82,7 +80,19 @@ export function createOAuthAppManagement(deps: Deps) {
       record,
       binding
     );
-    return value === undefined ? undefined : { value, version: record.version };
+    return value === undefined ? undefined : { value, nonce: record.nonce };
+  }
+
+  /** Whether the Connection holds a secret for its address, from any source. */
+  async function hasOwnSecret(stores: PlatformStores, connection: StoredConnection) {
+    const origin = connection.type
+      ? connectionOriginOf(connection.type, connection.config)
+      : undefined;
+    const record = await stores.connections.findSecret({
+      clientInstanceId: deps.clientInstanceId,
+      binding: { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT }
+    });
+    return record !== undefined && origin !== undefined && record.origin === origin;
   }
 
   return {
@@ -158,6 +168,29 @@ export function createOAuthAppManagement(deps: Deps) {
             "the Connection holds no client secret of its own to adopt. Enter the secret"
           );
         }
+        const server = connectionOAuthServerOf(endpoints);
+        const others = await readConnections({ ...deps, stores });
+        const current = await stores.connections.getOAuthApp({
+          clientInstanceId: deps.clientInstanceId,
+          server
+        });
+        if (current !== undefined && current.clientId !== endpoints.clientId) {
+          // A Connection on the app's old client id without a secret of its own signs in with
+          // the app: replacing the client id would leave it with none.
+          const using: string[] = [];
+          for (const other of others) {
+            const theirs = oauthAppEndpointsOf(other);
+            if (theirs?.clientId !== current.clientId || connectionOAuthServerOf(theirs) !== server)
+              continue;
+            if (!(await hasOwnSecret(stores, other))) using.push(other.config.name);
+          }
+          if (using.length > 0) {
+            throw refusal(
+              CONNECTION_REFUSALS.oauthAppInUse,
+              `${using.sort().join(", ")} sign in with the app's client id '${current.clientId}'. Give them the new client id or a secret of their own first`
+            );
+          }
+        }
         const app = await putOAuthApp(
           { clientInstanceId: deps.clientInstanceId, keyring, store: stores.connections },
           {
@@ -168,11 +201,10 @@ export function createOAuthAppManagement(deps: Deps) {
           }
         );
         // Every own secret that is the app's, byte for byte, is a copy: it goes.
-        const server = connectionOAuthServerOf(endpoints);
         const expected = Buffer.from(value, "utf8");
         const moved: string[] = [];
         try {
-          for (const other of await readConnections({ ...deps, stores })) {
+          for (const other of others) {
             if (other.config.origin === "release") continue;
             const theirs = oauthAppEndpointsOf(other);
             if (
@@ -193,8 +225,8 @@ export function createOAuthAppManagement(deps: Deps) {
               connectionAssetId: other.assetId,
               subject: SHARED_CREDENTIAL_SUBJECT,
               source: "runtime",
-              // Only the version compared: one set meanwhile stays.
-              version: own.version
+              // Only the row compared: a value set meanwhile stays.
+              nonce: own.nonce
             });
             moved.push(other.config.name);
           }

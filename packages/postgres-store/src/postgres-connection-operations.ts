@@ -133,7 +133,7 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
               .returning({ handle: secrets.handle });
       return written.length > 0;
     },
-    async deleteSecrets({ clientInstanceId, connectionAssetId, subject, source, version }) {
+    async deleteSecrets({ clientInstanceId, connectionAssetId, subject, source, nonce }) {
       await db
         .delete(secrets)
         .where(
@@ -142,7 +142,7 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
             eq(secrets.connectionAssetId, connectionAssetId),
             ...(subject === undefined ? [] : [eq(secrets.subject, subject)]),
             ...(source === undefined ? [] : [eq(secrets.source, source)]),
-            ...(version === undefined ? [] : [eq(secrets.version, version)])
+            ...(nonce === undefined ? [] : [eq(secrets.nonce, nonce)])
           )
         );
     },

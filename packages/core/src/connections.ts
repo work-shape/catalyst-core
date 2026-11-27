@@ -794,8 +794,8 @@ export interface ConnectionsStore extends ConnectionBindingsStore {
     subject?: string;
     /** Only a secret of this source, so a delete never takes one that was set meanwhile. */
     source?: SecretSource;
-    /** Only this version of it: a delete never takes a version written meanwhile. */
-    version?: number;
+    /** Only the row sealed with this nonce: a delete never takes a value written meanwhile. */
+    nonce?: Uint8Array;
   }): Promise<void>;
   /** The instance's OAuth app of one authorization server (OAUTH-APP), or nothing. */
   getOAuthApp(input: {
@@ -1336,7 +1336,12 @@ export const CONNECTION_REFUSALS = {
    * An instance's OAuth app (OAUTH-APP) is set from a Connection that signs in with OAuth at a
    * server its settings name, on a client of its own: not a managed, discovered or DCR client.
    */
-  oauthAppUnsupported: "oauth_app_unsupported"
+  oauthAppUnsupported: "oauth_app_unsupported",
+  /**
+   * The instance's OAuth app of a server is replaced with another client id while Connections
+   * still sign in with the app's: they would be left without a client secret.
+   */
+  oauthAppInUse: "oauth_app_in_use"
 } as const;
 
 /** What a person is told where App exposure and a person context header meet. */

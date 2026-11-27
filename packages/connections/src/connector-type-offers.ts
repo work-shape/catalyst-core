@@ -74,7 +74,8 @@ const ANY_CLIENT_ID = "client";
 
 /**
  * The authorization server a part's settings name, where it signs in on a client of its own;
- * nothing for a managed client, a discovered server or settings its type does not read.
+ * nothing for a managed client, a discovered server, settings its type does not read or a form
+ * whose fields fill in the server.
  */
 function partOAuthServer(
   type: ConnectorTypeDefinition | undefined,
@@ -82,6 +83,14 @@ function partOAuthServer(
 ): string | undefined {
   if (part.authScheme !== "oauth" || part.managedClient !== undefined) return undefined;
   if (type?.oauthEndpoints === undefined) return undefined;
+  // A field that fills in part of the sign-in's address, such as a tenant, makes the server
+  // the installer's to choose: the part names none the app could be offered for.
+  if (
+    part.fields.some(
+      (field) => field.setting?.startsWith("oauth.") === true && field.setting !== "oauth.clientId"
+    )
+  )
+    return undefined;
   const oauth = part.settings.oauth;
   const settings = type.settingsSchema.safeParse({
     ...part.settings,

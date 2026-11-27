@@ -106,7 +106,7 @@ afterAll(async () => {
 });
 
 /** A runtime `http_api` Connection on the REST provider's server and client. */
-function restConnection(): Record<string, unknown> {
+function restConnection(clientId = REST_CLIENT_ID): Record<string, unknown> {
   const base = `${world.sample}/oauth-rest`;
   return {
     displayName: "Sample REST",
@@ -119,7 +119,7 @@ function restConnection(): Record<string, unknown> {
         authorizationUrl: `${base}/authorize`,
         tokenUrl: `${base}/token`,
         revocationUrl: `${base}/revoke`,
-        clientId: REST_CLIENT_ID,
+        clientId,
         scopes: ["sample.read"]
       }
     },
@@ -148,7 +148,7 @@ async function setApp(name: string, body: Record<string, unknown>, cookie: strin
 
 /** The Connections of this file that hold a secret of their own. */
 async function ownSecrets(): Promise<string[]> {
-  const mine = ["copy-a", "copy-b", "other", REST_CONNECTION];
+  const mine = ["copy-a", "copy-b", "other", "another-client", REST_CONNECTION];
   const rows = await withTestSql(
     (sql) => sql<{ name: string }[]>`
       select a.name from secrets s join config_assets a on a.id = s.connection_asset_id
@@ -226,7 +226,7 @@ describe("an instance's OAuth app", () => {
     expect(world.oauth.counts().refreshToken - before.refreshToken).toBe(1);
   });
 
-  it("is replaced over the version its writer saw, and a stale version stores nothing", async () => {
+  it("is replaced over the version its writer saw, never stale nor from under a Connection using it", async () => {
     const alice = await world.signIn("alice");
     const stale = await setApp(
       "other",
@@ -242,6 +242,17 @@ describe("an instance's OAuth app", () => {
     );
     expect(replaced.status, replaced.text).toBe(200);
     expect(appSchema.parse(JSON.parse(replaced.text))).toMatchObject({ version: 2, moved: [] });
+
+    // Another client id on the same server would leave "rest", which uses the app, without one.
+    const other = restConnection("another-client");
+    expect(await world.putConnection("another-client", other, alice)).toBe(200);
+    const inUse = await setApp(
+      "another-client",
+      { value: "a-secret-of-another-client", expectedVersion: 2 },
+      alice
+    );
+    expect(inUse.status, inUse.text).toBe(409);
+    expect(inUse.text).toContain("oauth_app_in_use");
   });
 
   it("keeps the app's secret out of every answer, log line and row", async () => {
