@@ -1,36 +1,27 @@
-import type { PersonalConnections } from "@work-shape/catalyst-api-client";
 import {
   entriesToShow,
   type CatalogueEntryOffer,
   type CataloguePartName
 } from "./connection-catalogue-model";
-import { listedOwnServer, ownServerEntryOf, type OwnServerEntry } from "./own-server-model";
+import { listedOwnServer } from "./own-server-model";
 
-// "Dienste" on the Connections page (CAT-PAGE): one card per catalogue entry the reader can act
-// on, with what is true of it here. Pure: the page reads the entries, the Connections and the
-// reader's own sign-ins, and these decide only what each card says and where its click goes.
-// Nothing here grants a right: an install, an add and every sign-in are decided where they
-// were before.
-
-type PersonalRow = PersonalConnections["connections"][number];
+// "Dienste hinzufügen" on the manage tab of the Connections page (CAT-PAGE, CONN-IA): one card
+// per catalogue entry who manages Connections can install, with whether the instance has it.
+// Pure: the page reads the entries and the Connections, and these decide only what each card
+// says and where its click goes. A card says nothing of the reader's own account: that stands
+// under "Meine Verbindungen". Nothing here grants a right: an install is decided where it was.
 
 /** Where a card's click goes. */
 export type ServiceCardAction =
   /** The page of a Connection set up from the entry. */
   | { kind: "open"; name: string }
-  /** You > Connections, where the reader's own servers are. */
-  | { kind: "own-servers" }
   /** The New connection dialog, at the entry's install. */
-  | { kind: "install"; entry: string }
-  /** The add screen of You > Connections, at the entry's tile. */
-  | { kind: "add-own"; entry: OwnServerEntry };
+  | { kind: "install"; entry: string };
 
 /** What a card says of its entry here. */
 export type ServiceCardStatus =
-  /** The reader's own account is connected: their own server, or a personal Connection. */
-  | "connected"
-  /** A Connection was set up from the entry, or the reader added it and is not signed in. */
-  | "set-up"
+  /** The instance has a Connection set up from the entry. */
+  | "installed"
   /** Nothing yet: the click starts it. */
   | "start"
   /** The operator has not named the entry: it is greyed and opens nothing. */
@@ -41,8 +32,8 @@ export interface ServiceCard {
   title: CatalogueEntryOffer["title"];
   description: CatalogueEntryOffer["description"];
   mark: CatalogueEntryOffer["mark"];
-  /** What the entry brings: its parts for an admin's install, `own` for a person's own server. */
-  parts: readonly (CataloguePartName | "own")[];
+  /** What the entry brings. */
+  parts: readonly CataloguePartName[];
   status: ServiceCardStatus;
   /** Absent for an entry that opens nothing. */
   action?: ServiceCardAction;
@@ -54,58 +45,22 @@ export interface ListedConnection {
   attributes?: Record<string, unknown> | undefined;
 }
 
-/** How far a status goes: an entry that is both an admin's and a person's shows the further. */
-const RANK: Record<ServiceCardStatus, number> = {
-  "not-offered": 0,
-  start: 1,
-  "set-up": 2,
-  connected: 3
-};
-
 /**
- * The cards, in the order the reader acts on them: entries offered for an install, then
- * entries a person adds as their own server, then entries the operator has not named. An
- * install is offered only to a reader who may make a Connection; an entry the reader cannot
- * start and that is not set up here is not shown, unless it is one the operator has not named,
- * which an admin is told to ask for.
+ * The cards, in the order the reader acts on them: the entries that can be installed or are,
+ * then the entries the operator has not named, which an admin is told to ask for.
  */
 export function serviceCards(input: {
-  /** The catalogue's entries an admin installs: empty for a reader who may make no Connection. */
+  /** The catalogue's entries an admin installs. */
   entries: readonly CatalogueEntryOffer[];
-  /** The entries the reader may add as their own server: empty where they may add none. */
-  ownEntries: readonly OwnServerEntry[];
   /** The instance's Connections, as the list reads them. */
   connections: readonly ListedConnection[];
-  /** The reader's own sign-ins and servers. */
-  mine: readonly PersonalRow[];
-  /** The reader may make a Connection. */
-  mayCreate: boolean;
 }): ServiceCard[] {
-  const cards = new Map<string, ServiceCard>();
-  const put = (card: ServiceCard) => {
-    const before = cards.get(card.id);
-    if (before === undefined) {
-      cards.set(card.id, card);
-      return;
-    }
-    if (RANK[card.status] > RANK[before.status]) {
-      cards.set(card.id, { ...before, status: card.status, ...actionOf(card) });
-    }
-  };
-
-  for (const entry of entriesToShow(input.entries)) {
-    // A person's own server is never the instance's install of an entry, and another
-    // person's, which an admin's list shows, says nothing of the reader's.
+  const cards = entriesToShow(input.entries).map((entry): ServiceCard => {
+    // A person's own server is never the instance's install of an entry.
     const installed = input.connections.find(
       (connection) =>
         connection.attributes?.catalogueEntry === entry.id &&
         listedOwnServer(connection) === undefined
-    );
-    const own = input.mine.find(
-      (row) =>
-        row.ownServer === undefined &&
-        row.catalogue?.entry === entry.id &&
-        row.state === "connected"
     );
     const shown = {
       id: entry.id,
@@ -114,46 +69,14 @@ export function serviceCards(input: {
       mark: entry.mark,
       parts: entry.parts.map((part) => part.part)
     };
-    if (own) {
-      put({ ...shown, status: "connected", action: { kind: "open", name: own.name } });
-    } else if (installed) {
-      put({ ...shown, status: "set-up", action: { kind: "open", name: installed.name } });
-    } else if (!entry.offered) {
-      put({ ...shown, status: "not-offered" });
-    } else if (input.mayCreate) {
-      put({ ...shown, status: "start", action: { kind: "install", entry: entry.id } });
+    if (installed) {
+      return { ...shown, status: "installed", action: { kind: "open", name: installed.name } };
     }
-  }
-
-  // Only the reader's own servers count: `mine` lists no other person's.
-  for (const entry of input.ownEntries) {
-    const row = input.mine.find(
-      ({ ownServer, ...candidate }) =>
-        ownServer !== undefined &&
-        ownServerEntryOf({ ...candidate, ownServer }, [entry]) !== undefined
-    );
-    put({
-      id: entry.id,
-      title: entry.title,
-      description: entry.description,
-      mark: entry.mark,
-      parts: ["own"],
-      ...(row === undefined
-        ? { status: "start" as const, action: { kind: "add-own" as const, entry } }
-        : {
-            status: row.state === "connected" ? ("connected" as const) : ("set-up" as const),
-            action: { kind: "own-servers" as const }
-          })
-    });
-  }
-
-  const shown = [...cards.values()];
+    if (!entry.offered) return { ...shown, status: "not-offered" };
+    return { ...shown, status: "start", action: { kind: "install", entry: entry.id } };
+  });
   return [
-    ...shown.filter((card) => card.status !== "not-offered"),
-    ...shown.filter((card) => card.status === "not-offered")
+    ...cards.filter((card) => card.status !== "not-offered"),
+    ...cards.filter((card) => card.status === "not-offered")
   ];
-}
-
-function actionOf(card: ServiceCard): Pick<ServiceCard, "action"> {
-  return card.action === undefined ? {} : { action: card.action };
 }

@@ -6,13 +6,39 @@ export const connections = defineTranslations({
     "connections.personContextAppUnavailable":
       "Person context is not available in Apps yet. Remove App exposure or the person context header.",
     "connections.description":
-      "Connections give agents, apps and workflows access to outside systems. Those that come with the system setup are read-only here.",
+      "Connections give your agents access to other services, such as your own mailbox or shared folders.",
     "connections.catalogueUpdateRequired":
       "This connection was set up from an earlier version of its catalogue entry. Update it to the current version at the top of this page first.",
     "connections.releaseNotice":
       "This connection comes with the system setup. The technical team changes it there; it cannot be changed here.",
     "connections.new": "New connection",
-    "connections.yours": "Your connections",
+    "myConnections.title": "My connections",
+    "myConnections.description":
+      "Your own accounts with other services. Only you use them, and agents only in your private chats.",
+    "myConnections.addOwn": "Add your own server",
+    "myConnections.empty":
+      "Nothing here needs your own account yet. An administrator sets that up.",
+    "myConnections.emptyMayAdd":
+      "You have not connected anything yet. When an agent needs your own account with a service, the service shows up here.",
+    "myConnections.usedBy": "Used by {agents}",
+    "myConnections.usedByNone": "No agent uses this connection yet",
+    "myConnections.connectLabel": "Connect {title}",
+    "myConnections.noToolsYet":
+      "No tools chosen yet. Under “Change tools”, pick what your agents may use.",
+    "myConnections.connectFirst": "Not finished yet: connect first, then choose the tools.",
+    "connections.tabs": "Views",
+    "connections.manageTab": "Manage",
+    "connections.instanceTitle": "Connections set up here",
+    "connections.instanceText":
+      "What agents, apps and workflows work with. Each row says whose account it uses.",
+    "connections.sharedTitle": "Set up by your organisation",
+    "connections.sharedText":
+      "These run on one shared access. There is nothing for you to connect: agents use them in your chats by themselves.",
+    "connections.accountShared": "One shared access",
+    "connections.accountPersonal": "Each person's own account",
+    "connections.peopleConnected": "{count} people connected",
+    "connections.peopleConnectedOne": "1 person connected",
+    "connections.peopleConnectedNone": "Nobody connected yet",
     "connections.othersOwn": "Added by others",
     "connections.othersOwnText":
       "Servers other people added for themselves. Only they can use them; you can switch them off or delete them.",
@@ -339,13 +365,40 @@ export const connections = defineTranslations({
     "connections.personContextAppUnavailable":
       "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext.",
     "connections.description":
-      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung des Systems sind hier schreibgeschützt.",
+      "Verbindungen geben deinen Agenten Zugang zu anderen Diensten, etwa zu deinem eigenen Postfach oder zu gemeinsamen Ordnern.",
     "connections.catalogueUpdateRequired":
       "Diese Verbindung wurde mit einer früheren Version ihres Katalogeintrags eingerichtet. Aktualisiere sie zuerst oben auf dieser Seite auf die aktuelle Version.",
     "connections.releaseNotice":
       "Diese Verbindung gehört zur Einrichtung des Systems. Das technische Team ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",
-    "connections.yours": "Deine Verbindungen",
+    "myConnections.title": "Meine Verbindungen",
+    "myConnections.description":
+      "Deine eigenen Konten bei anderen Diensten. Nur du nutzt sie, und Agenten nur in deinen privaten Chats.",
+    "myConnections.addOwn": "Eigenen Server hinzufügen",
+    "myConnections.empty":
+      "Noch braucht keine Verbindung dein eigenes Konto. Eine Administratorin oder ein Administrator richtet das ein.",
+    "myConnections.emptyMayAdd":
+      "Du hast noch nichts verbunden. Sobald ein Agent dein eigenes Konto bei einem Dienst braucht, erscheint der Dienst hier.",
+    "myConnections.usedBy": "Genutzt von {agents}",
+    "myConnections.usedByNone": "Noch kein Agent nutzt diese Verbindung",
+    "myConnections.connectLabel": "{title} verbinden",
+    "myConnections.noToolsYet":
+      "Noch keine Tools ausgewählt. Wähl unter „Tools ändern“, was deine Agenten nutzen dürfen.",
+    "myConnections.connectFirst":
+      "Noch nicht fertig: Verbinde dich zuerst, dann wählst du die Tools.",
+    "connections.tabs": "Ansichten",
+    "connections.manageTab": "Verwalten",
+    "connections.instanceTitle": "Hier eingerichtete Verbindungen",
+    "connections.instanceText":
+      "Womit Agenten, Apps und Workflows arbeiten. Jede Zeile sagt, wessen Konto sie nutzt.",
+    "connections.sharedTitle": "Von deiner Organisation eingerichtet",
+    "connections.sharedText":
+      "Diese Verbindungen laufen über einen gemeinsamen Zugang. Du musst nichts verbinden: Agenten nutzen sie in deinen Chats von selbst.",
+    "connections.accountShared": "Gemeinsamer Zugang",
+    "connections.accountPersonal": "Jede Person mit eigenem Konto",
+    "connections.peopleConnected": "{count} Personen verbunden",
+    "connections.peopleConnectedOne": "1 Person verbunden",
+    "connections.peopleConnectedNone": "Noch niemand verbunden",
     "connections.othersOwn": "Von anderen hinzugefügt",
     "connections.othersOwnText":
       "Server, die andere Personen für sich selbst hinzugefügt haben. Nur sie können sie nutzen; du kannst sie ausschalten oder löschen.",

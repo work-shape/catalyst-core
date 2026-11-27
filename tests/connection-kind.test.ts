@@ -858,6 +858,32 @@ describe("a Connection a Knowledge Base can sync documents through", () => {
   });
 });
 
+describe("a Connection installed for a service", () => {
+  it("names the service and its mark in the list, in the reader's language", () => {
+    const kind = createConnectionAssetKind({
+      connectorTypes: createConnectorTypeRegistry([fixtureConnectorType]),
+      egress: createEgressChecker({ allow: [], resolve: () => Promise.resolve([]) }),
+      catalogue: {
+        linkIssue: () => undefined,
+        entries: [
+          { id: "files", title: { en: "Files", de: "Dateien" }, mark: { color: "#2f6f4f" } }
+        ]
+      }
+    });
+    const linked = connectionConfigSchema.parse(
+      connection("handbook", { catalogue: { entry: "files", part: "tools", version: 1 } })
+    );
+    expect(kind.summarize(linked, "de").attributes).toMatchObject({
+      catalogueEntry: "files",
+      serviceTitle: "Dateien",
+      serviceColor: "#2f6f4f"
+    });
+    // A Connection of no entry, or of one this build does not ship, names no service.
+    const plain = kind.summarize(connectionConfigSchema.parse(connection("handbook")), "de");
+    expect(plain.attributes).not.toHaveProperty("serviceTitle");
+  });
+});
+
 // A personal connection takes `agent` only, so its owner's data never leaves for an App, a
 // Workflow or a tool outside the instance (CONNECT-1b).
 describe("the exposures of a Connection", () => {

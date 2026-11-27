@@ -5,7 +5,7 @@ import type { BuildWithAgentCopy } from "../../build-with-agent-empty";
 import type { BuildAsset, BuildAssetRow } from "./asset";
 import type { BuildCreateDialogProps, BuildImportDialogProps } from "./create-dialog-props";
 import type { BuildAssetEditorProps, BuildPageSlot } from "./editor-props";
-import type { BuildListHeadProps } from "./list-head";
+import type { BuildListLayoutProps } from "./list-layout";
 import type { BuildListLead, BuildListLeadFilter } from "./list-lead";
 
 /** What every kind of the Build area names: its rail item and its list. */
@@ -123,12 +123,16 @@ export interface BuildAssetKind extends BuildKindBase {
    */
   importDialog?: { label: TranslationKey; Dialog: ComponentType<BuildImportDialogProps> };
   /**
-   * A section above the list, such as the catalogue's services above the Connections: the list
-   * then stands below it under `listTitle`. It may start the kind's own dialog at a place it
-   * names (`BuildCreateDialogProps.start`).
+   * The kind lays out its own list page: what stands above, beside and below the frame's list,
+   * such as the reader's own connections above the instance's (CONN-IA). It may start the
+   * kind's own dialog at a place it names (`BuildCreateDialogProps.start`).
    */
-  ListHead?: ComponentType<BuildListHeadProps>;
-  listTitle?: TranslationKey;
+  ListLayout?: ComponentType<BuildListLayoutProps>;
+  /**
+   * Rows the list leaves out because the kind's layout shows them elsewhere or they are not
+   * the reader's to act on. `mayManage` is whether the reader may start one of the kind.
+   */
+  listHides?(asset: BuildAssetRow, mayManage: boolean): boolean;
   /**
    * A new asset is available in the shared workspace it is made in: the dialog that starts
    * it says where, and offers every workspace to whoever may change that.

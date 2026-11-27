@@ -1,4 +1,5 @@
 import { apiOperations, connectionNameParamsSchema } from "@work-shape/catalyst-api-contract";
+import { resolveConfigLocale, resolveLocalizedString } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   CONNECTION_ACTIONS,
@@ -31,6 +32,7 @@ import { requestConnectionDiscovery } from "../connections/connection-jobs";
 import type { ConnectionManagementPort } from "../connections/connection-management-port";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
+import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 
 /** The module these operations belong to. */
 const CONNECTIONS_MODULE = "connections";
@@ -47,6 +49,8 @@ const SECRET_MARK = "[secret]";
  */
 export function registerConnectionRoutes(route: Route, options: ChatServerOptions): void {
   const { connections } = options;
+  // An operation is not told its caller's language: an agent is named in the instance's own.
+  const instanceLocale = resolveConfigLocale(options.config.localization, {});
 
   /** Decided on the stored Connection, or on the name alone where none carries it. */
   async function authorizeOn(
@@ -116,14 +120,22 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
   route.operation(apiOperations["connections.mine"], {
     authorize: () => ({ allowed: true }),
     module: CONNECTIONS_MODULE,
-    execute: (_input, context) =>
+    execute: async (_input, context) =>
       required().myConnections(
         context.actor.id,
         (resource) => context.access.authorize(CONNECTION_ACTIONS.use, resource).allowed,
         // Who may add an MCP server for themselves, as the self-add create decides it; the
         // operator's switch is read with the list.
         isFirstPartyPerson(context.actor) &&
-          context.access.authorize(CONNECTION_ACTIONS.addOwn).allowed
+          context.access.authorize(CONNECTION_ACTIONS.addOwn).allowed,
+        // A person's own account is used in their private chats: the agents named as using a
+        // Connection are the ones offered to the caller there, by availability and `agent.use`.
+        (await getWorkspaceAssetSnapshot(options, { kind: "personal" }, context.access)).agents.map(
+          (agent) => ({
+            title: resolveLocalizedString(agent.displayName, instanceLocale, "en"),
+            toolNames: agent.toolNames
+          })
+        )
       )
   });
   route.operation(apiOperations["connections.people"], {

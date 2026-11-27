@@ -674,7 +674,11 @@ export function createConnectionManagement(
 
   return {
     ...createConnectionPersonContextManagement(deps),
-    ...createPersonalConnectionManagement(deps, deps.catalogue?.ownServers),
+    ...createPersonalConnectionManagement(
+      deps,
+      deps.catalogue?.ownServers,
+      deps.catalogue?.entries
+    ),
     async resource(name) {
       const connection = await readConnection(deps, name);
       return connection ? connectionResourceOf(connection) : undefined;

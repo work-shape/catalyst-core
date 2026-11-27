@@ -32280,6 +32280,41 @@
                               "version"
                             ]
                           },
+                          "serviceTitle": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "de": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "mark": {
+                            "type": "object",
+                            "properties": {
+                              "color": {
+                                "type": "string"
+                              },
+                              "logo": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "usedBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "ownServer": {
                             "type": "object",
                             "properties": {

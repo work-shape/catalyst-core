@@ -4,14 +4,12 @@ import { defineTranslations } from "./translation-area";
 // the steps that install one part of an entry. `{title}` is the entry's name, such as a service's.
 export const connectionCatalogue = defineTranslations({
   en: {
-    "connectionCatalogue.services": "Services",
-    "connectionCatalogue.servicesText":
-      "Prepared connections to common services, set up in a few steps.",
+    "connectionCatalogue.installTitle": "Add services",
+    "connectionCatalogue.installText":
+      "Ready-made connections to common services. You set one up once, for everyone who should use it.",
+    "connectionCatalogue.statusInstalled": "Already set up",
     "connectionCatalogue.partTools": "For agents",
     "connectionCatalogue.partSource": "As a Knowledge Base source",
-    "connectionCatalogue.partOwn": "Only for you",
-    "connectionCatalogue.statusConnected": "You're connected",
-    "connectionCatalogue.statusSetUp": "Set up",
     "connectionCatalogue.statusStart": "Set up now",
     "connectionCatalogue.startLabel": "Set up {title}",
     "connectionCatalogue.openLabel": "Open {title}",
@@ -60,14 +58,12 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.updateChanges": "Settings that change"
   },
   de: {
-    "connectionCatalogue.services": "Dienste",
-    "connectionCatalogue.servicesText":
-      "Vorbereitete Verbindungen zu gängigen Diensten, in wenigen Schritten eingerichtet.",
+    "connectionCatalogue.installTitle": "Dienste hinzufügen",
+    "connectionCatalogue.installText":
+      "Vorbereitete Verbindungen zu gängigen Diensten. Du richtest sie einmal ein, für alle, die sie nutzen sollen.",
+    "connectionCatalogue.statusInstalled": "Bereits eingerichtet",
     "connectionCatalogue.partTools": "Für Agenten",
     "connectionCatalogue.partSource": "Als Quelle einer Wissensdatenbank",
-    "connectionCatalogue.partOwn": "Nur für dich",
-    "connectionCatalogue.statusConnected": "Du bist verbunden",
-    "connectionCatalogue.statusSetUp": "Eingerichtet",
     "connectionCatalogue.statusStart": "Einrichten",
     "connectionCatalogue.startLabel": "{title} einrichten",
     "connectionCatalogue.openLabel": "{title} öffnen",

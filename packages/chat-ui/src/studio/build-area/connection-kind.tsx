@@ -1,10 +1,12 @@
-import { Badge, Chip, ConnectionIcon } from "@work-shape/catalyst-ui";
+import { Badge, Chip, ConnectionIcon, ServiceMark } from "@work-shape/catalyst-ui";
 import { connectionCategory } from "../../shared/connection-facts";
 import type { BuildAsset, BuildAssetKind, BuildAssetRow } from "./build-asset-kind";
-import { ConnectionServices } from "./connection-catalogue-services";
 import { ConnectionCreateDialog } from "./connection-create-dialog";
 import { ConnectionAssetEditor } from "./connection-editor";
-import { connectorTypeLabel } from "./connection-form";
+import { knownConnectorTypeLabel } from "./connection-form";
+import { ConnectedPeopleBadge } from "./connection-people";
+import { ConnectionsListLayout } from "./connections-list-layout";
+import { hiddenFromConnectionList, markArt, serviceFaceOf } from "./my-connections-model";
 import { HEALTH_VIEWS, listedHealth } from "./connection-status";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 import { listedOwnServer } from "./own-server-model";
@@ -28,11 +30,12 @@ function listedIncomplete(asset: Pick<BuildAssetRow, "attributes">): boolean {
 }
 
 /**
- * Connections in Build: the catalogue's services on top ("Dienste", CAT-PAGE), the list below
- * them, "New connection" with its own dialog for an MCP server, a REST API or a type with a
- * form of its own, and the page of one Connection. A row says what the instance tells of the
- * Connection without its definition: its icon, what it is for, its connector type, whom it
- * belongs to and whether it is on. No row holds a setting or a reference to a credential.
+ * Connections in Build (CONN-IA): "Meine Verbindungen" for everyone, and for who manages
+ * Connections a tab with the instance's list, the services to install and other people's
+ * servers; "New connection" with its own dialog for an MCP server, a REST API or a type with a
+ * form of its own; and the page of one Connection. A row says what the instance tells of the
+ * Connection without its definition: the mark of its service, what it is for, whose account it
+ * uses and whether it works. No row holds a setting or a reference to a credential.
  */
 export const connectionKind: BuildAssetKind = {
   kind: "connection",
@@ -53,8 +56,10 @@ export const connectionKind: BuildAssetKind = {
   withoutCli: true,
   Editor: ConnectionAssetEditor,
   CreateDialog: ConnectionCreateDialog,
-  ListHead: ConnectionServices,
-  listTitle: "connections.yours",
+  ListLayout: ConnectionsListLayout,
+  // Who may change one Connection reads its row as who manages them all does.
+  listHides: (asset, mayManage) =>
+    hiddenFromConnectionList(asset, mayManage || (asset.allowed?.includes("write") ?? false)),
   // A person's own server is for that person alone, whatever its place. Another person's,
   // which an admin sees to switch off or delete, stands below the reader's own (PMCP).
   rowPlace: (asset, t) => {
@@ -73,14 +78,18 @@ export const connectionKind: BuildAssetKind = {
     description: "connections.othersOwnText",
     holds: (asset) => listedOwnServer(asset)?.owner === "other"
   },
-  // A row shows the icon of the system behind the Connection, on its tile, and what the
-  // Connection is for in words. Its id stands on its page.
+  // A row shows the mark of the service behind the Connection where it was installed for one,
+  // else the icon of its system, and what the Connection is for in words. Its id stands on
+  // its page.
   row: (asset, t) => {
     const { service, connectorType } = asset.attributes ?? {};
+    const face = serviceFaceOf(asset.attributes);
     // Without a description of its own, an incomplete Connection's row says what it lacks.
     const incomplete = listedIncomplete(asset) ? t("connections.incompleteRow") : undefined;
     return {
-      leading: (
+      leading: face ? (
+        <ServiceMark name={face.title} size="lg" showName={false} {...markArt(face.mark)} />
+      ) : (
         <ConnectionIcon
           size="lg"
           service={typeof service === "string" ? service : undefined}
@@ -95,28 +104,50 @@ export const connectionKind: BuildAssetKind = {
   // An incomplete Connection is removed from its row, as from its page.
   rowRemovable: listedIncomplete,
   rowRemoveLabel: "connections.incompleteRemove",
-  // An enabled Connection shows its health in the words of its page; a list of an instance
-  // that names no health shows that it is on.
+  // A row says whose account the Connection uses, in words: one shared access, or each
+  // person's own, then with how many people connected theirs for who may see them. An enabled
+  // shared Connection shows its health in the words of its page; a list of an instance that
+  // names no health shows that it is on.
   badges: (asset, t) => {
     const { connectorType, enabled, health, personalSignIn } = asset.attributes ?? {};
-    const listed = enabled === false ? undefined : listedHealth(health, personalSignIn === true);
+    const personal = personalSignIn === true;
+    const own = listedOwnServer(asset) !== undefined;
+    const listed = enabled === false ? undefined : listedHealth(health, personal);
+    const manages = asset.allowed?.includes("write") ?? false;
+    // The kind of server is a word for who sets it up, not for who only works with it.
+    const type =
+      manages && typeof connectorType === "string"
+        ? knownConnectorTypeLabel(connectorType, t)
+        : undefined;
     return (
       <>
-        {typeof connectorType === "string" ? (
-          <Chip size="sm">{connectorTypeLabel(connectorType, t)}</Chip>
-        ) : null}
+        {type ? <Chip size="sm">{type}</Chip> : null}
+        {own ? null : (
+          <Chip size="sm">
+            {t(personal ? "connections.accountPersonal" : "connections.accountShared")}
+          </Chip>
+        )}
         {listedIncomplete(asset) ? (
           <Badge tone="warning" data-connection-incomplete="">
             {t("connections.incomplete")}
           </Badge>
         ) : null}
-        {listed ? (
+        {enabled === false ? (
+          <Badge tone="neutral" dot>
+            {t("connections.disabled")}
+          </Badge>
+        ) : personal && !own ? (
+          // Each person connects their own account: nothing here is ready or missing.
+          manages ? (
+            <ConnectedPeopleBadge name={asset.name} />
+          ) : null
+        ) : listedIncomplete(asset) ? null : listed && listed !== "personal" ? (
           <Badge tone={HEALTH_VIEWS[listed].tone} dot data-connection-list-health={listed}>
             {t(HEALTH_VIEWS[listed].label)}
           </Badge>
-        ) : typeof enabled === "boolean" ? (
-          <Badge tone={enabled ? "success" : "neutral"} dot>
-            {t(enabled ? "connections.enabled" : "connections.disabled")}
+        ) : typeof enabled === "boolean" && !own ? (
+          <Badge tone="success" dot>
+            {t("connections.enabled")}
           </Badge>
         ) : null}
       </>

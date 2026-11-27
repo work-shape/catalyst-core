@@ -183,8 +183,9 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.details": "Details",
     "knowledgeSources.reviewFailures": "Review failures",
     "knowledgeSources.connectTitle": "Connect a folder",
-    "knowledgeSources.rowFrom": "Folders from {connection}",
     "knowledgeSources.rowDocument": "1 searchable",
+    "knowledgeSources.viaConnection": "Connection: {connection}",
+    "knowledgeSources.openConnection": "Open connection",
     "knowledgeSources.rowDocuments": "{count} searchable",
     "knowledgeSources.rowOriginals": "The originals stay in {connection}",
     "knowledgeSources.sentenceBoth":
@@ -403,8 +404,9 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.details": "Details",
     "knowledgeSources.reviewFailures": "Fehler ansehen",
     "knowledgeSources.connectTitle": "Ordner verbinden",
-    "knowledgeSources.rowFrom": "Ordner aus {connection}",
     "knowledgeSources.rowDocument": "1 durchsuchbar",
+    "knowledgeSources.viaConnection": "Verbindung: {connection}",
+    "knowledgeSources.openConnection": "Verbindung öffnen",
     "knowledgeSources.rowDocuments": "{count} durchsuchbar",
     "knowledgeSources.rowOriginals": "Die Originale bleiben in {connection}",
     "knowledgeSources.sentenceBoth":

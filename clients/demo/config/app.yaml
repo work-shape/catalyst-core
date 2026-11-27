@@ -300,7 +300,7 @@ egress:
         - 10.0.0.0/8
         - 172.16.0.0/12
         - 192.168.0.0/16
-# The catalogue entries New connection offers under "Dienste". The demo ships its sample
+# The catalogue entries the Connections page offers under "Add services". The demo ships its sample
 # entry (catalogue/sample-accounting); its host joins the egress list above. The two
 # sample-records entries are tiles on a person's own add screen (PMCP-CAT) and add no host.
 catalogue:

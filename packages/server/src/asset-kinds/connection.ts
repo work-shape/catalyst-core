@@ -1,4 +1,8 @@
-import { connectionConfigSchema, connectionNameSchema } from "@work-shape/catalyst-config-schema";
+import {
+  connectionConfigSchema,
+  connectionNameSchema,
+  resolveLocalizedString
+} from "@work-shape/catalyst-config-schema";
 import {
   AppError,
   CONNECTION_ACTIONS,
@@ -44,6 +48,8 @@ import {
   type ConnectorOAuthEndpoints,
   type DocumentSourceCapability,
   type JsonObject,
+  type LocaleCode,
+  type LocalizedStringConfig,
   type ConnectorTypeRegistry,
   type EgressChecker,
   type EgressTarget,
@@ -82,12 +88,42 @@ export interface ConnectionAssetKindOptions {
   catalogue?: {
     linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined;
     prepareConnection?(config: Record<string, unknown>): Record<string, unknown>;
+    /**
+     * The entries by id, with what a list shows of the service behind a Connection installed
+     * from one: its name and its mark.
+     */
+    entries?: readonly {
+      id: string;
+      title: LocalizedStringConfig;
+      mark: { color?: string; logo?: string };
+    }[];
   };
   /**
    * `modules.connections.ownServers`: whether people add their own MCP servers and how many
    * each. Left out, the release default.
    */
   ownServers?: Pick<OwnServersSettings, "enabled" | "perPerson">;
+}
+
+/**
+ * What a list shows of the service a Connection was installed for: the entry's name in the
+ * reader's language and its mark, a colour or a logo. Nothing where it names no known entry.
+ */
+function serviceFace(
+  options: ConnectionAssetKindOptions,
+  entryId: string | undefined,
+  locale: LocaleCode = "en"
+): Record<string, string> {
+  const entry = options.catalogue?.entries?.find((candidate) => candidate.id === entryId);
+  if (entry === undefined) return {};
+  return {
+    serviceTitle: resolveLocalizedString(entry.title, locale, "en"),
+    ...(entry.mark.logo === undefined
+      ? entry.mark.color === undefined
+        ? {}
+        : { serviceColor: entry.mark.color }
+      : { serviceLogo: entry.mark.logo })
+  };
 }
 
 /** The catalogue link a definition holds, as written, or nothing. */
@@ -523,7 +559,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
             return egress ? [egress] : [];
           });
       },
-      summarize: (connection) => ({
+      summarize: (connection, locale) => ({
         name: connection.name,
         title: connection.displayName,
         ...(connection.description === undefined ? {} : { description: connection.description }),
@@ -546,6 +582,9 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           ...(connection.catalogue === undefined
             ? {}
             : { catalogueEntry: connection.catalogue.entry }),
+          // The service it was installed for, by name and mark, so that whoever reads the
+          // Connection sees whose system it is without the right to read the catalogue.
+          ...serviceFace(options, connection.catalogue?.entry, locale),
           // A Knowledge Base can sync documents through it: its page offers it as a source. A
           // personal Connection never is one: ingestion keeps a shared binding.
           ...documentSourceAttributes(

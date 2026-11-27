@@ -6,6 +6,7 @@ import {
   isOwnServerOwner,
   ownServersOn,
   ownerOnlyOwnerOf,
+  parseConnectionOperationName,
   type AuditActor,
   type ConnectionBindingRecord,
   type OperationResource
@@ -18,7 +19,13 @@ import {
   type StoredConnection
 } from "./connection-reads";
 import { connectionOriginOf, connectionTargetOriginOf, takesOwnSecret } from "./connector-context";
-import type { OwnServerEntryView } from "./catalogue/catalogue";
+import type { CatalogueEntryView, OwnServerEntryView } from "./catalogue/catalogue";
+
+/** An agent that lists tools, as far as the caller may read it. */
+interface ListedAgent {
+  title: string;
+  toolNames: readonly string[];
+}
 
 /** A sign-in's binding, or a person's own token's (PMCP-6), as the lists below show it. */
 type ShownBinding = Pick<ConnectionBindingRecord, "state" | "connectedAt" | "origin"> &
@@ -73,7 +80,9 @@ function ownServerOf(connection: StoredConnection, switchOn: boolean) {
  */
 export function createPersonalConnectionManagement(
   deps: ConnectionOperationSourceDeps,
-  ownServerEntries: readonly OwnServerEntryView[] = []
+  ownServerEntries: readonly OwnServerEntryView[] = [],
+  /** The catalogue's entries, for the name and mark of the service a Connection is for. */
+  entries: readonly Pick<CatalogueEntryView, "id" | "title" | "mark">[] = []
 ) {
   return {
     async credentialMode(name: string) {
@@ -92,12 +101,14 @@ export function createPersonalConnectionManagement(
      * The personal Connections the person may use, each with only their own sign-in, and the
      * MCP servers they added for themselves, which nobody else is listed, also while switched
      * off. `mayAddOwn` is whether they hold the right to add one in a first-party session; the
-     * operator's switch is read here.
+     * operator's switch is read here. `agents` are the agents the caller may read: each
+     * Connection names those that carry one of its tools.
      */
     async myConnections(
       userId: string,
       usable: (resource: OperationResource) => boolean,
-      mayAddOwn = false
+      mayAddOwn = false,
+      agents: readonly ListedAgent[] = []
     ) {
       const [connections, bindings, ownSecrets] = await Promise.all([
         readConnections(deps),
@@ -133,6 +144,17 @@ export function createPersonalConnectionManagement(
           })
           .map((connection) => {
             const ownServer = ownServerOf(connection, switchOn);
+            const entry = entries.find(
+              (candidate) => candidate.id === connection.config.catalogue?.entry
+            );
+            const usedBy = agents
+              .filter((agent) =>
+                agent.toolNames.some(
+                  (toolName) =>
+                    parseConnectionOperationName(toolName)?.connection === connection.config.name
+                )
+              )
+              .map((agent) => agent.title);
             // Where each person pastes their own token, the token's binding is the state.
             const token = takesOwnSecret(connection.config)
               ? atCurrentOrigin(connection, tokenByConnection.get(connection.assetId))
@@ -146,6 +168,9 @@ export function createPersonalConnectionManagement(
               ...(connection.config.catalogue === undefined
                 ? {}
                 : { catalogue: connection.config.catalogue }),
+              ...(entry === undefined ? {} : { serviceTitle: entry.title, mark: entry.mark }),
+              // A person's own server names no agent: its tools go to every agent that allows them.
+              ...(ownServer === undefined ? { usedBy } : {}),
               ...displayBinding(
                 takesOwnSecret(connection.config)
                   ? token

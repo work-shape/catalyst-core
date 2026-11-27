@@ -79,6 +79,8 @@ function sourceWith(
     browsesFolders?: true;
     sourceFull?: string;
     sourceMinChanges?: number;
+    service?: { title: string; mark: { color?: string; logo?: string } };
+    opens?: true;
   }[],
   sourceTypes: readonly string[] | undefined
 ): KnowledgeBaseSource {
@@ -150,6 +152,8 @@ function render(
       browsesFolders?: true;
       sourceFull?: string;
       sourceMinChanges?: number;
+      service?: { title: string; mark: { color?: string; logo?: string } };
+      opens?: true;
     }[];
     /** The titles of the Connector types the instance can sync documents from. */
     sourceTypes?: readonly string[];
@@ -187,7 +191,7 @@ function render(
             value: {
               location: { kindPath: "knowledge-bases", name: "handbook-kb" },
               open: () => undefined,
-              href: (place) => `/build/${place.kindPath ?? ""}`
+              href: (place) => `/build/${[place.kindPath, place.name].filter(Boolean).join("/")}`
             },
             children: section
           })
@@ -563,6 +567,26 @@ describe("folders chosen by name (KB-FOLDERS-1)", () => {
     expect(page).not.toContain('data-knowledge-source-excluded-folder="**');
     expect(page).not.toContain('data-knowledge-source-field="folders"');
     expect(render("en")).toContain('data-knowledge-source-field="folders"');
+  });
+});
+
+describe("where a source's documents come from (CONN-IA)", () => {
+  it("names the service, the Connection and the folders, with a link only for who may open it", () => {
+    const files = {
+      name: "handbook-folders",
+      title: "Team files",
+      connectorType: "box",
+      browsesFolders: true as const,
+      service: { title: "Box", mark: { color: "#0061d5" } }
+    };
+    const page = render("de", { connections: [{ ...files, opens: true }], inBuild: true });
+    expect(page).toContain('data-knowledge-source-connection="handbook-folders"');
+    expect(page).toContain("Verbindung: ");
+    expect(page).toContain('href="/build/connections/handbook-folders"');
+    expect(page).toMatch(/data-knowledge-source-paths[^>]*>.*\/Objekte\/100/su);
+    const reader = render("de", { connections: [files], inBuild: true });
+    expect(reader).toContain("Team files");
+    expect(reader).not.toContain('href="/build/connections/handbook-folders"');
   });
 });
 

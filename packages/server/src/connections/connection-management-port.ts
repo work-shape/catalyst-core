@@ -92,11 +92,15 @@ export interface ConnectionManagementPort {
     connectorType: string;
     ownerPrincipalId: string;
   }>;
-  /** `mayAddOwn`: the caller holds `connection.add_own` in a first-party session. */
+  /**
+   * `mayAddOwn`: the caller holds `connection.add_own` in a first-party session. `agents`: the
+   * agents the caller may read, of which each Connection names those that carry its tools.
+   */
   myConnections(
     userId: string,
     usable: (resource: OperationResource) => boolean,
-    mayAddOwn?: boolean
+    mayAddOwn?: boolean,
+    agents?: readonly { title: string; toolNames: readonly string[] }[]
   ): Promise<PersonalConnections>;
   connectionPeople(name: string): Promise<ConnectionPeople>;
   revokePerson(
