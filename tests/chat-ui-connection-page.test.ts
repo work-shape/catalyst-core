@@ -877,11 +877,15 @@ describe("A Connection in the list", () => {
     expect(listedHealth(undefined)).toBeUndefined();
   });
 
-  it("shows the health of an enabled Connection, and Disabled for one that is off", () => {
-    expect(badges({ health: "unknown" })).toContain('data-connection-list-health="never_tested"');
+  it("names only a health somebody has to act on, and Disabled for one that is off", () => {
+    expect(badges({ health: "failed" })).toContain('data-connection-list-health="failed"');
     expect(badges({ enabled: false, health: "ok" })).toContain(">Disabled<");
-    // An instance that names no health shows that the Connection is on.
-    expect(badges({})).toContain(">Enabled<");
+    // One that works, was never tested or names no health says nothing more.
+    const quietOnes: Record<string, string>[] = [{ health: "ok" }, { health: "unknown" }, {}];
+    for (const quiet of quietOnes) {
+      expect(badges(quiet)).not.toContain("data-connection-list-health");
+      expect(badges(quiet)).not.toContain(">Enabled<");
+    }
   });
 
   // T35: a failed connect left a Connection behind without tools.
@@ -1331,6 +1335,10 @@ describe("The Connections page (CONN-IA)", () => {
     const personal = badges({ health: "needs_configuration", personalSignIn: true });
     expect(personal).toContain("Jede Person mit eigenem Konto");
     expect(personal).not.toContain("data-connection-list-health");
+    // The number of people stands in the same words, where the instance names it.
+    expect(badges({ personalSignIn: true, connectedPeople: "3" }).replaceAll(/<[^>]+>/gu, "")).toBe(
+      "Jede Person mit eigenem Konto · 3 verbunden"
+    );
     expect(
       serviceFaceOf(row({ serviceTitle: "Files", serviceColor: "#2f6f4f" }).attributes)
     ).toEqual({ title: "Files", mark: { color: "#2f6f4f" } });

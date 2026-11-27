@@ -70,8 +70,3 @@ export function ownSignInOf(answer: PersonalConnections, name: string): SignInRe
         }
       };
 }
-
-/** How many people have their own account connected now: a sign-in to renew counts as none. */
-export function connectedPeopleCount(people: ConnectionPeople["people"]): number {
-  return people.filter((person) => person.state === "connected").length;
-}

@@ -26,10 +26,9 @@ import {
   usePersonalConnectionsQuery
 } from "../../shared/api/personal-connections";
 import { formatDate, formatDateTime } from "../../shared/locale-format";
-import { useOptionalSettingsPage, useSettingsPage } from "../../shared/settings-page-context";
+import { useSettingsPage } from "../../shared/settings-page-context";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import {
-  connectedPeopleCount,
   mayRevoke,
   ownActions,
   ownSignInOf,
@@ -305,31 +304,6 @@ function useConnectionPeople(name: string) {
     retry: false
   });
   return { key, people };
-}
-
-/**
- * "3 people connected" on a personal Connection's row in the list, for who may change it. It
- * shows nothing until the people are read, and nothing where the read is refused.
- */
-export function ConnectedPeopleBadge({ name }: { name: string }) {
-  // Studio shown alone, as in a rendering of its frame, reads no instance.
-  return useOptionalSettingsPage() ? <InstancePeopleBadge name={name} /> : null;
-}
-
-function InstancePeopleBadge({ name }: { name: string }) {
-  const { t } = useTranslation();
-  const { people } = useConnectionPeople(name);
-  if (people.data === undefined) return null;
-  const count = connectedPeopleCount(people.data.people);
-  return (
-    <Badge tone={count === 0 ? "neutral" : "success"} dot data-connection-people={count}>
-      {count === 0
-        ? t("connections.peopleConnectedNone")
-        : count === 1
-          ? t("connections.peopleConnectedOne")
-          : t("connections.peopleConnected", { count })}
-    </Badge>
-  );
 }
 
 /**

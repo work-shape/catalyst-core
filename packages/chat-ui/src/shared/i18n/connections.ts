@@ -20,12 +20,12 @@ export const connections = defineTranslations({
       "Nothing here needs your own account yet. An administrator sets that up.",
     "myConnections.emptyMayAdd":
       "You have not connected anything yet. When an agent needs your own account with a service, the service shows up here.",
+    "myConnections.ownServerLine": "A server you added yourself. Only you use it.",
     "myConnections.usedBy": "Used by {agents}",
     "myConnections.usedByNone": "No agent uses this connection yet",
     "myConnections.connectLabel": "Connect {title}",
     "myConnections.noToolsYet":
       "No tools chosen yet. Under “Change tools”, pick what your agents may use.",
-    "myConnections.connectFirst": "Not finished yet: connect first, then choose the tools.",
     "connections.tabs": "Views",
     "connections.manageTab": "Manage",
     "connections.instanceTitle": "Connections set up here",
@@ -36,9 +36,7 @@ export const connections = defineTranslations({
       "These run on one shared access. There is nothing for you to connect: agents use them in your chats by themselves.",
     "connections.accountShared": "One shared access",
     "connections.accountPersonal": "Each person's own account",
-    "connections.peopleConnected": "{count} people connected",
-    "connections.peopleConnectedOne": "1 person connected",
-    "connections.peopleConnectedNone": "Nobody connected yet",
+    "connections.peopleConnectedShort": "connected",
     "connections.othersOwn": "Added by others",
     "connections.othersOwnText":
       "Servers other people added for themselves. Only they can use them; you can switch them off or delete them.",
@@ -379,13 +377,12 @@ export const connections = defineTranslations({
       "Noch braucht keine Verbindung dein eigenes Konto. Eine Administratorin oder ein Administrator richtet das ein.",
     "myConnections.emptyMayAdd":
       "Du hast noch nichts verbunden. Sobald ein Agent dein eigenes Konto bei einem Dienst braucht, erscheint der Dienst hier.",
+    "myConnections.ownServerLine": "Ein Server, den du selbst hinzugefügt hast. Nur du nutzt ihn.",
     "myConnections.usedBy": "Genutzt von {agents}",
     "myConnections.usedByNone": "Noch kein Agent nutzt diese Verbindung",
     "myConnections.connectLabel": "{title} verbinden",
     "myConnections.noToolsYet":
       "Noch keine Tools ausgewählt. Wähl unter „Tools ändern“, was deine Agenten nutzen dürfen.",
-    "myConnections.connectFirst":
-      "Noch nicht fertig: Verbinde dich zuerst, dann wählst du die Tools.",
     "connections.tabs": "Ansichten",
     "connections.manageTab": "Verwalten",
     "connections.instanceTitle": "Hier eingerichtete Verbindungen",
@@ -396,9 +393,7 @@ export const connections = defineTranslations({
       "Diese Verbindungen laufen über einen gemeinsamen Zugang. Du musst nichts verbinden: Agenten nutzen sie in deinen Chats von selbst.",
     "connections.accountShared": "Gemeinsamer Zugang",
     "connections.accountPersonal": "Jede Person mit eigenem Konto",
-    "connections.peopleConnected": "{count} Personen verbunden",
-    "connections.peopleConnectedOne": "1 Person verbunden",
-    "connections.peopleConnectedNone": "Noch niemand verbunden",
+    "connections.peopleConnectedShort": "verbunden",
     "connections.othersOwn": "Von anderen hinzugefügt",
     "connections.othersOwnText":
       "Server, die andere Personen für sich selbst hinzugefügt haben. Nur sie können sie nutzen; du kannst sie ausschalten oder löschen.",

@@ -66,6 +66,16 @@ interface BuildKindBase {
     t: TranslationContextValue["t"]
   ): { scope: "instance" | "workspace" | "personal"; name: string } | undefined;
   /**
+   * Whether a row leaves out where its asset sits, where the kind's own words on the row say
+   * whom it is for, such as a Connection of the instance, which says whose account it uses.
+   */
+  rowOmitsPlace?(asset: BuildAssetRow): boolean;
+  /**
+   * How many rows the list holds before it offers its search: a short list is read at a
+   * glance. Without it the search always stands.
+   */
+  searchFrom?: number;
+  /**
    * Rows that stand in a section of their own below the list, under `title`, such as other
    * people's own servers an admin sees: the list leaves them out. The search narrows them too.
    */
@@ -133,6 +143,11 @@ export interface BuildAssetKind extends BuildKindBase {
    * the reader's to act on. `mayManage` is whether the reader may start one of the kind.
    */
   listHides?(asset: BuildAssetRow, mayManage: boolean): boolean;
+  /**
+   * The tab of the kind's own list page (`ListLayout`) that the page's "New" belongs to: on
+   * its other tabs the head shows none, so a tab with an add action of its own has one.
+   */
+  newOnTab?: string;
   /**
    * A new asset is available in the shared workspace it is made in: the dialog that starts
    * it says where, and offers every workspace to whoever may change that.

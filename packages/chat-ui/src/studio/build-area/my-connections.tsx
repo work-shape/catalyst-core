@@ -48,8 +48,11 @@ interface Adding {
 export function MyConnectionsSection({
   title,
   description,
+  untitled = false,
   browser
 }: {
+  /** Under a tab that already says "My connections": no title of its own. */
+  untitled?: boolean;
   /** The section's title, where the page's head already says "My connections". */
   title?: string;
   /** The sentence under it. Without a `title` of its own the section says its own. */
@@ -85,21 +88,14 @@ export function MyConnectionsSection({
 
   const cards = myConnectionCards({ connections: query.data?.connections ?? [], entries });
   const from = adding?.from;
-  return (
-    <Section
-      layout="stacked"
-      title={title ?? t("myConnections.title")}
-      description={title === undefined ? t("myConnections.description") : description}
-      action={
-        mayAdd ? (
-          <Button size="sm" variant="outline" data-own-server-add="" onClick={() => openAdd()}>
-            <Plus aria-hidden="true" />
-            {t("myConnections.addOwn")}
-          </Button>
-        ) : undefined
-      }
-      data-my-connections=""
-    >
+  const addOwn = mayAdd ? (
+    <Button size="sm" variant="outline" data-own-server-add="" onClick={() => openAdd()}>
+      <Plus aria-hidden="true" />
+      {t("myConnections.addOwn")}
+    </Button>
+  ) : undefined;
+  const content = (
+    <>
       {query.isPending ? (
         <SkeletonList rows={3} />
       ) : query.isError ? (
@@ -169,6 +165,30 @@ export function MyConnectionsSection({
           {...(browser ? { browser } : {})}
         />
       ) : null}
+    </>
+  );
+  if (untitled) {
+    return (
+      <div className="grid min-w-0 gap-4" data-my-connections="">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <p className="min-w-0 text-caption text-muted-foreground">
+            {t("myConnections.description")}
+          </p>
+          {addOwn}
+        </div>
+        <div className="grid min-w-0 gap-5">{content}</div>
+      </div>
+    );
+  }
+  return (
+    <Section
+      layout="stacked"
+      title={title ?? t("myConnections.title")}
+      description={title === undefined ? t("myConnections.description") : description}
+      action={addOwn}
+      data-my-connections=""
+    >
+      {content}
     </Section>
   );
 }

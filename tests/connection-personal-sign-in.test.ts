@@ -199,6 +199,9 @@ describe("personal OAuth sign-in lifecycle", () => {
       state: "connected",
       account: "Account A"
     });
+    // The list names how many people connected, to who may change the Connection (CONN-IA).
+    const rows = (await client.assets.list({ params: { kind: "connection" } })).items;
+    expect(rows.find((row) => row.name === "personal")?.attributes?.connectedPeople).toBe("2");
     const people = await api("connections.people", alice, { name: "personal" });
     expect(people.status).toBe(200);
     const listed = peopleSchema.parse(people.body).people;

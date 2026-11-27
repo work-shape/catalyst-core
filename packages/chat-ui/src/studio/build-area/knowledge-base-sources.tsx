@@ -574,7 +574,7 @@ function SourceItem({
                 <Plug aria-hidden="true" className="size-3.5 shrink-0" />
                 {connectionPage && navigation ? (
                   <TextLink
-                    className="min-w-0 wrap-anywhere"
+                    className="min-w-0 underline decoration-muted-foreground wrap-anywhere"
                     href={navigation.href(connectionPage)}
                     onClick={(event) => {
                       if (!opensHere(event)) return;

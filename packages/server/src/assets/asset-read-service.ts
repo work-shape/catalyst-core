@@ -284,6 +284,10 @@ export class AssetReadWorkflow {
     // list that shows it to an admin does not read as theirs (PMCP).
     const ownServers =
       kind.kind === "connection" ? await this.ownServerAttributes(call, records) : undefined;
+    // How many people connected their own account to each personal Connection, from one read
+    // of the instance's sign-ins: named only on a Connection the reader may change.
+    const connectedPeople =
+      kind.kind === "connection" ? await this.connectedPeopleByConnection(records) : undefined;
     // The Apps that start each Workflow of the page, from one pass over the Apps.
     const appCallers =
       kind.kind === "workflow" && records.length > 0
@@ -320,7 +324,12 @@ export class AssetReadWorkflow {
           ? {
               ...summary.attributes,
               health: health.get(record.id) ?? "unknown",
-              ...ownServers?.get(record.id)
+              ...ownServers?.get(record.id),
+              ...(summary.attributes?.personalSignIn === true &&
+              !ownServers?.has(record.id) &&
+              allowed.includes("write")
+                ? { connectedPeople: String(connectedPeople?.get(record.id) ?? 0) }
+                : {})
             }
           : summary.attributes;
       return {
@@ -340,6 +349,32 @@ export class AssetReadWorkflow {
         updatedAt: record.updatedAt
       };
     });
+  }
+
+  /**
+   * How many people have their own account connected to each Connection among the records, by
+   * asset id: a sign-in or an own token that stands, counted once per person.
+   */
+  private async connectedPeopleByConnection(
+    records: readonly ConfigAssetRecord[]
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (records.length === 0) return counts;
+    const { clientInstanceId, stores } = this.options;
+    const [signIns, tokens] = await Promise.all([
+      stores.connections.listConnectionBindings({ clientInstanceId }),
+      stores.connections.listConnectionOwnSecrets({ clientInstanceId })
+    ]);
+    const seen = new Set<string>();
+    for (const binding of [...signIns, ...tokens]) {
+      if (binding.state !== "connected" || binding.userId === undefined) continue;
+      if (binding.subject !== `user:${binding.userId}`) continue;
+      const key = `${binding.connectionAssetId}\n${binding.subject}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      counts.set(binding.connectionAssetId, (counts.get(binding.connectionAssetId) ?? 0) + 1);
+    }
+    return counts;
   }
 
   /**
