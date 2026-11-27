@@ -60,6 +60,38 @@ export const secrets = pgTable(
 );
 
 /**
+ * An instance's OAuth app (OAUTH-APP): one per authorization server, entered once by an admin
+ * and used by every Connection on that server and client id that holds no client secret of
+ * its own. It holds the client secret as ciphertext only, like `secrets`, and belongs to no
+ * Connection, so deleting one leaves it.
+ */
+export const connectionOAuthApps = pgTable(
+  "connection_oauth_apps",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    /** The token, authorization and revocation addresses and the issuer, as one string. */
+    server: text("server").notNull(),
+    /** The service it was entered for: a label only. */
+    service: text("service"),
+    clientId: text("client_id").notNull(),
+    version: integer("version").notNull(),
+    keyId: text("key_id").notNull(),
+    nonce: bytes("nonce").notNull(),
+    ciphertext: bytes("ciphertext").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "connection_oauth_apps_pk",
+      columns: [table.clientInstanceId, table.server]
+    }),
+    check("connection_oauth_apps_nonce_length_check", sql`octet_length(${table.nonce}) = 12`),
+    check("connection_oauth_apps_version_check", sql`${table.version} >= 1`)
+  ]
+);
+
+/**
  * Runtime state of a Connection: its health, the last test and the catalog a discovery read.
  * It is no revision and holds no secret.
  */

@@ -440,6 +440,24 @@ export function connectionCredentialOrigin(
 }
 
 /**
+ * The authorization server an instance's OAuth app is registered at (OAUTH-APP): its token,
+ * authorization and revocation addresses and the issuer the settings name, as
+ * `connectionCredentialOrigin` writes them. The client id is no part of it: an instance holds
+ * one app per server. Holds no `|`.
+ */
+export function connectionOAuthServerOf(endpoints: ConnectorOAuthEndpoints): string {
+  const of = (address: string | undefined) =>
+    address === undefined ? "-" : encodeURIComponent(new URL(address).href);
+  return [
+    "oauth",
+    of(endpoints.tokenUrl),
+    of(endpoints.authorizationUrl),
+    of(endpoints.revocationUrl),
+    of(endpoints.issuer)
+  ].join(" ");
+}
+
+/**
  * The release config setting that lets a target no entry names through, as the sentence a
  * refusal ends with: an entry under `egress.allow`, and for `https` on port 443 also
  * `egress.allowPublicHttps`. Plain `http` needs a `private` entry.
@@ -705,6 +723,25 @@ export interface StoredSecretRecord {
 }
 
 /**
+ * An instance's OAuth app as the database holds it (OAUTH-APP): the client id an admin
+ * registered at one authorization server and its client secret, sealed with a key of the
+ * Secret Store. Never a value.
+ */
+export interface StoredOAuthAppRecord {
+  clientInstanceId: ClientInstanceId;
+  /** The authorization server, as `connectionOAuthServerOf` writes it. */
+  server: string;
+  /** The service it was entered for: a label, which no right or match reads. */
+  service?: string;
+  clientId: string;
+  version: number;
+  keyId: string;
+  nonce: Uint8Array;
+  ciphertext: Uint8Array;
+  updatedAt?: string;
+}
+
+/**
  * The rows behind Connections: stored secrets, runtime state and sign-in bindings. No method
  * returns a value.
  */
@@ -757,7 +794,22 @@ export interface ConnectionsStore extends ConnectionBindingsStore {
     subject?: string;
     /** Only a secret of this source, so a delete never takes one that was set meanwhile. */
     source?: SecretSource;
+    /** Only this version of it: a delete never takes a version written meanwhile. */
+    version?: number;
   }): Promise<void>;
+  /** The instance's OAuth app of one authorization server (OAUTH-APP), or nothing. */
+  getOAuthApp(input: {
+    clientInstanceId: ClientInstanceId;
+    server: string;
+  }): Promise<StoredOAuthAppRecord | undefined>;
+  /** Every OAuth app of the instance. */
+  listOAuthApps(input: { clientInstanceId: ClientInstanceId }): Promise<StoredOAuthAppRecord[]>;
+  /**
+   * Inserts version 1, or replaces the app of the same server with the version that follows
+   * the stored one, in one statement. Answers `false` and writes nothing where somebody else
+   * wrote in between.
+   */
+  putOAuthApp(record: StoredOAuthAppRecord): Promise<boolean>;
   getConnectionState(input: {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;
@@ -1279,7 +1331,12 @@ export const CONNECTION_REFUSALS = {
    */
   ownSecretUnsupported: "own_secret_unsupported",
   /** The Connection holds no test credential to remove. */
-  testCredentialNotSet: "test_credential_not_set"
+  testCredentialNotSet: "test_credential_not_set",
+  /**
+   * An instance's OAuth app (OAUTH-APP) is set from a Connection that signs in with OAuth at a
+   * server its settings name, on a client of its own: not a managed, discovered or DCR client.
+   */
+  oauthAppUnsupported: "oauth_app_unsupported"
 } as const;
 
 /** What a person is told where App exposure and a person context header meet. */

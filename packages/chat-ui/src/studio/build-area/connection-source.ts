@@ -134,6 +134,17 @@ export interface ConnectionSource {
     expectedRevision: number
   ): Promise<void>;
   /**
+   * Sets the instance's OAuth app of the server and client id the Connection names (OAUTH-APP)
+   * with the value, over the app's version the writer saw, for the Connection at
+   * `expectedRevision`. The value goes to the instance and is kept nowhere here.
+   */
+  setOAuthApp?(
+    name: string,
+    value: string,
+    expectedVersion: number | null,
+    expectedRevision: number
+  ): Promise<void>;
+  /**
    * Sets or rotates the Connection's test credential (ADR-0031): drafts' calls use it, and
    * never the live key. The value goes to the instance and is kept nowhere here. The page
    * reads the Connection again afterwards.
@@ -374,6 +385,20 @@ export function useConnectionSource(): ConnectionSource {
         });
       } finally {
         await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+      }
+    },
+    async setOAuthApp(name, value, expectedVersion, expectedRevision) {
+      try {
+        await calls.set_oauth_app({
+          params: { name },
+          body: { value, expectedVersion, expectedRevision }
+        });
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: detailKey(name) });
+        // The catalogue's parts on the app's server now install with no secret.
+        await queryClient.invalidateQueries({
+          queryKey: ["connector-types", apiBaseUrl, authScope]
+        });
       }
     },
     async setTestCredential(name, body) {

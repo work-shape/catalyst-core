@@ -76,6 +76,11 @@ export interface TypedInstall {
    * write names it and installs the Connection anew. The address then counts as free.
    */
   recreates?: number;
+  /**
+   * The secret typed is the instance's OAuth app for the part's server (OAUTH-APP), not the
+   * Connection's own: every later install on that server asks for none.
+   */
+  secretTarget?: "oauth_app" | "connection";
 }
 
 /** What a connected Connection is, for a flow that goes on after the connect. */
@@ -172,7 +177,10 @@ export function TypedConnectionCreate({
             })
           ).revision,
         setSecret: (value, expectedVersion, expectedRevision) =>
-          source.setSecret(name, value, expectedVersion, expectedRevision),
+          install?.secretTarget === "oauth_app" && source.setOAuthApp
+            ? // The instance had no app when the form opened: its version is none.
+              source.setOAuthApp(name, value, null, expectedRevision)
+            : source.setSecret(name, value, expectedVersion, expectedRevision),
         readDetail: () => source.readDetail(name),
         test: () => source.test(name),
         discover: () => Promise.resolve(),

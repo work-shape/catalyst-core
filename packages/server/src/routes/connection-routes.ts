@@ -288,6 +288,28 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     }
   });
 
+  route.operation(apiOperations["connections.set_oauth_app"], {
+    // The app serves every Connection of its server and client id (OAUTH-APP): set by whoever
+    // may write every Connection of the instance, and may write the one it is set from.
+    authorize: async (input, { access }) => {
+      const everywhere = decide(access, CONNECTION_ACTIONS.write, { kind: CONNECTION_ASSET_KIND });
+      return everywhere.allowed
+        ? authorizeOn(access, CONNECTION_ACTIONS.write, input.name)
+        : everywhere;
+    },
+    resource: connectionResource,
+    // An app secret that was replaced cannot be brought back.
+    inputWithoutSecrets: (input) =>
+      input.value === undefined ? input : { ...input, value: SECRET_MARK },
+    module: CONNECTIONS_MODULE,
+    execute: (input) =>
+      required().setOAuthApp(input.name, {
+        ...(input.value === undefined ? {} : { value: input.value }),
+        expectedVersion: input.expectedVersion,
+        expectedRevision: input.expectedRevision
+      })
+  });
+
   route.operation(apiOperations["connections.set_test_credential"], {
     authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
     resource: connectionResource,
@@ -479,7 +501,13 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
         ? { allowed: true }
         : decide(access, CONNECTION_ACTIONS.write, { kind: CONNECTION_ASSET_KIND }),
     module: CONNECTIONS_MODULE,
-    execute: () => (connections ? connections.connectorTypes() : { types: [] })
+    execute: (_input, context) =>
+      connections
+        ? connections.connectorTypes(
+            decide(context.access, CONNECTION_ACTIONS.write, { kind: CONNECTION_ASSET_KIND })
+              .allowed
+          )
+        : { types: [] }
   });
 }
 

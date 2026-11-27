@@ -324,7 +324,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
             connection: starting.connection,
             origin: starting.origin,
             clientId: endpoints.clientId,
-            preregisteredId: endpoints.clientId
+            preregisteredId: endpoints.clientId,
+            endpoints
           })
         : { clientId: endpoints.clientId };
     return {
@@ -578,7 +579,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       origin,
       clientId: session.clientId,
       preregisteredId: signIn.oauthSettings(settings).clientId,
-      managedClient: endpoints?.managedClient
+      managedClient: endpoints?.managedClient,
+      endpoints
     });
     let tokens;
     try {

@@ -354,6 +354,24 @@ export async function openBoundSecret(
 }
 
 /**
+ * The value of a row already read, opened for the binding the caller names, or nothing where
+ * it does not open. For a caller that compares it and then acts on that very version.
+ */
+export function openSecretRecord(
+  options: Pick<SecretStoreOptions, "clientInstanceId" | "keyring">,
+  record: StoredSecretRecord,
+  binding: SecretBinding
+): string | undefined {
+  const opened = openRecord(options, record, binding);
+  if (!opened) return undefined;
+  try {
+    return opened.toString("utf8");
+  } finally {
+    opened.fill(0);
+  }
+}
+
+/**
  * The token set a binding names, opened for the origin it was made for. Throws
  * `connection_not_connected` where its row is gone or was set for another origin, and
  * `secret_unreadable` where it does not open or is no token set.

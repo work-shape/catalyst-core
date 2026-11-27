@@ -161,6 +161,7 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
       }),
       catalog: undefined
     };
+    const endpoints = type.oauthEndpoints?.(settings.data);
     const client = await clientOfSession(
       {
         clientInstanceId,
@@ -175,7 +176,8 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
         origin,
         clientId: tokenSet.clientId,
         preregisteredId: type.signIn.oauthSettings(settings.data).clientId,
-        managedClient: type.oauthEndpoints?.(settings.data)?.managedClient
+        managedClient: endpoints?.managedClient,
+        endpoints
       }
     );
     return {

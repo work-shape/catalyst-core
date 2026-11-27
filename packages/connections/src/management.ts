@@ -1,4 +1,5 @@
 import { createPersonalConnectionManagement } from "./personal-management";
+import { createOAuthAppManagement } from "./oauth-app-management";
 import type { Catalogue } from "./catalogue/catalogue";
 import {
   AppError,
@@ -195,6 +196,8 @@ export interface ConnectionView {
   binding?: ConnectionBindingView;
   /** Only for a Connection whose auth scheme is `oauth`. */
   oauth?: ConnectionOAuthView;
+  /** The instance's OAuth app of the Connection's server (OAUTH-APP), where it has one. */
+  oauthApp?: { clientId: string; version: number; inUse: boolean };
   /** Only for a shared Connection that takes one, or where one is stored. */
   testCredential?: ConnectionTestCredentialView;
   /** Only for a personal MCP Connection that takes each person's own token: the reader's. */
@@ -242,7 +245,8 @@ export interface AgentToolListing {
 export interface ConnectionManagement
   extends
     ReturnType<typeof createConnectionPersonContextManagement>,
-    ReturnType<typeof createPersonalConnectionManagement> {
+    ReturnType<typeof createPersonalConnectionManagement>,
+    Pick<ReturnType<typeof createOAuthAppManagement>, "setOAuthApp"> {
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
   /** Refuses a discovery of a person's own server with `own_servers_off` while it is off. */
@@ -267,7 +271,10 @@ export interface ConnectionManagement
    * The Connector types of the build that the New connection dialog offers with a form, and
    * the catalogue's entries.
    */
-  connectorTypes(): { types: ConnectorTypeOfferView[]; entries: CatalogueEntryOfferView[] };
+  connectorTypes(
+    /** The reader may set the instance's OAuth apps (OAUTH-APP): `connection.write` on all. */
+    mayManageOAuthApps?: boolean
+  ): Promise<{ types: ConnectorTypeOfferView[]; entries: CatalogueEntryOfferView[] }>;
   /**
    * Stores the shared secret of a Connection made on the instance, as the next version. The
    * value is written once and never read back. `expectedVersion` is the version the writer
@@ -534,6 +541,7 @@ export function createConnectionManagement(
 ): ConnectionManagement {
   const now = deps.now ?? (() => new Date());
   const signIn = createConnectionSignIn(deps);
+  const oauthApps = createOAuthAppManagement(deps);
   // Without a key of the Secret Store there is no token set, and so no sign-in to end.
   const ending =
     deps.keyring === undefined
@@ -700,6 +708,8 @@ export function createConnectionManagement(
       const binding = await bindingOf(connection, origin);
       const ownToken = await ownTokenOf(connection, origin, reader);
       const oauth = oauthOf(connection);
+      const secret = await secretOf(connection);
+      const oauthApp = await oauthApps.appOf(connection, secret.state === "not_set");
       const testCredential = testCredentialViewOf(
         connection,
         connection.config.credentialMode === "user"
@@ -719,7 +729,7 @@ export function createConnectionManagement(
           : { lastTestedAt: state.lastTestedAt }),
         ...(state?.lastErrorCode === undefined ? {} : { lastErrorCode: state.lastErrorCode }),
         ...(state === undefined ? {} : { recordedAt: state.updatedAt }),
-        secret: await secretOf(connection),
+        secret,
         sharedCredential: connection.config.credentialMode === "shared",
         operations: operationsOf(connection),
         discovered: seesDiscovered ? discoveredOf(connection) : [],
@@ -733,6 +743,7 @@ export function createConnectionManagement(
         ...(catalog && seesDiscovered ? { discoveredAt: catalog.discoveredAt } : {}),
         ...(binding === undefined ? {} : { binding }),
         ...(oauth === undefined ? {} : { oauth }),
+        ...(oauthApp === undefined ? {} : { oauthApp }),
         ...(testCredential === undefined ? {} : { testCredential }),
         ...(ownToken === undefined ? {} : { ownToken })
       };
@@ -1210,8 +1221,16 @@ export function createConnectionManagement(
         ? undefined
         : signInLandingUrl(deps.publicUrl, outcome, connectionName),
 
-    connectorTypes: () =>
-      connectorTypeOffers(deps.connectorTypes, deps.catalogue, (name) => signIn.redirectUri(name)),
+    setOAuthApp: oauthApps.setOAuthApp,
+
+    async connectorTypes(mayManageOAuthApps = false) {
+      return connectorTypeOffers(
+        deps.connectorTypes,
+        deps.catalogue,
+        (name) => signIn.redirectUri(name),
+        { byServer: await oauthApps.oauthApps(), mayEnter: mayManageOAuthApps }
+      );
+    },
 
     async listTools(readable) {
       const connections = (await readConnections(deps))

@@ -50,16 +50,32 @@ export function managedSettings(
   return { ...copy, oauth: { ...oauth, managedClient } };
 }
 
+/** The setting of the client id a part's form asks for. */
+const CLIENT_ID_SETTING = "oauth.clientId";
+
+/**
+ * Where what the form's secret field takes goes: the instance's OAuth app, where the part can
+ * use one and the installer may set it, or the Connection's own secret.
+ */
+export function partSecretTarget(part: CataloguePartOffer): "oauth_app" | "connection" {
+  return part.oauthApp?.mayEnter === true && part.oauthApp.clientId === undefined
+    ? "oauth_app"
+    : "connection";
+}
+
 /**
  * The part as a form of its type: the entry's title and service, the part's fields. On the
  * operator's managed client (`managed`, where the instance has one for the part) it asks for
- * no field: the client id, the secret and the tenant come from the operator.
+ * no field: the client id, the secret and the tenant come from the operator. On the instance's
+ * OAuth app it asks for neither client id nor secret: the app's client id is written.
  */
 export function partOffer(
   entry: CatalogueEntryOffer,
   part: CataloguePartOffer,
   managed = false
 ): ConnectorTypeOffer {
+  // The instance's OAuth app of the part's server (OAUTH-APP), where it has one.
+  const appClientId = part.oauthApp?.clientId;
   if (managed && part.managedClient !== undefined) {
     return {
       type: part.connectorType,
@@ -80,8 +96,8 @@ export function partOffer(
     service: entry.service,
     documentSource: part.documentSource,
     authScheme: part.authScheme,
-    settings: part.settings,
-    fields: part.fields.map((field) => ({
+    settings: appClientId === undefined ? part.settings : appSettings(part.settings, appClientId),
+    fields: partFields(part).map((field) => ({
       label: field.label,
       ...(field.help === undefined ? {} : { help: field.help }),
       optional: field.optional,
@@ -90,6 +106,22 @@ export function partOffer(
     })),
     ...PART_REVIEWS_ITS_OWN
   };
+}
+
+/**
+ * The fields the part's form asks for: on the instance's OAuth app neither client id nor
+ * secret, which the app holds.
+ */
+function partFields(part: CataloguePartOffer): CataloguePartOffer["fields"] {
+  return part.oauthApp?.clientId === undefined
+    ? part.fields
+    : part.fields.filter((field) => !(field.secret || field.setting === CLIENT_ID_SETTING));
+}
+
+/** The part's settings with the client id of the instance's OAuth app. */
+function appSettings(settings: Record<string, unknown>, clientId: string): Record<string, unknown> {
+  const copy = structuredClone(settings);
+  return { ...copy, oauth: { ...recordOf(copy.oauth), clientId } };
 }
 
 /**
@@ -104,7 +136,7 @@ const PART_REVIEWS_ITS_OWN = {
 /** What the fields start with: each field's default, by its position. Never a secret. */
 export function partDefaults(part: CataloguePartOffer): TypedValues {
   return Object.fromEntries(
-    part.fields.flatMap((field, index) =>
+    partFields(part).flatMap((field, index) =>
       field.default === undefined || field.secret ? [] : [[index, field.default] as const]
     )
   );
