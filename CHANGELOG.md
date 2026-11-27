@@ -7,6 +7,39 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.54 — 2026-11-27
+
+### Added
+
+- **Connections:** an instance keeps one OAuth app per authorization server, entered once by
+  someone who may write every Connection (`PUT /api/v1/connections/:name/oauth-app`, CLI
+  `catalyst connection secret set <name> --app`, `--adopt` to take the Connection's own secret).
+  A Connection with authorization code sign-in on that server and client id, and no secret of its
+  own, signs in, refreshes and revokes with it; a Connection's own secret still wins. Another client
+  id replaces the app only while no Connection relies on the old one. The write
+  deletes own secrets that are exact copies of the app's and leaves every other. The catalogue
+  install form asks for the client id and secret only while the instance has no app for that
+  server; the secret is never answered.
+
+### Changed
+
+- Studio > Connections opens on "My connections" for every member: one card per connection they use with their own account, saying "Connected as …" with Disconnect or one Connect button, and which agents work with it. A service a member can connect themselves shows "Connect", not "Set up".
+- Whoever may manage Connections gets a second tab, "Manage": the Connections of the instance with "One shared access" or "Each person's own account" and how many people are connected, the services that can be installed, and other people's servers. Members without that right see only their own connections and the ones their organisation set up.
+- A Knowledge Base source shows the service's mark and name, the Connection it syncs through, linked for who may open it, and its folders as paths.
+- `GET /api/v1/me/connections` names, for each personal Connection, the service it is for (`serviceTitle`, `mark`) and the agents that use it (`usedBy`). A Connection's list summary carries `serviceTitle` and `serviceColor` or `serviceLogo` where it was installed for a catalogued service.
+- A row of Studio > Connections > Manage says at most two things beside its name: whose account it uses ("One shared access", or "Each person's own account · 3 connected") and, only where somebody has to act, what is wrong. "Ready", the availability chip of an instance Connection and the kind of server are gone from the row.
+- The Connections lists show their search from 8 rows on.
+- "My connections" on the tab of that name has no second title, and "New connection" stands on the Manage tab only, so each tab has one add action.
+- A server a person added shows, before they connect, its name, one line of what it is and Connect; its address, its tools and "Change tools" come once it is connected.
+- A Knowledge Base source underlines the link to its Connection.
+- A Connection's list summary names `connectedPeople` on a personal Connection the reader may change, so the page reads the numbers with the list and not once per row.
+
+### Database
+
+- **Connections:** migration 0211 `connection_oauth_apps` creates the table
+  `connection_oauth_apps` (one sealed OAuth app secret per instance and authorization server). It
+  rewrites no row; a rollback leaves the table unused.
+
 ## 0.8.0-rc.53 — 2026-11-27
 
 ### Changed
