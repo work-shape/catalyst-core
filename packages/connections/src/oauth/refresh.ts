@@ -374,7 +374,8 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
           origin,
           clientId,
           preregisteredId: connection.type.signIn.oauthSettings(settings.data).clientId,
-          managedClient: endpoints?.managedClient
+          managedClient: endpoints?.managedClient,
+          endpoints
         }
       );
       // A server the settings name is sent no `resource`, as at the sign-in.

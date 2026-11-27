@@ -1,6 +1,9 @@
 import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
+import type { OAuthAppView } from "./oauth/oauth-apps";
 import {
+  connectionOAuthServerOf,
   connectorTypeExposures,
+  type ConnectorTypeDefinition,
   type ConnectionExposure,
   type ConnectionOperationEffect,
   type ConnectorFormFieldValue,
@@ -56,8 +59,54 @@ export interface ConnectorTypeOfferView {
 
 /** An entry as the dialog reads it: an OAuth part also names the redirect URI to register. */
 export type CatalogueEntryOfferView = Omit<CatalogueEntryView, "parts"> & {
-  parts: (CatalogueEntryView["parts"][number] & { redirectUri?: string })[];
+  parts: (CatalogueEntryView["parts"][number] & {
+    redirectUri?: string;
+    /**
+     * Where the part signs in at a server its settings name on a client of its own: the
+     * instance's OAuth app of that server (OAUTH-APP), with its client id where it has one.
+     */
+    oauthApp?: { clientId?: string; mayEnter: boolean };
+  })[];
 };
+
+/** A placeholder client id: the server a part names does not depend on it. */
+const ANY_CLIENT_ID = "client";
+
+/**
+ * The authorization server a part's settings name, where it signs in on a client of its own;
+ * nothing for a managed client, a discovered server, settings its type does not read or a form
+ * whose fields fill in the server.
+ */
+function partOAuthServer(
+  type: ConnectorTypeDefinition | undefined,
+  part: CatalogueEntryView["parts"][number]
+): string | undefined {
+  if (part.authScheme !== "oauth" || part.managedClient !== undefined) return undefined;
+  if (type?.oauthEndpoints === undefined) return undefined;
+  // A field that fills in part of the sign-in's address, such as a tenant, makes the server
+  // the installer's to choose: the part names none the app could be offered for.
+  if (
+    part.fields.some(
+      (field) => field.setting?.startsWith("oauth.") === true && field.setting !== "oauth.clientId"
+    )
+  )
+    return undefined;
+  const oauth = part.settings.oauth;
+  const settings = type.settingsSchema.safeParse({
+    ...part.settings,
+    oauth: {
+      ...(typeof oauth === "object" && oauth !== null && !Array.isArray(oauth) ? oauth : {}),
+      clientId: ANY_CLIENT_ID
+    }
+  });
+  if (!settings.success) return undefined;
+  try {
+    const endpoints = type.oauthEndpoints(settings.data);
+    return endpoints === undefined ? undefined : connectionOAuthServerOf(endpoints);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * The types of the build that declare a form, by type id, and the catalogue's entries. A type
@@ -69,7 +118,12 @@ export type CatalogueEntryOfferView = Omit<CatalogueEntryView, "parts"> & {
 export function connectorTypeOffers(
   registry: ConnectorTypeRegistry,
   catalogue?: Pick<Catalogue, "entries">,
-  redirectUri?: (connectionName: string) => string | undefined
+  redirectUri?: (connectionName: string) => string | undefined,
+  /** The instance's OAuth apps by server (OAUTH-APP), and whether the reader may set one. */
+  oauthApps: { byServer: ReadonlyMap<string, OAuthAppView>; mayEnter: boolean } = {
+    byServer: new Map(),
+    mayEnter: false
+  }
 ): {
   types: ConnectorTypeOfferView[];
   entries: CatalogueEntryOfferView[];
@@ -85,12 +139,22 @@ export function connectorTypeOffers(
             ? line
             : { text: line.text, ...(redirect === undefined ? {} : { value: redirect }) }
         );
+        const server = partOAuthServer(registry.get(part.connectorType), part);
+        const app = server === undefined ? undefined : oauthApps.byServer.get(server);
         return {
           ...part,
           prerequisites,
           ...(part.authScheme === "oauth" && redirect !== undefined
             ? { redirectUri: redirect }
-            : {})
+            : {}),
+          ...(server === undefined
+            ? {}
+            : {
+                oauthApp: {
+                  ...(app === undefined ? {} : { clientId: app.clientId }),
+                  mayEnter: oauthApps.mayEnter
+                }
+              })
         };
       })
     })),

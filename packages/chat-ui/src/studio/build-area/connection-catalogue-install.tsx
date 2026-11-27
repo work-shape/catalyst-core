@@ -26,6 +26,7 @@ import {
   recommendedNames,
   partDefaults,
   partOffer,
+  partSecretTarget,
   type CatalogueEntryOffer,
   type CataloguePartName,
   type CataloguePartOffer
@@ -332,6 +333,7 @@ export function CatalogueInstall({
               </Banner>
             ) : null,
           ...(oauth ? { credentialMode: mode, signsIn: true, addressFixed: true } : {}),
+          ...(oauth && !managed ? { secretTarget: partSecretTarget(part) } : {}),
           ...(oauth && recreates?.name === part.name ? { recreates: recreates.revision } : {})
         }}
         onConnected={(connected) => {

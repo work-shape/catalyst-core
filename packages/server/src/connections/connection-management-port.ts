@@ -7,6 +7,7 @@ import type {
   ConnectionSecretState,
   ConnectionTestResult,
   ConnectionTools,
+  ConnectionOAuthAppState,
   ConnectorTypeOffers
 } from "@work-shape/catalyst-api-contract";
 import type {
@@ -135,8 +136,20 @@ export interface ConnectionManagementPort {
   ): Promise<ConnectionTestResult>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionTools>;
-  /** The Connector types of the build that the New connection dialog offers with a form. */
-  connectorTypes(): ConnectorTypeOffers;
+  /**
+   * The Connector types of the build that the New connection dialog offers with a form, and
+   * whether the reader may set the instance's OAuth apps.
+   */
+  connectorTypes(mayManageOAuthApps: boolean): Promise<ConnectorTypeOffers>;
+  /**
+   * Sets or replaces the instance's OAuth app of the server and client id the Connection names
+   * (OAUTH-APP), with the value or the Connection's own secret, and removes the own secrets that
+   * equal it. The caller decided the right on the whole instance. Never answers the value.
+   */
+  setOAuthApp(
+    name: string,
+    input: { value?: string; expectedVersion: number | null; expectedRevision: number }
+  ): Promise<ConnectionOAuthAppState>;
   /**
    * The folders inside one folder of a Connection whose type lets a person choose a Knowledge
    * Base's folders, through the Connection's credential, egress and limits. Its folder names are

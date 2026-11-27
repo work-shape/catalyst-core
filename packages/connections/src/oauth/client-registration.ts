@@ -9,6 +9,7 @@ import {
   type ClientInstanceId,
   type ConnectionCredentialResolver,
   type ConnectionsStore,
+  type ConnectorOAuthEndpoints,
   type JsonValue
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import { issuersMatch } from "./checks";
 import type { OAuthFetch } from "./fetch";
 import { OAuthPortError, type OAuthClient, type OAuthPort, type OAuthServerMetadata } from "./port";
 import { NO_MANAGED_OAUTH_CLIENTS, type ManagedOAuthClients } from "./managed-clients";
+import { oauthAppSecretFor } from "./oauth-apps";
 
 // Which OAuth client a sign-in uses. A client id in the Connection's settings is one the
 // provider issued (pre-registered); its secret, if it has one, is the Connection's own secret.
@@ -30,6 +32,9 @@ import { NO_MANAGED_OAUTH_CLIENTS, type ManagedOAuthClients } from "./managed-cl
 // A Connection on the operator's managed client (MS-APP-1) uses that client alone: its id
 // from release config and its secret read from the host for this one request. It never falls
 // back to a secret stored for the Connection, and no other Connection is handed it.
+//
+// A pre-registered client without a secret of the Connection's own takes the instance's OAuth
+// app (OAUTH-APP) where its settings name the app's server and client id: the own secret wins.
 
 /** What `connection_state.oauth_client` holds. Never a client secret. */
 const registeredClientSchema = z.object({
@@ -92,6 +97,8 @@ export async function clientOfSession(
     preregisteredId: string | undefined;
     /** The managed client the Connection's settings name, by its id. */
     managedClient?: string | undefined;
+    /** The server the Connection's settings name, where they name one: its OAuth app's. */
+    endpoints?: ConnectorOAuthEndpoints | undefined;
   }
 ): Promise<OAuthClient> {
   const { connection, origin, clientId } = input;
@@ -109,10 +116,17 @@ export async function clientOfSession(
   if (input.preregisteredId === clientId) {
     const isRegistrationSecret =
       registered?.secretVersion !== undefined && registered.secretVersion === secret?.version;
-    return {
-      clientId,
-      ...(secret === undefined || isRegistrationSecret ? {} : { clientSecret: secret.value })
-    };
+    if (secret !== undefined && !isRegistrationSecret) {
+      return { clientId, clientSecret: secret.value };
+    }
+    const app =
+      input.endpoints?.clientId === clientId && connection.config.authScheme === "oauth"
+        ? await oauthAppSecretFor(
+            { clientInstanceId: deps.clientInstanceId, keyring: deps.keyring, store: deps.store },
+            input.endpoints
+          )
+        : undefined;
+    return { clientId, ...(app === undefined ? {} : { clientSecret: app }) };
   }
   if (registered?.clientId === clientId) {
     return {

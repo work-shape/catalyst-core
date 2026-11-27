@@ -2,15 +2,31 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type {
   ConnectionStateRecord,
   ConnectionsStore,
+  StoredOAuthAppRecord,
   StoredSecretRecord
 } from "@work-shape/catalyst-core";
 import { createPostgresSourceCallOperations } from "./postgres-source-call-operations";
 import { createPostgresConnectionBindingOperations } from "./postgres-connection-binding-operations";
 import type { PostgresConnection } from "./postgres-database";
-import { connectionState, secrets } from "./schema";
+import { connectionOAuthApps, connectionState, secrets } from "./schema";
 
 type SecretRow = typeof secrets.$inferSelect;
 type StateRow = typeof connectionState.$inferSelect;
+type OAuthAppRow = typeof connectionOAuthApps.$inferSelect;
+
+function mapOAuthApp(row: OAuthAppRow): StoredOAuthAppRecord {
+  return {
+    clientInstanceId: row.clientInstanceId,
+    server: row.server,
+    ...(row.service === null ? {} : { service: row.service }),
+    clientId: row.clientId,
+    version: row.version,
+    keyId: row.keyId,
+    nonce: row.nonce,
+    ciphertext: row.ciphertext,
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
 
 function mapSecret(row: SecretRow): StoredSecretRecord {
   return {
@@ -40,7 +56,7 @@ function mapState(row: StateRow): ConnectionStateRecord {
   };
 }
 
-/** The only code that reads or writes `secrets` and `connection_state`. */
+/** The only code that reads or writes `secrets`, `connection_oauth_apps` and `connection_state`. */
 export function createPostgresConnectionsStore(db: PostgresConnection): ConnectionsStore {
   return {
     ...createPostgresConnectionBindingOperations(db),
@@ -117,7 +133,7 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
               .returning({ handle: secrets.handle });
       return written.length > 0;
     },
-    async deleteSecrets({ clientInstanceId, connectionAssetId, subject, source }) {
+    async deleteSecrets({ clientInstanceId, connectionAssetId, subject, source, nonce }) {
       await db
         .delete(secrets)
         .where(
@@ -125,9 +141,67 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
             eq(secrets.clientInstanceId, clientInstanceId),
             eq(secrets.connectionAssetId, connectionAssetId),
             ...(subject === undefined ? [] : [eq(secrets.subject, subject)]),
-            ...(source === undefined ? [] : [eq(secrets.source, source)])
+            ...(source === undefined ? [] : [eq(secrets.source, source)]),
+            ...(nonce === undefined ? [] : [eq(secrets.nonce, nonce)])
           )
         );
+    },
+    async getOAuthApp({ clientInstanceId, server }) {
+      const [row] = await db
+        .select()
+        .from(connectionOAuthApps)
+        .where(
+          and(
+            eq(connectionOAuthApps.clientInstanceId, clientInstanceId),
+            eq(connectionOAuthApps.server, server)
+          )
+        )
+        .limit(1);
+      return row ? mapOAuthApp(row) : undefined;
+    },
+    async listOAuthApps({ clientInstanceId }) {
+      const rows = await db
+        .select()
+        .from(connectionOAuthApps)
+        .where(eq(connectionOAuthApps.clientInstanceId, clientInstanceId))
+        .orderBy(asc(connectionOAuthApps.server));
+      return rows.map(mapOAuthApp);
+    },
+    async putOAuthApp(record) {
+      const sealed = {
+        service: record.service ?? null,
+        clientId: record.clientId,
+        version: record.version,
+        keyId: record.keyId,
+        nonce: record.nonce,
+        ciphertext: record.ciphertext
+      };
+      // As `putSecret`: version 1 is only inserted, a later one only replaces the one before.
+      const written =
+        record.version === 1
+          ? await db
+              .insert(connectionOAuthApps)
+              .values({
+                clientInstanceId: record.clientInstanceId,
+                server: record.server,
+                ...sealed,
+                createdAt: sql`now()`,
+                updatedAt: sql`now()`
+              })
+              .onConflictDoNothing()
+              .returning({ server: connectionOAuthApps.server })
+          : await db
+              .update(connectionOAuthApps)
+              .set({ ...sealed, updatedAt: sql`now()` })
+              .where(
+                and(
+                  eq(connectionOAuthApps.clientInstanceId, record.clientInstanceId),
+                  eq(connectionOAuthApps.server, record.server),
+                  eq(connectionOAuthApps.version, record.version - 1)
+                )
+              )
+              .returning({ server: connectionOAuthApps.server });
+      return written.length > 0;
     },
     async getConnectionState({ clientInstanceId, connectionAssetId }) {
       const [row] = await db

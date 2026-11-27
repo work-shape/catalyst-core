@@ -13,3 +13,4 @@ export * from "./client-credentials";
 export * from "./managed-clients";
 export * from "./managed-sign-ins";
 export * from "./admin-consent";
+export { oauthAppAssociatedData, oauthAppsByServer, type OAuthAppView } from "./oauth-apps";

@@ -398,6 +398,32 @@ describe("a writer of one Connection", () => {
     );
   });
 
+  it("cannot set the instance's OAuth app from it; a writer of every Connection can", async () => {
+    // The app serves every Connection on its server and client id (OAUTH-APP).
+    const t = await twoConnections();
+    await t.grant(t.kai.id, "connection.write", { assetId: t.alpha });
+    await grantOnInstance(t, t.lena.id, "connection.write");
+    const input = async () => ({
+      ...t.name("alpha"),
+      payload: {
+        expectedVersion: null,
+        expectedRevision: (await t.secretInput("alpha")).payload.expectedRevision
+      }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "connections.set_oauth_app",
+      await input(),
+      t.forbidden("connection.write", "no_grant")
+    );
+    // Past the right, the instance decides on the Connection: this one signs in with no OAuth.
+    const refused = await t.expectRefused(t.lena.id, "connections.set_oauth_app", await input(), {
+      status: 409,
+      code: "CONFLICT"
+    });
+    expect(refused.details).toMatchObject({ reason: "oauth_app_unsupported" });
+  });
+
   it("reads the Connector types for the form of that Connection's page", async () => {
     const t = await twoConnections();
     await t.grant(t.kai.id, "connection.write", { assetId: t.alpha });
