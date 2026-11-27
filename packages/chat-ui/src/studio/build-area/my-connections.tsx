@@ -205,7 +205,7 @@ function AccountCard({
           showName={false}
           {...markArt(connection.mark)}
         />
-        <div className="grid min-w-0 flex-1 basis-48 gap-1">
+        <div className="grid min-w-0 flex-1 basis-56 gap-1">
           <span className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-label wrap-anywhere">{title}</span>
             <PersonalStateBadge signIn={connection} token={connection.token !== undefined} />

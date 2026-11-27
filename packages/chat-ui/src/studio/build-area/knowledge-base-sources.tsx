@@ -433,7 +433,6 @@ function SourceItem({
   const runs = status?.running !== undefined && liveLine !== undefined;
   const connectionTitle = choice?.title || entry.connection;
   const titleId = useId();
-  const named = browses && folders.length > 0;
   const searchable = status === undefined ? undefined : sourceItemCounts(status.items).searchable;
   // The service the folders come from, where the Connection was installed for one: its mark
   // and name lead the row, and the Connection stands under it.
@@ -594,7 +593,7 @@ function SourceItem({
                 )}
               </span>
             ) : null}
-            {named ? (
+            {folders.length > 0 ? (
               <ul
                 className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-caption text-foreground"
                 aria-label={t("knowledgeSources.chosenFolders")}
@@ -607,7 +606,11 @@ function SourceItem({
                       className="size-3.5 shrink-0 text-muted-foreground"
                     />
                     <span className="min-w-0 wrap-anywhere">
-                      <FolderName source={source} connection={entry.connection} folder={folder} />
+                      {browses ? (
+                        <FolderName source={source} connection={entry.connection} folder={folder} />
+                      ) : (
+                        folder
+                      )}
                       {index === folders.length - 1 ? (
                         <KnowledgeSourceExcludedSuffix exclude={entry.exclude} />
                       ) : null}

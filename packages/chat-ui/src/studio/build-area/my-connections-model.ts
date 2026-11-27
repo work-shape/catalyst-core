@@ -62,13 +62,17 @@ interface ListedRow {
  * Whether the instance's list leaves a Connection out because "Meine Verbindungen" shows it or
  * because it is not the reader's to act on. The reader's own server is a card there, never a
  * row. Who manages no Connection is also not shown the Connections each person connects
- * themselves, which are their cards, nor other people's servers, which only who manages acts on.
+ * themselves, which are their cards, nor other people's servers, which only who manages acts on,
+ * nor a Connection that is switched off or not set up to the end, which nobody can work with.
  */
 export function hiddenFromConnectionList(row: ListedRow, mayManage: boolean): boolean {
   const own = listedOwnServer(row);
   if (own?.owner === "reader") return true;
   if (mayManage) return false;
-  return own?.owner === "other" || row.attributes?.personalSignIn === true;
+  const { enabled, personalSignIn, withoutTools } = row.attributes ?? {};
+  return (
+    own?.owner === "other" || personalSignIn === true || enabled === false || withoutTools === true
+  );
 }
 
 /** A service's mark as its catalogue entry gives it: its logo, or the colour of its initial. */

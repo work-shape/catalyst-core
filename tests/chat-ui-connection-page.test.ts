@@ -1257,12 +1257,16 @@ describe("The Connections page (CONN-IA)", () => {
     };
     const personal = { attributes: { personalSignIn: true } };
     const shared = { attributes: { connectorType: "mcp" } };
+    const unfinished = { attributes: { connectorType: "mcp", withoutTools: true } };
+    const off = { attributes: { connectorType: "mcp", enabled: false } };
     const hidden = (mayManage: boolean) =>
-      [own, others, personal, shared].map((row) => hiddenFromConnectionList(row, mayManage));
+      [own, others, personal, unfinished, off, shared].map((row) =>
+        hiddenFromConnectionList(row, mayManage)
+      );
     // Who manages Connections sees each person's Connection and other people's servers.
-    expect(hidden(true)).toEqual([true, false, false, false]);
-    // Everybody else reads only the shared ones there.
-    expect(hidden(false)).toEqual([true, true, true, false]);
+    expect(hidden(true)).toEqual([true, false, false, false, false, false]);
+    // Everybody else reads only the shared ones they can work with.
+    expect(hidden(false)).toEqual([true, true, true, true, true, false]);
   });
 
   it("says of an entry only whether the instance has it, never that the reader is connected", () => {

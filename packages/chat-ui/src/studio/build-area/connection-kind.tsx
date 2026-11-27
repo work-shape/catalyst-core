@@ -111,8 +111,12 @@ export const connectionKind: BuildAssetKind = {
     const personal = personalSignIn === true;
     const own = listedOwnServer(asset) !== undefined;
     const listed = enabled === false ? undefined : listedHealth(health, personal);
+    const manages = asset.allowed?.includes("write") ?? false;
+    // The kind of server is a word for who sets it up, not for who only works with it.
     const type =
-      typeof connectorType === "string" ? knownConnectorTypeLabel(connectorType, t) : undefined;
+      manages && typeof connectorType === "string"
+        ? knownConnectorTypeLabel(connectorType, t)
+        : undefined;
     return (
       <>
         {type ? <Chip size="sm">{type}</Chip> : null}
@@ -132,7 +136,7 @@ export const connectionKind: BuildAssetKind = {
           </Badge>
         ) : personal && !own ? (
           // Each person connects their own account: nothing here is ready or missing.
-          (asset.allowed?.includes("write") ?? false) ? (
+          manages ? (
             <ConnectedPeopleBadge name={asset.name} />
           ) : null
         ) : listed && listed !== "personal" ? (
